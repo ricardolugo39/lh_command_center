@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: commercial-command-center
+Version: 0.2.0
+Summary: Commercial intelligence platform for Lugo Hermanos
+Requires-Python: >=3.12

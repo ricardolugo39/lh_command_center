@@ -1,0 +1,8 @@
+[project]
+name = "commercial-command-center"
+version = "0.2.0"
+description = "Commercial intelligence platform for Lugo Hermanos"
+requires-python = ">=3.12"
+
+[tool.setuptools]
+packages = ["app"]
