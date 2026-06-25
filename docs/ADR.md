@@ -27,3 +27,17 @@ Data access should go through repositories and services.
 The core product is the commercial data engine.
 
 Flask is the user interface layer on top of the data model, services, and pipelines.
+
+## ADR-006 — Product Dimension
+
+Status: Accepted
+
+### Decision
+
+Product families and product groups will be stored in a single dimension table (`dim_product`).
+
+### Rationale
+
+Commercial reports always analyze products by hierarchy.
+
+A single dimension simplifies joins, reporting, and future extensions while matching the business mental model.

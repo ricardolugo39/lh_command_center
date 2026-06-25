@@ -13,3 +13,17 @@ def execute(sql: str, params: tuple | None = None) -> None:
     with get_connection() as conn:
         conn.execute(sql, params or ())
         conn.commit()
+
+
+def save_raw_table(df: pd.DataFrame, table_name: str) -> None:
+    """
+    Save a raw table exactly as received from the source.
+    """
+
+    with get_connection() as conn:
+        df.to_sql(
+            table_name,
+            conn,
+            if_exists="replace",
+            index=False,
+        )
