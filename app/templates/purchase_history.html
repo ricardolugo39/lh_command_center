@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customer Purchase History</title>
+</head>
+<body>
+    <h1>Customer Purchase History</h1>
+
+    <h2>Cartones América S.A. — Correas — Last 18 Months</h2>
+
+    <table border="1" cellpadding="6">
+        <thead>
+            <tr>
+                <th>Part Number</th>
+                <th>Brand</th>
+                <th>Qty</th>
+                <th>Orders</th>
+                <th>Sales</th>
+                <th>Last Purchase</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>{{ row.part_number }}</td>
+                <td>{{ row.brand }}</td>
+                <td>{{ row.qty }}</td>
+                <td>{{ row.orders }}</td>
+                <td>{{ "{:,.0f}".format(row.sales) }}</td>
+                <td>{{ row.last_purchase }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

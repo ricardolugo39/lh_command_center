@@ -1,6 +1,7 @@
 from pathlib import Path
 import sqlite3
 import sys
+import pandas as pd
 
 sys.path.append(str(Path.cwd()))
 
@@ -15,11 +16,39 @@ TABLES = {
     "customers": "raw_customers",
 }
 
+def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize raw ERP data before writing to SQLite.
+    """
+
+    df = df.copy()
+
+    # Normalize column names
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.lower()
+    )
+
+    # Normalize sales date
+    if "fecha" in df.columns:
+
+        df["fecha"] = pd.to_datetime(
+            df["fecha"],
+            format="%m/%d/%y %H:%M:%S",
+            errors="coerce",
+        )
+
+        df["fecha"] = df["fecha"].dt.strftime("%Y-%m-%d")
+
+    return df
 
 def migrate_table(access_table: str, sqlite_table: str, conn: sqlite3.Connection):
     print(f"\nMigrating {access_table} → {sqlite_table}")
 
     df = get_table_data(ACCESS_FILE, access_table)
+
+    df = normalize_dataframe(df)
 
     print(f"Rows: {len(df):,}")
     print(f"Columns: {len(df.columns)}")

@@ -37,6 +37,32 @@ def get_table_data(access_file, table_name):
 
     return pd.DataFrame(clean_rows, columns=columns)
 
+def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize ERP data before loading into SQLite.
+    """
+
+    df = df.copy()
+
+    # Normalize column names
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.lower()
+    )
+
+    # Normalize sales date
+    if "fecha" in df.columns:
+
+        df["fecha"] = pd.to_datetime(
+            df["fecha"],
+            format="%m/%d/%y %H:%M:%S",
+            errors="coerce"
+        )
+
+        df["fecha"] = df["fecha"].dt.strftime("%Y-%m-%d")
+
+    return df
 
 def load_tables(access_file, tables):
     """
@@ -47,6 +73,8 @@ def load_tables(access_file, tables):
     for table in tables:
         print(f"Loading {table}...")
         df = get_table_data(access_file, table)
+
+        df = normalize_dataframe(df)
 
         if df.empty:
             print(f"{table} is empty or failed.")

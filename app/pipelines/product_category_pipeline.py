@@ -66,141 +66,93 @@ class ProductCategoryPipeline:
         df = df.copy()
 
         # Normalize column names
-
         df.columns = (
-
             df.columns
-
             .str.strip()
-
             .str.lower()
-
         )
 
-        # Keep only family/group rows
+        # Preserve original dataframe for family lookup
+        raw_df = df.copy()
 
+        # Fill family values down to group rows
+        df["familia"] = df["familia"].ffill()
+
+        # Keep only group rows (ignore subgroups)
         df = df[
-
             (df["grupo"].notna()) &
-
-            (df["subgrupo"].isna()) &
-
-            (df["familia"].notna())
-
+            (df["subgrupo"].isna())
         ].copy()
 
+        # IDs as strings
         df["familia"] = (
-
             df["familia"]
-
             .astype(int)
-
             .astype(str)
-
         )
 
         df["grupo"] = (
-
             df["grupo"]
-
             .astype(int)
-
             .astype(str)
-
         )
 
-        # Build dimension
-
+        # Build product category dimension
         df = df.rename(columns={
-
             "familia": "family_id",
-
             "grupo": "group_id",
-
             "denominación": "group_name"
-
         })
 
-        # Family names
-
-        family_df = read_table(self.TABLE_IN).copy()
-
-        family_df.columns = (
-
-            family_df.columns
-
-            .str.strip()
-
-            .str.lower()
-
-        )
-
-        family_df = family_df[
-
-            (family_df["grupo"].isna()) &
-
-            (family_df["familia"].notna())
-
+        # Build family dimension from original dataframe
+        family_df = raw_df[
+            (raw_df["familia"].notna()) &
+            (raw_df["grupo"].isna())
         ].copy()
 
         family_df["familia"] = (
-
             family_df["familia"]
-
             .astype(int)
-
             .astype(str)
-
         )
 
         family_df = family_df.rename(columns={
-
             "familia": "family_id",
-
             "denominación": "family_name"
-
         })
 
         family_df = family_df[
-
-            ["family_id", "family_name"]
-
+            [
+                "family_id",
+                "family_name"
+            ]
         ]
 
+        # Join family names
         df = df.merge(
-
             family_df,
-
             on="family_id",
-
             how="left"
-
         )
 
+        # Final dimension
         df = df[
-
             [
-
                 "family_id",
-
                 "family_name",
-
                 "group_id",
-
                 "group_name"
-
             ]
-
         ]
 
         df = df.sort_values(
-
-            ["family_id", "group_id"]
-
+            [
+                "family_id",
+                "group_id"
+            ]
         ).reset_index(drop=True)
 
         return df
-
     def load(self, df: pd.DataFrame):
 
         save_dataframe(

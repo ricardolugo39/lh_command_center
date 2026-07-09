@@ -1,6 +1,40 @@
-from flask import Flask
+from flask import Flask, render_template
+from app.services.purchase_history_service import PurchaseHistoryService
+from pathlib import Path
+from flask import request
+from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
+
+
+app = Flask(
+
+    __name__,
+
+    template_folder="app/templates",
+
+    static_folder="app/static",
+
+)
+
+
+from app.services.purchase_history_service import PurchaseHistoryService
+
+
+@app.route("/purchase-history")
+def purchase_history():
+    df = PurchaseHistoryService.get_history(
+        customer="CARTONES AMERICA S.A.",
+        family_id="5000",
+        group_id="5110",
+        months=18,
+    )
+
+    rows = df.to_dict(orient="records")
+
+    return render_template(
+        "purchase_history.html",
+        rows=rows,
+    )
 
 @app.route("/")
 def home():
