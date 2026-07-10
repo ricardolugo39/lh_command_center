@@ -1,134 +1,58 @@
 from pathlib import Path
-import hashlib
+import shutil
+from datetime import datetime
 
-import pandas as pd
-
-from app.database.reader import read_table, table_exists
-from app.database.writer import save_dataframe
+from app.loaders.raw_sales_loader import load_raw_sales
 
 
-REQUIRED_COLUMNS = {
-    "nit",
-    "razonsocial",
-    "prefijo",
-    "numero",
-    "fecha",
-    "idproducto",
-    "nombreproducto",
-    "cantidad",
-    "idfam1",
-    "idfam2",
-    "valorbruto",
-    "costo",
-}
+INBOX_DIR = Path("data/inbox/sales")
+ARCHIVE_DIR = Path("data/archive/sales")
+
+ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
 
-def read_file(file_path: str | Path) -> pd.DataFrame:
-    file_path = Path(file_path)
+def get_files_to_import():
+    INBOX_DIR.mkdir(parents=True, exist_ok=True)
 
-    if file_path.suffix.lower() in [".xlsx", ".xls"]:
-        return pd.read_excel(file_path)
-
-    if file_path.suffix.lower() == ".csv":
-        return pd.read_csv(file_path)
-
-    raise ValueError(f"Unsupported file type: {file_path.suffix}")
-
-
-def normalize_raw_sales(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-
-    df.columns = df.columns.str.strip().str.lower()
-
-    missing = REQUIRED_COLUMNS - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
-    df["fecha"] = pd.to_datetime(
-        df["fecha"],
-        errors="coerce",
-    ).dt.strftime("%Y-%m-%d")
-
-    numeric_cols = [
-        "numero",
-        "cantidad",
-        "precio",
-        "preciousd",
-        "idfam1",
-        "idfam2",
-        "idbodega",
-        "neto",
-        "valorbruto",
-        "descuento",
-        "vdescuento",
-        "costo",
+    return [
+        file
+        for file in INBOX_DIR.iterdir()
+        if file.is_file() and file.suffix.lower() in ALLOWED_EXTENSIONS
     ]
 
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df["sales_line_key"] = df.apply(build_sales_line_key, axis=1)
+def archive_file(file_path: Path):
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
-    return df
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_path = ARCHIVE_DIR / f"{file_path.stem}_{timestamp}{file_path.suffix}"
 
+    shutil.move(str(file_path), str(archive_path))
 
-def build_sales_line_key(row) -> str:
-    key = "|".join([
-        str(row.get("prefijo", "")).strip(),
-        str(row.get("numero", "")).strip(),
-        str(row.get("fecha", "")).strip(),
-        str(row.get("idproducto", "")).strip(),
-        str(row.get("cantidad", "")).strip(),
-        str(row.get("valorbruto", "")).strip(),
-    ])
-
-    return hashlib.md5(key.encode("utf-8")).hexdigest()
+    return archive_path
 
 
-def load_raw_sales(file_path: str | Path) -> dict:
-    new_df = read_file(file_path)
-    new_df = normalize_raw_sales(new_df)
+def main():
+    files = get_files_to_import()
 
-    before_rows = 0
+    if not files:
+        print("No sales files found in data/inbox/sales")
+        return
 
-    if table_exists("raw_sales"):
-        current_df = read_table("raw_sales")
+    for file_path in files:
+        print("=" * 80)
+        print(f"Importing: {file_path}")
 
-        if "sales_line_key" not in current_df.columns:
-            current_df = normalize_raw_sales(current_df)
+        result = load_raw_sales(file_path)
 
-        before_rows = len(current_df)
+        print("✅ Import completed")
+        print(f"Rows before:   {result['before_rows']:,}")
+        print(f"Rows imported: {result['imported_rows']:,}")
+        print(f"Rows after:    {result['after_rows']:,}")
 
-        combined = pd.concat(
-            [current_df, new_df],
-            ignore_index=True,
-        )
+        archived = archive_file(file_path)
+        print(f"Archived to: {archived}")
 
-        before_dedup = len(combined)
 
-        combined = combined.drop_duplicates(
-            subset=["sales_line_key"],
-            keep="last",
-        )
-
-        duplicates_removed = before_dedup - len(combined)
-
-    else:
-        combined = new_df
-        duplicates_removed = 0
-
-    save_dataframe(
-        df=combined,
-        table_name="raw_sales",
-        if_exists="replace",
-    )
-
-    return {
-        "before_rows": before_rows,
-        "imported_rows": len(new_df),
-        "after_rows": len(combined),
-        "duplicates_removed": duplicates_removed,
-        "min_date": combined["fecha"].min(),
-        "max_date": combined["fecha"].max(),
-    }
+if __name__ == "__main__":
+    main()

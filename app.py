@@ -5,7 +5,6 @@ from flask import request
 from werkzeug.utils import secure_filename
 
 
-
 app = Flask(
 
     __name__,
@@ -17,15 +16,12 @@ app = Flask(
 )
 
 
-from app.services.purchase_history_service import PurchaseHistoryService
-
-
 @app.route("/purchase-history")
 def purchase_history():
     df = PurchaseHistoryService.get_history(
         customer="CARTONES AMERICA S.A.",
         family_id="5000",
-        group_id="5110",
+        group_id="5070",
         months=18,
     )
 
