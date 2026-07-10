@@ -1,12 +1,17 @@
 from typing import Any
+from datetime import datetime
 
 from app.workspace.constants.activity_types import ActivityType
+from app.workspace.constants.followup_status import FollowupStatus
 from app.workspace.constants.project_status import ProjectStatus
 from app.workspace.repositories.activity_repository import (
     ActivityRepository,
 )
 from app.workspace.repositories.customer_repository import (
     CustomerRepository,
+)
+from app.workspace.repositories.followup_repository import (
+    FollowupRepository,
 )
 from app.workspace.repositories.project_repository import (
     ProjectRepository,
@@ -108,49 +113,12 @@ class ProjectWorkspaceService:
         return ProjectWorkspaceService.get_workspace(project_id)
 
     @staticmethod
-    def get_workspace(
-        project_id: int,
-    ) -> dict[str, Any]:
-        project = ProjectRepository.get_project(project_id)
-
-        if project is None:
-            raise ValueError(
-                f"Project does not exist: {project_id}"
-            )
-
-        customer = CustomerRepository.get_customer(
-            project["customer_id"]
-        )
-
-        if customer is None:
-            raise ValueError(
-                f"Customer does not exist: "
-                f"{project['customer_id']}"
-            )
-
-        activities = (
-            ActivityRepository.list_project_activities(
-                project_id
-            )
-        )
-
-        return {
-            "customer": customer,
-            "project": project,
-            "followups": [],
-            "open_loops": [],
-            "activities": activities,
-            "notes": [],
-            "files": [],
-        }
-    @staticmethod
     def change_blocker(
         *,
         project_id: int,
         new_blocker: str | None,
         created_by: str = "system",
     ) -> dict[str, Any]:
-
         project = ProjectRepository.get_project(project_id)
 
         if project is None:
@@ -181,3 +149,137 @@ class ProjectWorkspaceService:
         )
 
         return ProjectWorkspaceService.get_workspace(project_id)
+
+    @staticmethod
+    def create_followup(
+        *,
+        project_id: int,
+        due_date: str,
+        description: str,
+        status: str = FollowupStatus.PENDING,
+        created_by: str = "system",
+    ) -> dict[str, Any]:
+        project = ProjectRepository.get_project(project_id)
+
+        if project is None:
+            raise ValueError(
+                f"Project does not exist: {project_id}"
+            )
+
+        if status not in FollowupStatus.LABELS:
+            raise ValueError(
+                f"Invalid follow-up status: {status}"
+            )
+        
+        clean_description = description.strip()
+        existing_followup = (
+            FollowupRepository.find_pending_duplicate(
+                project_id=project_id,
+                due_date=due_date,
+                description=clean_description,
+            )
+        )
+        if existing_followup is not None:
+            return ProjectWorkspaceService.get_workspace(project_id)
+
+        FollowupRepository.create_followup(
+            project_id=project_id,
+            due_date=due_date,
+            description=description,
+            status=status,
+            created_by=created_by,
+        )
+
+        formatted_due_date = datetime.strptime(
+            due_date,
+            "%Y-%m-%d",
+        ).strftime("%d %b %Y")
+
+        ActivityRepository.create_activity(
+            project_id=project_id,
+            activity_type=ActivityType.FOLLOWUP_CREATED,
+            title="Follow-up programado",
+            details=(
+                f"{description}\n"
+                f"Vence: {formatted_due_date}"
+            ),
+            created_by=created_by,
+        )
+
+        return ProjectWorkspaceService.get_workspace(project_id)
+
+    @staticmethod
+    def get_workspace(
+        project_id: int,
+    ) -> dict[str, Any]:
+        project = ProjectRepository.get_project(project_id)
+
+        if project is None:
+            raise ValueError(
+                f"Project does not exist: {project_id}"
+            )
+
+        customer = CustomerRepository.get_customer(
+            project["customer_id"]
+        )
+
+        if customer is None:
+            raise ValueError(
+                f"Customer does not exist: "
+                f"{project['customer_id']}"
+            )
+
+        activities = ActivityRepository.list_project_activities(
+            project_id
+        )
+
+        followups = FollowupRepository.list_project_followups(
+            project_id
+        )
+
+        return {
+            "customer": customer,
+            "project": project,
+            "followups": followups,
+            "open_loops": [],
+            "activities": activities,
+            "notes": [],
+            "files": [],
+        }
+    
+    @staticmethod
+    def complete_followup(
+        *,
+        followup_id: int,
+        created_by: str = "system",
+    ) -> dict[str, Any]:
+
+        followup = FollowupRepository.get_followup(
+            followup_id
+        )
+
+        if followup is None:
+            raise ValueError(
+                f"Follow-up does not exist: {followup_id}"
+            )
+
+        if followup["status"] == FollowupStatus.COMPLETED:
+            return ProjectWorkspaceService.get_workspace(
+                followup["project_id"]
+            )
+
+        FollowupRepository.complete_followup(
+            followup_id
+        )
+
+        ActivityRepository.create_activity(
+            project_id=followup["project_id"],
+            activity_type=ActivityType.FOLLOWUP_COMPLETED,
+            title="Follow-up completado",
+            details=followup["description"],
+            created_by=created_by,
+        )
+
+        return ProjectWorkspaceService.get_workspace(
+            followup["project_id"]
+        )
