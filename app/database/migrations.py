@@ -13,6 +13,7 @@ def downgrade() -> None:
         conn.executescript(
             """
             DROP TABLE IF EXISTS ws_activities;
+            DROP TABLE IF EXISTS ws_followups;
             DROP TABLE IF EXISTS ws_projects;
             DROP TABLE IF EXISTS ws_customers;
             """

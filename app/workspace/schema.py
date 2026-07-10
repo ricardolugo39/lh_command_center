@@ -40,4 +40,27 @@ CREATE TABLE IF NOT EXISTS ws_activities (
         REFERENCES ws_projects(id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS ws_followups (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    project_id INTEGER NOT NULL,
+
+    due_date TEXT NOT NULL,
+
+    description TEXT NOT NULL,
+
+    status TEXT NOT NULL,
+
+    completed_at TEXT,
+
+    created_by TEXT NOT NULL DEFAULT 'system',
+
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (project_id)
+        REFERENCES ws_projects(id)
+        ON DELETE CASCADE
+);
 """
