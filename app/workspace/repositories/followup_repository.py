@@ -135,12 +135,28 @@ class FollowupRepository:
     @staticmethod
     def list_due_followups() -> list[dict[str, Any]]:
         sql = """
-        SELECT *
-        FROM ws_followups
+        SELECT
+            f.id AS followup_id,
+            f.project_id,
+            f.due_date,
+            f.description,
+            f.status,
+            p.name AS project_name,
+            p.status AS project_status,
+            c.id AS customer_id,
+            c.name AS customer_name
+        FROM ws_followups f
+        INNER JOIN ws_projects p
+            ON p.id = f.project_id
+        INNER JOIN ws_customers c
+            ON c.id = p.customer_id
         WHERE
-            status = 'pending'
-            AND due_date <= DATE('now')
-        ORDER BY due_date ASC, id ASC
+            f.status = 'pending'
+            AND f.due_date <= DATE('now')
+        ORDER BY
+            f.due_date ASC,
+            c.name ASC,
+            p.name ASC
         """
 
         with get_connection() as conn:
