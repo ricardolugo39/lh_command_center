@@ -8,3 +8,4 @@ class ActivityType:
     OPEN_LOOP_CREATED = "open_loop_created"
     OPEN_LOOP_CLOSED = "open_loop_closed"
     MANUAL_UPDATE = "manual_update"
+    BLOCKER_CHANGED = "blocker_changed"

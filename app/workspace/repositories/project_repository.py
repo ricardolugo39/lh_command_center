@@ -207,3 +207,27 @@ class ProjectRepository:
                 ),
             )
             conn.commit()
+
+    @staticmethod
+    def update_blocker(
+        project_id: int,
+        blocker: str | None,
+    ) -> None:
+
+        sql = """
+        UPDATE ws_projects
+        SET
+            current_blocker = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            conn.execute(
+                sql,
+                (
+                    blocker,
+                    project_id,
+                ),
+            )
+            conn.commit()

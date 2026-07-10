@@ -143,3 +143,41 @@ class ProjectWorkspaceService:
             "notes": [],
             "files": [],
         }
+    @staticmethod
+    def change_blocker(
+        *,
+        project_id: int,
+        new_blocker: str | None,
+        created_by: str = "system",
+    ) -> dict[str, Any]:
+
+        project = ProjectRepository.get_project(project_id)
+
+        if project is None:
+            raise ValueError(
+                f"Project does not exist: {project_id}"
+            )
+
+        old_blocker = project["current_blocker"]
+
+        if old_blocker == new_blocker:
+            return ProjectWorkspaceService.get_workspace(project_id)
+
+        ProjectRepository.update_blocker(
+            project_id=project_id,
+            blocker=new_blocker,
+        )
+
+        ActivityRepository.create_activity(
+            project_id=project_id,
+            activity_type=ActivityType.BLOCKER_CHANGED,
+            title="Bloqueo actualizado",
+            details=(
+                f"{old_blocker or 'Sin bloqueo'} "
+                f"→ "
+                f"{new_blocker or 'Sin bloqueo'}"
+            ),
+            created_by=created_by,
+        )
+
+        return ProjectWorkspaceService.get_workspace(project_id)
