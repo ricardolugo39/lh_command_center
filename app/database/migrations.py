@@ -1,12 +1,19 @@
-def upgrade():
-    """
-    Future database migrations will live here.
-    """
-    pass
+from app.database.connection import get_connection
+from app.workspace.schema import WORKSPACE_SCHEMA
 
 
-def downgrade():
-    """
-    Future rollback logic will live here.
-    """
-    pass
+def upgrade() -> None:
+    with get_connection() as conn:
+        conn.executescript(WORKSPACE_SCHEMA)
+        conn.commit()
+
+
+def downgrade() -> None:
+    with get_connection() as conn:
+        conn.executescript(
+            """
+            DROP TABLE IF EXISTS ws_projects;
+            DROP TABLE IF EXISTS ws_customers;
+            """
+        )
+        conn.commit()
