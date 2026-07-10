@@ -184,3 +184,26 @@ class ProjectRepository:
                 )
 
             conn.commit()
+
+    @staticmethod
+    def update_status(
+        project_id: int,
+        new_status: str,
+    ) -> None:
+        sql = """
+        UPDATE ws_projects
+        SET
+            status = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            conn.execute(
+                sql,
+                (
+                    new_status,
+                    project_id,
+                ),
+            )
+            conn.commit()
