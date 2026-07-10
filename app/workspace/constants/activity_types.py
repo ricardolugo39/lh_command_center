@@ -1,0 +1,10 @@
+class ActivityType:
+    PROJECT_CREATED = "project_created"
+    STATUS_CHANGED = "status_changed"
+    FOLLOWUP_CREATED = "followup_created"
+    FOLLOWUP_COMPLETED = "followup_completed"
+    NOTE_ADDED = "note_added"
+    FILE_UPLOADED = "file_uploaded"
+    OPEN_LOOP_CREATED = "open_loop_created"
+    OPEN_LOOP_CLOSED = "open_loop_closed"
+    MANUAL_UPDATE = "manual_update"

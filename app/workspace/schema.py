@@ -25,4 +25,19 @@ CREATE TABLE IF NOT EXISTS ws_projects (
         REFERENCES ws_customers(id)
         ON DELETE RESTRICT
 );
+
+CREATE TABLE IF NOT EXISTS ws_activities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    activity_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    details TEXT,
+    created_by TEXT NOT NULL DEFAULT 'system',
+    occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (project_id)
+        REFERENCES ws_projects(id)
+        ON DELETE CASCADE
+);
 """

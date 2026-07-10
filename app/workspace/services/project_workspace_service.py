@@ -1,5 +1,9 @@
 from typing import Any
 
+from app.workspace.constants.activity_types import ActivityType
+from app.workspace.repositories.activity_repository import (
+    ActivityRepository,
+)
 from app.workspace.repositories.customer_repository import (
     CustomerRepository,
 )
@@ -20,6 +24,7 @@ class ProjectWorkspaceService:
         proposed_solution: str | None = None,
         current_blocker: str | None = None,
         erp_customer_id: str | None = None,
+        created_by: str = "system",
     ) -> dict[str, Any]:
         customer = None
 
@@ -45,6 +50,14 @@ class ProjectWorkspaceService:
             current_blocker=current_blocker,
         )
 
+        ActivityRepository.create_activity(
+            project_id=project_id,
+            activity_type=ActivityType.PROJECT_CREATED,
+            title="Proyecto creado",
+            details=f"Estado inicial: {status}",
+            created_by=created_by,
+        )
+
         return ProjectWorkspaceService.get_workspace(project_id)
 
     @staticmethod
@@ -66,12 +79,16 @@ class ProjectWorkspaceService:
                 f"{project['customer_id']}"
             )
 
+        activities = ActivityRepository.list_project_activities(
+            project_id
+        )
+
         return {
             "customer": customer,
             "project": project,
             "followups": [],
             "open_loops": [],
-            "activities": [],
+            "activities": activities,
             "notes": [],
             "files": [],
         }
