@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Editar cotización · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Editar cotización
+{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    {{ error }}
+</div>
+{% endif %}
+
+<form method="post">
+
+    <div class="card">
+
+        <div class="card-header">
+            <h3 class="card-title">
+                {{ quote.display_quote_number }}
+            </h3>
+        </div>
+
+        <div class="card-body">
+
+            {% include "workspace/partials/_quote_form.html" %}
+
+        </div>
+
+        <div class="card-footer d-flex justify-content-end gap-2">
+
+            <a
+                href="{{ url_for(
+                    'workspace.project_detail',
+                    project_id=quote.project_id
+                ) }}"
+                class="btn btn-outline-secondary"
+            >
+                Cancelar
+            </a>
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+                Guardar cambios
+            </button>
+
+        </div>
+
+    </div>
+
+</form>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const currencyInput = document.getElementById(
+        "currency_code"
+    );
+    const amountInput = document.getElementById(
+        "amount"
+    );
+    const exchangeRateInput = document.getElementById(
+        "exchange_rate"
+    );
+    const usdSection = document.getElementById(
+        "usd-section"
+    );
+    const normalizedInput = document.getElementById(
+        "normalized_amount"
+    );
+
+    function formatCop(value) {
+        if (!Number.isFinite(value)) {
+            return "—";
+        }
+
+        return `COP ${value.toLocaleString(
+            "en-US",
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }
+        )}`;
+    }
+
+    function refreshQuoteFields() {
+        const currency = currencyInput.value;
+        const amount = Number(
+            amountInput.value
+        );
+
+        const isUsd = currency === "USD";
+
+        usdSection.style.display = isUsd
+            ? ""
+            : "none";
+
+        exchangeRateInput.required = isUsd;
+
+        if (!isUsd) {
+            normalizedInput.value = (
+                Number.isFinite(amount)
+                    ? formatCop(amount)
+                    : "—"
+            );
+
+            return;
+        }
+
+        const exchangeRate = Number(
+            exchangeRateInput.value
+        );
+
+        if (
+            !Number.isFinite(amount)
+            || !Number.isFinite(exchangeRate)
+        ) {
+            normalizedInput.value = "—";
+            return;
+        }
+
+        normalizedInput.value = formatCop(
+            amount * exchangeRate
+        );
+    }
+
+    currencyInput.addEventListener(
+        "change",
+        refreshQuoteFields
+    );
+
+    amountInput.addEventListener(
+        "input",
+        refreshQuoteFields
+    );
+
+    exchangeRateInput.addEventListener(
+        "input",
+        refreshQuoteFields
+    );
+
+    refreshQuoteFields();
+});
+</script>
+
+{% endblock %}

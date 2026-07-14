@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Clientes · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Clientes
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+
+    <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>ID ERP</th>
+                    <th>Creado</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for customer in customers %}
+                <tr>
+
+                    <td>
+                        <a
+                            href="{{ url_for(
+                                'workspace.customer_detail',
+                                customer_id=customer.id
+                            ) }}"
+                            class="fw-bold text-reset"
+                        >
+                            {{ customer.name }}
+                        </a>
+                    </td>
+
+                    <td class="text-secondary">
+                        {{ customer.erp_customer_id or "—" }}
+                    </td>
+
+                    <td class="text-secondary">
+                        {{ customer.created_at }}
+                    </td>
+
+                </tr>
+                {% else %}
+                <tr>
+                    <td
+                        colspan="3"
+                        class="text-center text-secondary py-5"
+                    >
+                        No hay clientes.
+                    </td>
+                </tr>
+                {% endfor %}
+
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+{% endblock %}

@@ -23,26 +23,35 @@ class ProjectRepository:
         status: str = "prospect",
         proposed_solution: str | None = None,
         current_blocker: str | None = None,
+        customer_site_id: str | None = None,
+        sales_rep: str | None = None,
     ) -> int:
         if status not in VALID_STATUSES:
-            raise ValueError(f"Invalid project status: {status}")
+            raise ValueError(
+                f"Invalid project status: {status}"
+            )
 
-        if not name.strip():
+        clean_name = name.strip()
+        clean_objective = objective.strip()
+
+        if not clean_name:
             raise ValueError("Project name is required")
 
-        if not objective.strip():
+        if not clean_objective:
             raise ValueError("Project objective is required")
 
         sql = """
         INSERT INTO ws_projects (
             customer_id,
+            customer_site_id,
+            sales_rep,
             name,
             status,
             objective,
             proposed_solution,
             current_blocker
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         with get_connection() as conn:
@@ -50,9 +59,11 @@ class ProjectRepository:
                 sql,
                 (
                     customer_id,
-                    name.strip(),
+                    customer_site_id,
+                    sales_rep.strip() if sales_rep else None,
+                    clean_name,
                     status,
-                    objective.strip(),
+                    clean_objective,
                     proposed_solution.strip()
                     if proposed_solution
                     else None,
@@ -66,11 +77,16 @@ class ProjectRepository:
             return int(cursor.lastrowid)
 
     @staticmethod
-    def get_project(project_id: int) -> dict[str, Any] | None:
+    def get_project(
+        project_id: int,
+    ) -> dict[str, Any] | None:
         sql = """
         SELECT
             id,
             customer_id,
+            customer_site_id,
+            initiative_id,
+            sales_rep,
             name,
             status,
             objective,
@@ -84,14 +100,12 @@ class ProjectRepository:
         """
 
         with get_connection() as conn:
-            cursor = conn.execute(sql, (project_id,))
-            row = cursor.fetchone()
+            row = conn.execute(
+                sql,
+                (project_id,),
+            ).fetchone()
 
-            if row is None:
-                return None
-
-            columns = [column[0] for column in cursor.description]
-            return dict(zip(columns, row))
+        return dict(row) if row is not None else None
 
     @staticmethod
     def list_projects(
@@ -103,6 +117,8 @@ class ProjectRepository:
         SELECT
             id,
             customer_id,
+            customer_site_id,
+            sales_rep,
             name,
             status,
             objective,
@@ -121,14 +137,12 @@ class ProjectRepository:
         sql += "\nORDER BY updated_at DESC, created_at DESC"
 
         with get_connection() as conn:
-            cursor = conn.execute(sql, params)
-            rows = cursor.fetchall()
-            columns = [column[0] for column in cursor.description]
+            rows = conn.execute(
+                sql,
+                params,
+            ).fetchall()
 
-            return [
-                dict(zip(columns, row))
-                for row in rows
-            ]
+        return [dict(row) for row in rows]
 
     @staticmethod
     def update_project(
@@ -139,9 +153,25 @@ class ProjectRepository:
         objective: str,
         proposed_solution: str | None,
         current_blocker: str | None,
+        sales_rep: str | None = None,
     ) -> None:
         if status not in VALID_STATUSES:
-            raise ValueError(f"Invalid project status: {status}")
+            raise ValueError(
+                f"Invalid project status: {status}"
+            )
+
+        clean_name = name.strip()
+        clean_objective = objective.strip()
+
+        if not clean_name:
+            raise ValueError(
+                "El nombre del proyecto es obligatorio."
+            )
+
+        if not clean_objective:
+            raise ValueError(
+                "El objetivo del proyecto es obligatorio."
+            )
 
         sql = """
         UPDATE ws_projects
@@ -151,10 +181,14 @@ class ProjectRepository:
             objective = ?,
             proposed_solution = ?,
             current_blocker = ?,
+            sales_rep = ?,
             updated_at = CURRENT_TIMESTAMP,
             closed_at = CASE
                 WHEN ? IN ('won', 'lost')
-                THEN COALESCE(closed_at, CURRENT_TIMESTAMP)
+                THEN COALESCE(
+                    closed_at,
+                    CURRENT_TIMESTAMP
+                )
                 ELSE NULL
             END
         WHERE id = ?
@@ -164,14 +198,17 @@ class ProjectRepository:
             cursor = conn.execute(
                 sql,
                 (
-                    name.strip(),
+                    clean_name,
                     status,
-                    objective.strip(),
+                    clean_objective,
                     proposed_solution.strip()
                     if proposed_solution
                     else None,
                     current_blocker.strip()
                     if current_blocker
+                    else None,
+                    sales_rep.strip()
+                    if sales_rep
                     else None,
                     status,
                     project_id,
@@ -190,6 +227,11 @@ class ProjectRepository:
         project_id: int,
         new_status: str,
     ) -> None:
+        if new_status not in VALID_STATUSES:
+            raise ValueError(
+                f"Invalid project status: {new_status}"
+            )
+
         sql = """
         UPDATE ws_projects
         SET
@@ -199,13 +241,19 @@ class ProjectRepository:
         """
 
         with get_connection() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 sql,
                 (
                     new_status,
                     project_id,
                 ),
             )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
             conn.commit()
 
     @staticmethod
@@ -213,7 +261,6 @@ class ProjectRepository:
         project_id: int,
         blocker: str | None,
     ) -> None:
-
         sql = """
         UPDATE ws_projects
         SET
@@ -223,11 +270,136 @@ class ProjectRepository:
         """
 
         with get_connection() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 sql,
                 (
-                    blocker,
+                    blocker.strip() if blocker else None,
                     project_id,
                 ),
             )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
+            conn.commit()
+
+    @staticmethod
+    def list_unassigned_projects() -> list[dict[str, Any]]:
+        sql = """
+        SELECT
+            p.id,
+            p.customer_id,
+            p.name,
+            p.status,
+            p.objective,
+            p.current_blocker,
+            p.created_at,
+            p.updated_at,
+
+            c.name AS customer_name
+
+        FROM ws_projects AS p
+
+        INNER JOIN ws_customers AS c
+            ON c.id = p.customer_id
+
+        WHERE p.initiative_id IS NULL
+
+        ORDER BY
+            c.name ASC,
+            p.updated_at DESC
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(sql)
+            rows = cursor.fetchall()
+
+            columns = [
+                column[0]
+                for column in cursor.description
+            ]
+
+            return [
+                dict(zip(columns, row))
+                for row in rows
+            ]
+
+    @staticmethod
+    def assign_to_initiative(
+        *,
+        project_id: int,
+        initiative_id: int,
+    ) -> None:
+        sql = """
+        UPDATE ws_projects
+        SET
+            initiative_id = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    initiative_id,
+                    project_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
+            conn.commit()
+
+    @staticmethod
+    def remove_from_initiative(
+        *,
+        project_id: int,
+    ) -> None:
+        sql = """
+        UPDATE ws_projects
+        SET
+            initiative_id = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (project_id,),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
+            conn.commit()
+
+    @staticmethod
+    def delete_project(
+        project_id: int,
+    ) -> None:
+        with get_connection() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+            cursor = conn.execute(
+                """
+                DELETE FROM ws_projects
+                WHERE id = ?
+                """,
+                (project_id,),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
             conn.commit()

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Proyectos · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Proyectos
+{% endblock %}
+
+{% block page_actions %}
+
+<div class="col-auto ms-auto">
+    <a
+        href="{{ url_for('workspace.new_project') }}"
+        class="btn btn-primary"
+    >
+        Nuevo proyecto
+    </a>
+</div>
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+
+    <div class="table-responsive">
+
+        <table class="table table-vcenter card-table">
+
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Proyecto</th>
+                    <th>Valor comercial</th>
+                    <th>Valor en COP</th>
+                    <th>Estado</th>
+                    <th>Bloqueo actual</th>
+                    <th>Actualizado</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for project in projects %}
+                <tr>
+
+                    <td>
+                        <div class="fw-bold">
+                            {{ project.customer_name }}
+                        </div>
+                    </td>
+
+                    <td>
+                        <a
+                            href="{{ url_for(
+                                'workspace.project_detail',
+                                project_id=project.id
+                            ) }}"
+                            class="text-reset fw-medium"
+                        >
+                            {{ project.name }}
+                        </a>
+                    </td>
+
+                    <td>
+                        {% if project.quote %}
+
+                            <div class="fw-bold">
+                                {{ project.quote.display_amount }}
+                            </div>
+
+                            <div class="text-secondary small">
+                                {{ project.quote.display_quote_number }}
+                            </div>
+
+                        {% else %}
+
+                            <span class="text-secondary">
+                                Sin cotización
+                            </span>
+
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if project.quote %}
+
+                            <div class="fw-bold">
+                                {{
+                                    project.quote
+                                    .display_normalized_amount
+                                }}
+                            </div>
+
+                            {% if (
+                                project.quote.currency_code
+                                == "USD"
+                            ) %}
+                            <div class="text-secondary small">
+                                Tasa
+                                {{
+                                    project.quote
+                                    .exchange_rate_type_label
+                                    | lower
+                                }}
+                            </div>
+                            {% endif %}
+
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <span class="badge bg-blue-lt">
+                            {{ project.status }}
+                        </span>
+                    </td>
+
+                    <td class="text-secondary">
+                        {{
+                            project.current_blocker
+                            or "Sin bloqueo actual"
+                        }}
+                    </td>
+
+                    <td class="text-secondary">
+                        {{ project.updated_at }}
+                    </td>
+
+                </tr>
+
+                {% else %}
+
+                <tr>
+                    <td
+                        colspan="7"
+                        class="text-center text-secondary py-5"
+                    >
+                        No hay proyectos.
+                    </td>
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endblock %}

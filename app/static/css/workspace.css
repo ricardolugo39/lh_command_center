@@ -1,0 +1,243 @@
+.project-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.project-identity {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.project-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: var(--tblr-primary);
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.project-title {
+    margin: 0;
+    font-size: 1.55rem;
+}
+
+.project-subtitle {
+    margin-top: 0.2rem;
+    color: var(--tblr-secondary);
+}
+
+.stage-card {
+    padding: 1.5rem 1rem 1rem;
+}
+
+.stage-track {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    align-items: start;
+}
+
+.stage-item {
+    position: relative;
+    text-align: center;
+}
+
+.stage-item::before {
+    content: "";
+    position: absolute;
+    top: 15px;
+    left: -50%;
+    width: 100%;
+    height: 2px;
+    background: var(--tblr-border-color);
+}
+
+.stage-item:first-child::before {
+    display: none;
+}
+
+.stage-dot {
+    position: relative;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 0.6rem;
+    border: 2px solid var(--tblr-border-color);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: white;
+    color: var(--tblr-secondary);
+    font-weight: 600;
+}
+
+.stage-item.completed::before,
+.stage-item.active::before {
+    background: var(--tblr-success);
+}
+
+.stage-item.completed .stage-dot {
+    border-color: var(--tblr-success);
+    background: var(--tblr-success);
+    color: white;
+}
+
+.stage-item.active .stage-dot {
+    border-color: var(--tblr-primary);
+    background: var(--tblr-primary);
+    color: white;
+}
+
+.stage-item.active .stage-label {
+    color: var(--tblr-primary);
+    font-weight: 600;
+}
+
+.stage-label {
+    font-size: 0.8rem;
+}
+
+.summary-card {
+    height: 100%;
+}
+
+.summary-card .card-body {
+    min-height: 190px;
+}
+
+.summary-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: var(--tblr-primary-lt);
+    color: var(--tblr-primary);
+    font-size: 1.1rem;
+}
+
+.summary-label {
+    color: var(--tblr-secondary);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.objective-text {
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.execution-card {
+    position: sticky;
+    top: 1rem;
+}
+
+.activity-type {
+    border: 0;
+    background: transparent;
+    color: var(--tblr-secondary);
+    padding: 0.5rem 0.65rem;
+    font-size: 0.85rem;
+}
+
+.activity-type.active {
+    color: var(--tblr-primary);
+    background: var(--tblr-primary-lt);
+    border-radius: 6px;
+}
+
+.execution-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--tblr-secondary);
+    letter-spacing: 0.04em;
+}
+
+.followup-row {
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--tblr-border-color);
+}
+
+.followup-row:last-child {
+    border-bottom: 0;
+}
+
+.timeline-item {
+    position: relative;
+    padding: 0 0 1.5rem 2rem;
+}
+
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    left: 0.45rem;
+    top: 1.1rem;
+    bottom: 0;
+    width: 1px;
+    background: var(--tblr-border-color);
+}
+
+.timeline-item:last-child::before {
+    display: none;
+}
+
+.timeline-dot {
+    position: absolute;
+    left: 0;
+    top: 0.2rem;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--tblr-primary);
+    border: 3px solid white;
+    box-shadow: 0 0 0 1px var(--tblr-border-color);
+}
+
+@media (max-width: 991px) {
+    .stage-track {
+        overflow-x: auto;
+        grid-template-columns: repeat(6, minmax(130px, 1fr));
+        padding-bottom: 0.5rem;
+    }
+
+    .execution-card {
+        position: static;
+    }
+}
+
+.stage-button {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.stage-button:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.stage-item:not(.active) .stage-button:hover .stage-dot {
+    border-color: var(--tblr-primary);
+    color: var(--tblr-primary);
+}
+
+.stage-item:not(.active) .stage-button:hover .stage-label {
+    color: var(--tblr-primary);
+}
+
+.stage-item.completed .stage-button:hover .stage-dot {
+    border-color: var(--tblr-success);
+    background: var(--tblr-success);
+    color: white;
+}

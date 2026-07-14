@@ -182,3 +182,37 @@ class FollowupRepository:
             ).fetchone()
 
         return dict(row) if row is not None else None
+
+    @staticmethod
+    def reschedule_followup(
+        followup_id: int,
+        due_date: str,
+    ) -> None:
+        clean_due_date = due_date.strip()
+
+        if not clean_due_date:
+            raise ValueError(
+                "La nueva fecha de seguimiento es obligatoria."
+            )
+
+        sql = """
+        UPDATE ws_followups
+        SET due_date = ?
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    clean_due_date,
+                    followup_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Follow-up does not exist: {followup_id}"
+                )
+
+            conn.commit()

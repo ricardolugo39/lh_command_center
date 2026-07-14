@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>
+        {% block title %}
+            Commercial Command Center
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/workspace.css') }}"
+    >
+</head>
+
+<body>
+<div class="page">
+
+    <aside class="navbar navbar-vertical navbar-expand-lg">
+        <div class="container-fluid">
+
+            <h1 class="navbar-brand navbar-brand-autodark">
+                <a href="{{ url_for('home.home') }}">
+                    Commercial Command Center
+                </a>
+            </h1>
+
+            <button
+                class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#sidebar-menu"
+                aria-controls="sidebar-menu"
+                aria-expanded="false"
+                aria-label="Abrir navegación"
+            >
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div
+                class="collapse navbar-collapse"
+                id="sidebar-menu"
+            >
+                <ul class="navbar-nav pt-lg-3">
+
+                    <li class="nav-item">
+                        <a
+                            class="nav-link
+                            {% if request.endpoint == 'home.home' %}
+                                active
+                            {% endif %}"
+                            href="{{ url_for('home.home') }}"
+                        >
+                            <span class="nav-link-title">
+                                Workspace
+                            </span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a
+                            class="nav-link
+                            {% if request.endpoint == 'workspace.project_list' %}
+                                active
+                            {% endif %}"
+                            href="{{ url_for('workspace.project_list') }}"
+                        >
+                            <span class="nav-link-title">
+                                Proyectos
+                            </span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a
+                            class="nav-link
+                            {% if request.endpoint == 'workspace.customer_list' %}
+                                active
+                            {% endif %}"
+                            href="{{ url_for('workspace.customer_list') }}"
+                        >
+                            <span class="nav-link-title">
+                                Clientes
+                            </span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a
+                            href="{{ url_for(
+                                'workspace.initiative_list'
+                            ) }}"
+                            class="nav-link"
+                        >
+                            Iniciativas
+                        </a>
+
+                    </li>
+                    
+
+                    <li class="nav-item mt-3">
+                        <div class="nav-link disabled">
+                            <span class="nav-link-title text-secondary">
+                                Analytics
+                            </span>
+                        </div>
+                    </li>
+
+                    <li class="nav-item">
+                        <a
+                            class="nav-link
+                            {% if request.endpoint == 'purchase_history.purchase_history' %}
+                                active
+                            {% endif %}"
+                            href="{{ url_for('purchase_history.purchase_history') }}"
+                        >
+                            <span class="nav-link-title">
+                                Historial de compras
+                            </span>
+                        </a>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </aside>
+
+    <div class="page-wrapper">
+
+        <div class="page-header d-print-none">
+            <div class="container-xl">
+                <div class="row g-2 align-items-center">
+
+                    <div class="col">
+                        <div class="page-pretitle">
+                            Commercial Command Center
+                        </div>
+
+                        <h2 class="page-title">
+                            {% block page_title %}
+                                Workspace
+                            {% endblock %}
+                        </h2>
+                    </div>
+
+                    {% block page_actions %}
+                    {% endblock %}
+
+                </div>
+            </div>
+        </div>
+
+        <div class="page-body">
+            <div class="container-xl">
+
+                {% block content %}
+                {% endblock %}
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script
+    src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js">
+</script>
+</body>
+</html>

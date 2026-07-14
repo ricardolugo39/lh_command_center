@@ -1,0 +1,1053 @@
+{% extends "base.html" %}
+
+{% set project = workspace.project %}
+{% set customer = workspace.customer %}
+
+{% set customer_site = workspace.customer_site %}
+{% set quotes = workspace.quotes %}
+{% set brands = workspace.brands %}
+
+{% set stages = [
+    ("prospect", "Prospecto"),
+    ("quoting", "Cotización"),
+    ("waiting_customer", "Esperando cliente"),
+    ("negotiation", "Negociación"),
+    ("won", "Ganado"),
+    ("lost", "Perdido")
+] %}
+
+{% set stage_order = {
+    "prospect": 0,
+    "quoting": 1,
+    "waiting_customer": 2,
+    "negotiation": 3,
+    "won": 4,
+    "lost": 5
+} %}
+
+{% set current_stage_index = stage_order.get(project.status, 0) %}
+{% set pending_followups = workspace.followups
+    | selectattr("status", "equalto", "pending")
+    | list
+%}
+
+{% block title %}
+    {{ project.name }} · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+{% endblock %}
+
+{% block content %}
+
+<div class="project-header mb-4">
+
+    <div class="project-identity">
+
+        <div class="project-avatar">
+            {{ customer.name[:2] | upper }}
+        </div>
+
+        <div>
+            <div class="text-secondary small mb-1">
+                Proyectos / {{ project.name }}
+            </div>
+
+            <h1 class="project-title">
+                {{ customer.name }}
+            </h1>
+
+            <div class="project-subtitle">
+                {{ project.name }}
+            </div>
+
+            <div class="d-flex flex-wrap gap-3 mt-2 small text-secondary">
+
+                {% if customer_site %}
+                <span>
+                    {{ customer_site.city }}
+                    {% if customer_site.address %}
+                        · {{ customer_site.address }}
+                    {% endif %}
+                </span>
+                {% endif %}
+
+                {% if project.sales_rep %}
+                <span>
+                    Vendedor: {{ project.sales_rep }}
+                </span>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+
+    <div class="d-flex flex-column align-items-end">
+
+        <div class="mb-3">
+    
+            <span class="badge bg-blue-lt">
+                {{ project.status }}
+            </span>
+    
+        </div>
+    
+        <div class="mb-3">
+    
+            {% for brand in project.brands %}
+    
+            <span class="badge bg-secondary-lt">
+                {{ brand }}
+            </span>
+    
+            {% endfor %}
+    
+        </div>
+    
+        <div class="d-grid gap-2">
+    
+            <a class="btn btn-primary">
+                Editar proyecto
+            </a>
+    
+            <form ...>
+    
+                <button
+                    class="btn btn-outline-danger"
+                >
+                    Eliminar oportunidad
+                </button>
+    
+            </form>
+    
+        </div>
+    
+    </div>
+
+</div>
+
+
+<div class="card stage-card mb-4">
+
+    <div class="stage-track">
+
+        {% for stage_value, stage_label in stages %}
+
+            {% set stage_index = stage_order[stage_value] %}
+
+            <form
+                method="post"
+                action="{{ url_for(
+                    'workspace.change_project_status',
+                    project_id=project.id
+                ) }}"
+                class="stage-item
+                    {% if stage_index < current_stage_index %}
+                        completed
+                    {% elif stage_value == project.status %}
+                        active
+                    {% endif %}
+                "
+            >
+
+                <input
+                    type="hidden"
+                    name="new_status"
+                    value="{{ stage_value }}"
+                >
+
+                <button
+                    type="submit"
+                    class="stage-button"
+                    {% if stage_value == project.status %}
+                        disabled
+                    {% endif %}
+                    title="Cambiar estado a {{ stage_label }}"
+                >
+
+                    <div class="stage-dot">
+                        {% if stage_index < current_stage_index %}
+                            ✓
+                        {% else %}
+                            {{ loop.index }}
+                        {% endif %}
+                    </div>
+
+                    <div class="stage-label">
+                        {{ stage_label }}
+                    </div>
+
+                </button>
+
+            </form>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+
+<div class="row row-cards mb-4">
+
+    <div class="col-12 col-xl-5">
+
+        <div class="card summary-card">
+
+            <div class="card-body">
+
+                <div class="d-flex align-items-center gap-3 mb-3">
+
+                    <div class="summary-icon">
+                        ◎
+                    </div>
+
+                    <div>
+                        <div class="summary-label">
+                            Objetivo
+                        </div>
+
+                        <h3 class="card-title mb-0">
+                            ¿Qué problema estamos resolviendo?
+                        </h3>
+                    </div>
+
+                </div>
+
+                <div class="objective-text">
+                    {{ project.objective }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-12 col-md-6 col-xl-3">
+
+        <div class="card summary-card">
+    
+            <div class="card-body">
+    
+                <div class="d-flex align-items-center gap-3 mb-4">
+    
+                    <div class="summary-icon">
+                        ↗
+                    </div>
+    
+                    <h3 class="card-title mb-0">
+                        Estado actual
+                    </h3>
+    
+                </div>
+    
+                <div class="summary-label mb-1">
+                    Estado
+                </div>
+    
+                <div class="mb-4">
+                    <span class="badge bg-blue-lt">
+                        {{ project.status }}
+                    </span>
+                </div>
+    
+    
+                <!-- NUEVO -->
+    
+                <div class="summary-label mb-1">
+                    Salud del proyecto
+                </div>
+    
+                <div class="mb-4">
+    
+                    <span
+                        class="badge bg-{{ workspace.health.badge }}-lt"
+                    >
+                        {{ workspace.health.label }}
+                    </span>
+    
+                </div>
+    
+    
+                <!-- EXISTENTE -->
+    
+                <div class="summary-label mb-1">
+                    Bloqueo actual
+                </div>
+                
+                <div class="d-flex align-items-start justify-content-between gap-2">
+                
+                    <div class="fw-semibold">
+                        {{ project.current_blocker
+                           or "Sin bloqueo actual." }}
+                    </div>
+                
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-ghost-primary"
+                        id="show-blocker-form"
+                    >
+                        Editar
+                    </button>
+                
+                </div>
+                
+                <form
+                    method="post"
+                    action="{{ url_for(
+                        'workspace.change_project_blocker',
+                        project_id=project.id
+                    ) }}"
+                    id="blocker-form"
+                    class="mt-3 d-none"
+                >
+                
+                    <textarea
+                        name="current_blocker"
+                        class="form-control"
+                        rows="3"
+                        placeholder="¿Qué está impidiendo avanzar?"
+                    >{{ project.current_blocker or "" }}</textarea>
+                
+                    <div class="d-flex justify-content-end gap-2 mt-2">
+                
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            id="cancel-blocker-edit"
+                        >
+                            Cancelar
+                        </button>
+                
+                        <button
+                            type="submit"
+                            class="btn btn-sm btn-primary"
+                        >
+                            Guardar
+                        </button>
+                
+                    </div>
+                
+                </form>
+    
+            </div>
+    
+        </div>
+    
+    </div>
+
+
+    <div class="col-12 col-md-6 col-xl-4">
+
+        <div class="card summary-card">
+
+            <div class="card-body">
+
+                <div class="d-flex align-items-center gap-3 mb-4">
+
+                    <div class="summary-icon">
+                        ◫
+                    </div>
+
+                    <h3 class="card-title mb-0">
+                        Próximo seguimiento
+                    </h3>
+
+                </div>
+
+                {% if pending_followups %}
+
+                    {% set next_followup = pending_followups[0] %}
+
+                    <div class="summary-label mb-1">
+                        Fecha
+                    </div>
+
+                    <div class="fw-bold mb-4">
+                        {{ next_followup.due_date }}
+                    </div>
+
+                    <div class="summary-label mb-1">
+                        Acción
+                    </div>
+
+                    <div class="fw-semibold">
+                        {{ next_followup.description }}
+                    </div>
+
+                {% else %}
+
+                    <div class="text-secondary">
+                        No hay un follow-up pendiente.
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% if quotes %}
+
+<div class="card mt-4">
+
+    <div class="card-header">
+
+        <div>
+            <h3 class="card-title">
+                Cotizaciones
+            </h3>
+
+            <div class="text-secondary small mt-1">
+                Valor original y valor normalizado del proyecto.
+            </div>
+        </div>
+
+    </div>
+
+    <div class="table-responsive">
+
+        <table class="table table-vcenter card-table">
+
+            <thead>
+                <tr>
+                    <th>Cotización</th>
+                    <th>Valor comercial</th>
+                    <th>Valor en COP</th>
+                    <th>Tasa de cambio</th>
+                    <th>Tipo de tasa</th>
+                    <th>Fecha</th>
+                    <th>Estado</th>
+                    <th class="w-1"></th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for quote in quotes %}
+                <tr>
+
+                    <td>
+                        <div class="fw-bold">
+                            {{ quote.display_quote_number }}
+                        </div>
+
+                        {% if quote.revision %}
+                        <div class="text-secondary small">
+                            Revisión {{ quote.revision }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <div class="fw-bold">
+                            {{ quote.display_amount }}
+                        </div>
+
+                        <div class="text-secondary small">
+                            Moneda original
+                        </div>
+                    </td>
+
+                    <td>
+                        <div class="fw-bold">
+                            {{ quote.display_normalized_amount }}
+                        </div>
+
+                        {% if quote.currency_code == "USD" %}
+                        <div class="text-secondary small">
+                            Valor estimado en COP
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if quote.currency_code == "USD" %}
+                            {{ quote.display_exchange_rate }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+
+                    <td>
+
+                        {% if quote.currency_code == "USD" %}
+
+                            {% if quote.exchange_rate_type == "final" %}
+                                <span class="badge bg-green-lt">
+                                    {{ quote.exchange_rate_type_label }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-yellow-lt">
+                                    {{ quote.exchange_rate_type_label }}
+                                </span>
+                            {% endif %}
+
+                        {% else %}
+                            —
+                        {% endif %}
+
+                    </td>
+
+                    <td>
+                        {{ quote.quote_date or "—" }}
+                    </td>
+
+                    <td>
+
+                        {% if quote.quote_status %}
+                            <span class="badge bg-blue-lt">
+                                {{ quote.quote_status }}
+                            </span>
+                        {% else %}
+                            <span class="text-secondary">
+                                Sin estado
+                            </span>
+                        {% endif %}
+
+                    </td>
+
+                    <td class="text-end">
+
+                        <a
+                            href="{{ url_for(
+                                'workspace.edit_quote',
+                                quote_id=quote.id
+                            ) }}"
+                            class="btn btn-sm btn-outline-primary"
+                        >
+                            Editar
+                        </a>
+
+                    </td>
+
+                </tr>
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endif %}
+
+<div class="row row-cards">
+
+    <div class="col-12 col-xl-7">
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <ul class="nav nav-tabs card-header-tabs">
+
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#overview">
+                            Resumen
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="#timeline">
+                            Timeline
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <span class="nav-link disabled">
+                            Archivos
+                        </span>
+                    </li>
+
+                    <li class="nav-item">
+                        <span class="nav-link disabled">
+                            Historial de compras
+                        </span>
+                    </li>
+
+                    <li class="nav-item">
+                        <span class="nav-link disabled">
+                            Notas
+                        </span>
+                    </li>
+
+                </ul>
+
+            </div>
+
+            <div class="card-body" id="overview">
+
+                <div class="mb-5">
+
+                    <div class="d-flex gap-3">
+
+                        <div class="summary-icon">
+                            ◇
+                        </div>
+
+                        <div>
+
+                            <h3 class="card-title">
+                                Nuestra solución
+                            </h3>
+
+                            <div class="text-secondary">
+                                {{ project.proposed_solution
+                                   or "Sin solución registrada." }}
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <hr>
+
+                <div id="timeline" class="pt-3">
+
+                    <h3 class="card-title mb-4">
+                        Actividad reciente
+                    </h3>
+
+                    {% for activity in workspace.activities[:5] %}
+
+                        <div class="timeline-item">
+
+                            <span class="timeline-dot"></span>
+
+                            <div class="fw-bold">
+                                {{ activity.title }}
+                            </div>
+
+                            {% if activity.details %}
+                                <div
+                                    class="text-secondary mt-1"
+                                    style="white-space: pre-line;"
+                                >
+                                    {{ activity.details }}
+                                </div>
+                            {% endif %}
+
+                            <div class="small text-secondary mt-2">
+                                {{ activity.occurred_at }}
+                            </div>
+
+                        </div>
+
+                    {% else %}
+
+                        <div class="text-secondary">
+                            No hay actividad registrada.
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-12 col-xl-5">
+
+        <div class="card execution-card">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Ejecución
+                </h3>
+            </div>
+
+            <div class="card-body border-bottom">
+
+                <form
+                    method="post"
+                    action="{{ url_for(
+                        'workspace.add_project_activity',
+                        project_id=project.id
+                    ) }}"
+                >
+                    <input
+                        type="hidden"
+                        name="activity_type"
+                        id="activity_type"
+                        value="call"
+                    >
+
+                    <div class="d-flex flex-wrap gap-1 mb-3">
+
+                        <button
+                            class="activity-type active"
+                            type="button"
+                            data-activity-type="call"
+                        >
+                            ☎ Llamada
+                        </button>
+
+                        <button
+                            class="activity-type"
+                            type="button"
+                            data-activity-type="visit"
+                        >
+                            Visita
+                        </button>
+
+                        <button
+                            class="activity-type"
+                            type="button"
+                            data-activity-type="meeting"
+                        >
+                            Reunión
+                        </button>
+
+                        <button
+                            class="activity-type"
+                            type="button"
+                            data-activity-type="email"
+                        >
+                            Correo
+                        </button>
+
+                        <button
+                            class="activity-type"
+                            type="button"
+                            data-activity-type="note"
+                        >
+                            Nota
+                        </button>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label
+                            for="activity-details"
+                            class="form-label"
+                        >
+                            Gestión realizada
+                        </label>
+
+                        <input
+                            type="text"
+                            id="activity-details"
+                            name="details"
+                            class="form-control"
+                            placeholder="Describe la gestión realizada..."
+                            minlength="3"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="form-check mb-3">
+
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="schedule-followup"
+                        >
+
+                        <label
+                            class="form-check-label"
+                            for="schedule-followup"
+                        >
+                            Programar seguimiento
+                        </label>
+
+                    </div>
+
+                    <div
+                        id="followup-fields"
+                        class="d-none mb-3"
+                    >
+                        <div class="row g-3">
+
+                            <div class="col-md-4">
+
+                                <label
+                                    for="followup-due-date"
+                                    class="form-label"
+                                >
+                                    Fecha de seguimiento
+                                </label>
+
+                                <input
+                                    type="date"
+                                    id="followup-due-date"
+                                    class="form-control"
+                                    name="followup_due_date"
+                                >
+
+                            </div>
+
+                            <div class="col-md-8">
+
+                                <label
+                                    for="followup-description"
+                                    class="form-label"
+                                >
+                                    Descripción
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="followup-description"
+                                    class="form-control"
+                                    name="followup_description"
+                                    placeholder="Ej. Llamar al comprador para revisar la propuesta"
+                                >
+
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+
+                        <button
+                            class="btn btn-primary"
+                            type="submit"
+                        >
+                            Registrar gestión
+                        </button>
+
+                    </div>
+
+                </form>
+            
+            </div>
+
+            <div class="card-body">
+
+                <div class="execution-section-title mb-2">
+                    Próximas acciones
+                </div>
+
+                {% set upcoming_found = false %}
+
+                {% for followup in workspace.followups %}
+
+                    {% if followup.status == "pending" %}
+
+                        {% set upcoming_found = true %}
+
+                        <div class="followup-row">
+
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+
+                                <div class="flex-grow-1">
+                            
+                                    <div class="fw-bold">
+                                        {{ followup.description }}
+                                    </div>
+                            
+                                    <div class="text-secondary small mt-1">
+                                        {{ followup.due_date }}
+                                    </div>
+                            
+                                    <div class="d-flex gap-2 mt-3">
+                            
+                                        <form
+                                            method="post"
+                                            action="{{ url_for(
+                                                'workspace.complete_followup',
+                                                followup_id=followup.id
+                                            ) }}"
+                                        >
+                            
+                                            <button
+                                                type="submit"
+                                                class="btn btn-success btn-sm"
+                                            >
+                                                ✓ Completar
+                                            </button>
+                            
+                                        </form>
+                            
+                                        <details>
+
+                                            <summary
+                                                class="btn btn-outline-secondary btn-sm"
+                                            >
+                                                ↻ Reprogramar
+                                            </summary>
+                                        
+                                            <form
+                                                method="post"
+                                                action="{{ url_for(
+                                                    'workspace.reschedule_followup',
+                                                    followup_id=followup.id
+                                                ) }}"
+                                                class="mt-3"
+                                            >
+                                        
+                                                <input
+                                                    type="date"
+                                                    name="due_date"
+                                                    value="{{ followup.due_date }}"
+                                                    class="form-control mb-2"
+                                                    required
+                                                >
+                                        
+                                                <button
+                                                    class="btn btn-primary btn-sm"
+                                                    type="submit"
+                                                >
+                                                    Guardar
+                                                </button>
+                                        
+                                            </form>
+                                        
+                                        </details>
+                            
+                                    </div>
+                            
+                                </div>
+                            
+                                <span class="badge bg-yellow-lt">
+                                    Pendiente
+                                </span>
+                            
+                            </div>
+
+                        </div>
+
+                    {% endif %}
+
+                {% endfor %}
+
+                {% if not pending_followups %}
+
+                    <div class="text-secondary py-3">
+                        No hay próximas acciones.
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const typeInput = document.getElementById("activity_type");
+        const activityButtons = document.querySelectorAll(
+            "[data-activity-type]"
+        );
+    
+        const followupCheckbox = document.getElementById(
+            "schedule-followup"
+        );
+    
+        const followupFields = document.getElementById(
+            "followup-fields"
+        );
+    
+        const followupDate = document.getElementById(
+            "followup-due-date"
+        );
+    
+        const followupDescription = document.getElementById(
+            "followup-description"
+        );
+    
+        activityButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                activityButtons.forEach((item) => {
+                    item.classList.remove("active");
+                });
+    
+                button.classList.add("active");
+                typeInput.value = button.dataset.activityType;
+            });
+        });
+    
+        followupCheckbox.addEventListener("change", () => {
+            const enabled = followupCheckbox.checked;
+    
+            followupFields.classList.toggle(
+                "d-none",
+                !enabled
+            );
+    
+            followupDate.required = enabled;
+            followupDescription.required = enabled;
+    
+            if (!enabled) {
+                followupDate.value = "";
+                followupDescription.value = "";
+            }
+        });
+
+        const showButton = document.getElementById(
+
+            "show-blocker-form"
+
+        );
+
+        const cancelButton = document.getElementById(
+
+            "cancel-blocker-edit"
+
+        );
+
+        const blockerForm = document.getElementById(
+
+            "blocker-form"
+
+        );
+
+        if (!showButton || !blockerForm) {
+
+            return;
+
+        }
+
+        showButton.addEventListener("click", () => {
+
+            blockerForm.classList.remove("d-none");
+
+            showButton.classList.add("d-none");
+
+            const textarea = blockerForm.querySelector(
+
+                "textarea"
+
+            );
+
+            if (textarea) {
+
+                textarea.focus();
+
+            }
+
+        });
+
+        cancelButton?.addEventListener("click", () => {
+
+            blockerForm.classList.add("d-none");
+
+            showButton.classList.remove("d-none");
+
+        });
+    });
+    </script>
+{% endblock %}

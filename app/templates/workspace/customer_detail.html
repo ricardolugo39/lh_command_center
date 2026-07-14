@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% set customer = customer_page.customer %}
+{% set erp = customer_page.erp_summary %}
+{% set pipeline = customer_page.pipeline %}
+{% set sales = customer_page.sales %}
+
+{% block title %}
+    {{ customer.name }} · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    {{ customer.name }}
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+
+    <div class="text-secondary">
+        NIT {{ customer.erp_customer_id or "—" }}
+    </div>
+
+    {% if erp %}
+    <div class="text-secondary mt-1">
+        {{ erp.classification_name or "Sin clasificación" }}
+        {% if erp.commercial_group_name %}
+            · {{ erp.commercial_group_name }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+
+<div class="row row-cards mb-4">
+
+    <div class="col-sm-6 col-xl-3">
+
+        <div class="card">
+
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Ventas últimos 12 meses
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ sales.display_last_12_months }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+
+        <div class="card">
+
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Pipeline abierto
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ customer_page.display_pipeline }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+
+        <div class="card">
+
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Proyectos activos
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ pipeline.active_project_count }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+
+        <div class="card">
+
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Última compra
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ sales.last_purchase_date or "—" }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="row row-cards">
+
+    <div class="col-12 col-xl-8">
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <div>
+                    <h3 class="card-title">
+                        Proyectos
+                    </h3>
+
+                    <div class="text-secondary small mt-1">
+                        Oportunidades y proyectos asociados al cliente.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="table-responsive">
+
+                <table class="table table-vcenter card-table">
+
+                    <thead>
+                        <tr>
+                            <th>Proyecto</th>
+                            <th>Estado</th>
+                            <th>Valor</th>
+                            <th>Bloqueo actual</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for project in customer_page.projects %}
+
+                        <tr>
+
+                            <td>
+
+                                <a
+                                    href="{{ url_for(
+                                        'workspace.project_detail',
+                                        project_id=project.id
+                                    ) }}"
+                                    class="fw-bold text-reset"
+                                >
+                                    {{ project.name }}
+                                </a>
+
+                                {% if project.sales_rep %}
+                                <div class="text-secondary small">
+                                    {{ project.sales_rep }}
+                                </div>
+                                {% endif %}
+
+                            </td>
+
+                            <td>
+                                <span class="badge bg-blue-lt">
+                                    {{ project.status }}
+                                </span>
+                            </td>
+
+                            <td>
+
+                                {% if project.quote %}
+
+                                    <div class="fw-bold">
+                                        {{
+                                            project.quote
+                                            .display_amount
+                                        }}
+                                    </div>
+
+                                    {% if (
+                                        project.quote
+                                        .currency_code == "USD"
+                                    ) %}
+                                    <div class="text-secondary small">
+                                        {{
+                                            project.quote
+                                            .display_normalized_amount
+                                        }}
+                                    </div>
+                                    {% endif %}
+
+                                {% else %}
+                                    <span class="text-secondary">
+                                        Sin cotización
+                                    </span>
+                                {% endif %}
+
+                            </td>
+
+                            <td class="text-secondary">
+                                {{
+                                    project.current_blocker
+                                    or "Sin bloqueo actual"
+                                }}
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td
+                                colspan="4"
+                                class="text-center text-secondary py-5"
+                            >
+                                Este cliente no tiene proyectos.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <h3 class="card-title">
+                        Ventas recientes
+                    </h3>
+
+                    <div class="text-secondary small mt-1">
+                        Últimos documentos registrados en el ERP.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="table-responsive">
+
+                <table class="table table-vcenter card-table">
+
+                    <thead>
+                        <tr>
+                            <th>Documento</th>
+                            <th>Fecha</th>
+                            <th>Valor neto</th>
+                            <th>Descuento</th>
+                            <th>Líneas</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for sale in customer_page.recent_sales %}
+
+                        <tr>
+
+                            <td class="fw-bold">
+                                {{ sale.prefijo }}-{{ sale.numero }}
+                            </td>
+
+                            <td>
+                                {{ sale.sale_date or "—" }}
+                            </td>
+
+                            <td class="fw-bold">
+                                {{ sale.display_net_amount }}
+                            </td>
+
+                            <td class="text-secondary">
+                                {{ sale.display_discount_amount }}
+                            </td>
+
+                            <td>
+                                {{ sale.line_count }}
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td
+                                colspan="5"
+                                class="text-center text-secondary py-5"
+                            >
+                                No se encontraron ventas.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-12 col-xl-4">
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Información comercial
+                </h3>
+            </div>
+
+            <div class="card-body">
+
+                <div class="mb-4">
+
+                    <div class="text-secondary small">
+                        Vendedor ERP
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {{
+                            erp.seller
+                            if erp
+                            else "—"
+                        }}
+                    </div>
+
+                </div>
+
+                <div class="mb-4">
+
+                    <div class="text-secondary small">
+                        Sedes
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {{ customer_page.sites | length }}
+                    </div>
+
+                </div>
+
+                <div class="mb-4">
+
+                    <div class="text-secondary small">
+                        Ventas año actual
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {{ sales.display_current_year }}
+                    </div>
+
+                </div>
+
+                <div>
+
+                    <div class="text-secondary small">
+                        Condiciones de pago
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {% if erp and erp.payment_terms %}
+                            {{ erp.payment_terms }} días
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Sedes
+                </h3>
+            </div>
+
+            <div class="list-group list-group-flush">
+
+                {% for site in customer_page.sites %}
+
+                <div class="list-group-item">
+
+                    <div class="fw-bold">
+                        {{ site.city or "Sin ciudad" }}
+                    </div>
+
+                    <div class="text-secondary small mt-1">
+                        {{ site.address or "Sin dirección" }}
+                    </div>
+
+                    {% if site.seller %}
+                    <div class="text-secondary small mt-1">
+                        Vendedor: {{ site.seller }}
+                    </div>
+                    {% endif %}
+
+                </div>
+
+                {% else %}
+
+                <div class="p-4 text-center text-secondary">
+                    No se encontraron sedes.
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

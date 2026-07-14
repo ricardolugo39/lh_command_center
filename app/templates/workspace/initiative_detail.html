@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+
+{% set initiative = initiative_page.initiative %}
+{% set summary = initiative_page.summary %}
+
+{% block title %}
+    {{ initiative.name }} · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    {{ initiative.name }}
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+
+    <span class="badge bg-blue-lt">
+        {{ initiative.status_label }}
+    </span>
+
+    {% if initiative.partner %}
+    <span class="badge bg-secondary-lt ms-2">
+        {{ initiative.partner }}
+    </span>
+    {% endif %}
+
+</div>
+
+<div class="d-flex justify-content-end mb-4">
+
+    <form
+        method="post"
+        action="{{ url_for(
+            'workspace.delete_initiative',
+            initiative_id=initiative.id
+        ) }}"
+        onsubmit="return confirm(
+            '¿Eliminar esta iniciativa? Las oportunidades relacionadas no serán eliminadas, pero quedarán sin iniciativa. Esta acción no se puede deshacer.'
+        );"
+    >
+
+        <button
+            type="submit"
+            class="btn btn-outline-danger"
+        >
+            Eliminar iniciativa
+        </button>
+
+    </form>
+
+</div>
+
+
+<div class="row row-cards mb-4">
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Pipeline abierto
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ summary.display_pipeline }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Oportunidades activas
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ summary.active_count }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Clientes involucrados
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ summary.customer_count }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Ganadas
+                </div>
+
+                <div class="h2 mt-2 mb-0">
+                    {{ summary.won_count }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+<div class="row row-cards">
+
+    <div class="col-12 col-xl-8">
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h3 class="card-title">
+                        Oportunidades relacionadas
+                    </h3>
+
+                    <div class="text-secondary small mt-1">
+                        Oportunidades que ejecutan la estrategia
+                        de esta iniciativa.
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            {% if initiative_page.available_opportunities %}
+
+            <div class="card-body border-bottom">
+
+                <form
+                    method="post"
+                    action="{{ url_for(
+                        'workspace.add_initiative_opportunity',
+                        initiative_id=initiative.id
+                    ) }}"
+                >
+
+                    <div class="row g-2 align-items-end">
+
+                        <div class="col">
+
+                            <label
+                                for="project_id"
+                                class="form-label"
+                            >
+                                Agregar oportunidad
+                            </label>
+
+                            <select
+                                id="project_id"
+                                name="project_id"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    Seleccionar oportunidad...
+                                </option>
+
+                                {% for opportunity
+                                   in initiative_page.available_opportunities %}
+
+                                <option value="{{ opportunity.id }}">
+                                    {{ opportunity.customer_name }}
+                                    — {{ opportunity.name }}
+                                </option>
+
+                                {% endfor %}
+
+                            </select>
+
+                        </div>
+
+
+                        <div class="col-auto">
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                            >
+                                Agregar
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+            {% else %}
+
+            <div class="card-body border-bottom">
+
+                <div class="text-secondary">
+                    No hay oportunidades disponibles para asociar.
+                </div>
+
+            </div>
+
+            {% endif %}
+
+
+            <div class="table-responsive">
+
+                <table class="table table-vcenter card-table">
+
+                    <thead>
+
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Oportunidad</th>
+                            <th>Asesor</th>
+                            <th>Estado</th>
+                            <th>Valor</th>
+                            <th>Bloqueo</th>
+                            <th class="w-1"></th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        {% for opportunity
+                           in initiative_page.opportunities %}
+
+                        <tr>
+
+                            <td class="fw-bold">
+                                {{ opportunity.customer_name }}
+                            </td>
+
+                            <td>
+
+                                <a
+                                    href="{{ url_for(
+                                        'workspace.project_detail',
+                                        project_id=opportunity.id
+                                    ) }}"
+                                    class="fw-bold text-reset"
+                                >
+                                    {{ opportunity.name }}
+                                </a>
+
+                            </td>
+
+                            <td>
+                                {{ opportunity.sales_rep or "—" }}
+                            </td>
+
+                            <td>
+
+                                <span class="badge bg-blue-lt">
+                                    {{ opportunity.status }}
+                                </span>
+
+                            </td>
+
+                            <td>
+
+                                {% if opportunity.quote %}
+
+                                    <div class="fw-bold">
+                                        {{
+                                            opportunity.quote
+                                            .display_amount
+                                        }}
+                                    </div>
+
+                                    {% if (
+                                        opportunity.quote.currency_code
+                                        == "USD"
+                                    ) %}
+
+                                    <div class="text-secondary small">
+                                        {{
+                                            opportunity.quote
+                                            .display_normalized_amount
+                                        }}
+                                    </div>
+
+                                    {% endif %}
+
+                                {% else %}
+
+                                    <span class="text-secondary">
+                                        Sin cotización
+                                    </span>
+
+                                {% endif %}
+
+                            </td>
+
+                            <td class="text-secondary">
+
+                                {{
+                                    opportunity.current_blocker
+                                    or "Sin bloqueo"
+                                }}
+
+                            </td>
+
+                            <td class="text-end">
+
+                                <form
+                                    method="post"
+                                    action="{{ url_for(
+                                        'workspace.remove_initiative_opportunity',
+                                        initiative_id=initiative.id,
+                                        project_id=opportunity.id
+                                    ) }}"
+                                    onsubmit="return confirm(
+                                        '¿Quitar esta oportunidad de la iniciativa?'
+                                    );"
+                                >
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-sm btn-outline-danger"
+                                    >
+                                        Quitar
+                                    </button>
+
+                                </form>
+
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+
+                            <td
+                                colspan="7"
+                                class="text-center text-secondary py-5"
+                            >
+                                Esta iniciativa todavía no tiene oportunidades.
+                            </td>
+
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Timeline de la iniciativa
+                </h3>
+
+            </div>
+
+            <div class="list-group list-group-flush">
+
+                {% for event in initiative_page.events %}
+
+                <div class="list-group-item">
+
+                    <div class="fw-bold">
+                        {{ event.title }}
+                    </div>
+
+                    {% if event.details %}
+
+                    <div class="text-secondary mt-1">
+                        {{ event.details }}
+                    </div>
+
+                    {% endif %}
+
+                    <div class="text-secondary small mt-1">
+                        {{ event.occurred_at }}
+                    </div>
+
+                </div>
+
+                {% else %}
+
+                <div class="p-4 text-center text-secondary">
+                    No hay eventos registrados.
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-12 col-xl-4">
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Información general
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+
+                <div class="mb-4">
+
+                    <div class="text-secondary small">
+                        Responsable
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {{ initiative.owner }}
+                    </div>
+
+                </div>
+
+
+                <div class="mb-4">
+
+                    <div class="text-secondary small">
+                        Fecha de inicio
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {{ initiative.start_date or "—" }}
+                    </div>
+
+                </div>
+
+
+                <div>
+
+                    <div class="text-secondary small">
+                        Fecha fin esperada
+                    </div>
+
+                    <div class="fw-bold mt-1">
+                        {{ initiative.expected_end_date or "—" }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Objetivo
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+                {{ initiative.objective }}
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Estrategia / Playbook
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+
+                <div style="white-space: pre-wrap;">{{
+                    initiative.strategy
+                    or "Sin estrategia documentada."
+                }}</div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

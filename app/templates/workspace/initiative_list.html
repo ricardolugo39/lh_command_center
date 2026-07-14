@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Iniciativas · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Iniciativas
+{% endblock %}
+
+{% block page_actions %}
+
+<div class="col-auto ms-auto">
+
+    <a
+        href="{{ url_for(
+            'workspace.new_initiative'
+        ) }}"
+        class="btn btn-primary"
+    >
+        Nueva iniciativa
+    </a>
+
+</div>
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+
+    <div class="table-responsive">
+
+        <table class="table table-vcenter card-table">
+
+            <thead>
+                <tr>
+                    <th>Iniciativa</th>
+                    <th>Estado</th>
+                    <th>Partner</th>
+                    <th>Responsable</th>
+                    <th>Oportunidades</th>
+                    <th>Pipeline</th>
+                    <th>Fecha esperada</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for initiative in initiatives %}
+
+                <tr>
+
+                    <td>
+
+                        <a
+                            href="{{ url_for(
+                                'workspace.initiative_detail',
+                                initiative_id=initiative.id
+                            ) }}"
+                            class="fw-bold text-reset"
+                        >
+                            {{ initiative.name }}
+                        </a>
+
+                        <div class="text-secondary small mt-1">
+                            {{ initiative.objective }}
+                        </div>
+
+                    </td>
+
+                    <td>
+                        <span class="badge bg-blue-lt">
+                            {{ initiative.status_label }}
+                        </span>
+                    </td>
+
+                    <td>
+                        {{ initiative.partner or "—" }}
+                    </td>
+
+                    <td>
+                        {{ initiative.owner }}
+                    </td>
+
+                    <td>
+                        {{ initiative.opportunity_count }}
+                    </td>
+
+                    <td class="fw-bold">
+                        {{ initiative.display_pipeline }}
+                    </td>
+
+                    <td>
+                        {{
+                            initiative.expected_end_date
+                            or "—"
+                        }}
+                    </td>
+
+                </tr>
+
+                {% else %}
+
+                <tr>
+                    <td
+                        colspan="7"
+                        class="text-center text-secondary py-5"
+                    >
+                        No hay iniciativas.
+                    </td>
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endblock %}

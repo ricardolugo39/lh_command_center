@@ -1,0 +1,201 @@
+<div class="row g-3">
+
+    <div class="col-md-3">
+
+        <label class="form-label">
+            Prefijo
+        </label>
+
+        <input
+            class="form-control"
+            name="prefix"
+            value="{{ quote.prefix if quote else 'CTC' }}"
+            required
+        >
+
+    </div>
+
+    <div class="col-md-9">
+
+        <label class="form-label">
+            Número
+        </label>
+
+        <input
+            class="form-control"
+            name="quote_number"
+            value="{{ quote.quote_number if quote else '' }}"
+            required
+        >
+
+    </div>
+
+    <div class="col-md-4">
+
+        <label class="form-label">
+            Fecha
+        </label>
+
+        <input
+            type="date"
+            class="form-control"
+            name="quote_date"
+            value="{{ quote.quote_date if quote else '' }}"
+        >
+
+    </div>
+
+    <div class="col-md-4">
+
+        <label class="form-label">
+            Moneda
+        </label>
+
+        <select
+            class="form-select"
+            id="currency_code"
+            name="currency_code"
+        >
+
+            <option
+                value="COP"
+                {% if quote.currency_code == "COP" %}
+                selected
+                {% endif %}
+            >
+                COP
+            </option>
+
+            <option
+                value="USD"
+                {% if quote.currency_code == "USD" %}
+                selected
+                {% endif %}
+            >
+                USD
+            </option>
+
+        </select>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <label class="form-label">
+            Valor
+        </label>
+
+        <input
+            id="amount"
+            type="number"
+            step="0.01"
+            class="form-control"
+            name="amount"
+            value="{{ quote.amount }}"
+            required
+        >
+
+    </div>
+
+</div>
+
+<hr>
+
+<div
+    id="usd-section"
+    {% if quote.currency_code != "USD" %}
+    style="display:none"
+    {% endif %}
+>
+
+    <div class="row g-3">
+
+        <div class="col-md-6">
+
+            <label class="form-label">
+                Tasa de cambio
+            </label>
+        
+            <input
+                id="exchange_rate"
+                type="number"
+                step="0.01"
+                min="0"
+                class="form-control"
+                name="exchange_rate"
+                value="{{ quote.exchange_rate if quote else '' }}"
+            >
+        
+        </div>
+
+        <div class="col-md-6">
+
+            <label class="form-label">
+                Tipo
+            </label>
+
+            <select
+                class="form-select"
+                name="exchange_rate_type"
+            >
+
+                <option
+                    value="estimated"
+                    {% if quote.exchange_rate_type=="estimated" %}
+                    selected
+                    {% endif %}
+                >
+                    Estimada
+                </option>
+
+                <option
+                    value="final"
+                    {% if quote.exchange_rate_type=="final" %}
+                    selected
+                    {% endif %}
+                >
+                    Final
+                </option>
+
+            </select>
+
+        </div>
+
+    </div>
+
+</div>
+
+<hr>
+
+<div class="row">
+
+    <div class="col-md-6">
+
+        <label class="form-label">
+            Valor normalizado
+        </label>
+
+        <input
+            id="normalized_amount"
+            class="form-control"
+            readonly
+            value="{{ quote.display_normalized_amount if quote else '' }}"
+        >
+
+    </div>
+
+    <div class="col-md-6">
+
+        <label class="form-label">
+            Estado
+        </label>
+
+        <input
+            class="form-control"
+            name="quote_status"
+            value="{{ quote.quote_status or '' }}"
+        >
+
+    </div>
+
+</div>

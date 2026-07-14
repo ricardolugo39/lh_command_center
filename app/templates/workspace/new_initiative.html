@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Nueva iniciativa · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Nueva iniciativa
+{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+<form method="post">
+
+    <div class="row row-cards">
+
+        <div class="col-12 col-xl-8">
+
+            <div class="card">
+
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Información general
+                    </h3>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="mb-4">
+
+                        <label
+                            for="name"
+                            class="form-label required"
+                        >
+                            Nombre
+                        </label>
+
+                        <input
+                            type="text"
+                            id="name"
+                            name="name"
+                            class="form-control"
+                            value="{{ form_data.get('name', '') }}"
+                            placeholder="Ej. DODGE - Reductores"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="objective"
+                            class="form-label required"
+                        >
+                            Objetivo
+                        </label>
+
+                        <textarea
+                            id="objective"
+                            name="objective"
+                            class="form-control"
+                            rows="3"
+                            placeholder="¿Qué queremos lograr?"
+                            required
+                        >{{ form_data.get('objective', '') }}</textarea>
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="description"
+                            class="form-label"
+                        >
+                            Descripción
+                        </label>
+
+                        <textarea
+                            id="description"
+                            name="description"
+                            class="form-control"
+                            rows="4"
+                            placeholder="Contexto general de la iniciativa"
+                        >{{ form_data.get('description', '') }}</textarea>
+
+                    </div>
+
+                    <div>
+
+                        <label
+                            for="strategy"
+                            class="form-label"
+                        >
+                            Estrategia / Playbook
+                        </label>
+
+                        <textarea
+                            id="strategy"
+                            name="strategy"
+                            class="form-control"
+                            rows="8"
+                            placeholder="Describe los pasos para ejecutar la iniciativa."
+                        >{{ form_data.get('strategy', '') }}</textarea>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-12 col-xl-4">
+
+            <div class="card">
+
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Administración
+                    </h3>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="mb-4">
+
+                        <label
+                            for="status"
+                            class="form-label required"
+                        >
+                            Estado
+                        </label>
+
+                        <select
+                            id="status"
+                            name="status"
+                            class="form-select"
+                            required
+                        >
+                            <option value="planning">
+                                Planeación
+                            </option>
+                            <option value="active">
+                                En ejecución
+                            </option>
+                            <option value="paused">
+                                Pausada
+                            </option>
+                            <option value="completed">
+                                Finalizada
+                            </option>
+                        </select>
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="partner"
+                            class="form-label"
+                        >
+                            Partner
+                        </label>
+
+                        <input
+                            type="text"
+                            id="partner"
+                            name="partner"
+                            class="form-control"
+                            value="{{ form_data.get('partner', '') }}"
+                            placeholder="Ej. DODGE"
+                        >
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="owner"
+                            class="form-label required"
+                        >
+                            Responsable
+                        </label>
+
+                        <input
+                            type="text"
+                            id="owner"
+                            name="owner"
+                            class="form-control"
+                            value="{{ form_data.get('owner', '') }}"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="start_date"
+                            class="form-label"
+                        >
+                            Fecha de inicio
+                        </label>
+
+                        <input
+                            type="date"
+                            id="start_date"
+                            name="start_date"
+                            class="form-control"
+                            value="{{ form_data.get('start_date', '') }}"
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label
+                            for="expected_end_date"
+                            class="form-label"
+                        >
+                            Fecha fin esperada
+                        </label>
+
+                        <input
+                            type="date"
+                            id="expected_end_date"
+                            name="expected_end_date"
+                            class="form-control"
+                            value="{{ form_data.get(
+                                'expected_end_date',
+                                ''
+                            ) }}"
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+
+        <a
+            href="{{ url_for(
+                'workspace.initiative_list'
+            ) }}"
+            class="btn btn-outline-secondary"
+        >
+            Cancelar
+        </a>
+
+        <button
+            type="submit"
+            class="btn btn-primary"
+        >
+            Crear iniciativa
+        </button>
+
+    </div>
+
+</form>
+
+{% endblock %}

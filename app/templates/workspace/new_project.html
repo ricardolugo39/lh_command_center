@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Nuevo proyecto · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Nuevo proyecto
+{% endblock %}
+
+{% block content %}
+
+<style>
+    .customer-lookup {
+        position: relative;
+    }
+
+    .customer-results {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 1050;
+        max-height: 340px;
+        overflow-y: auto;
+        border: 1px solid var(--tblr-border-color);
+        border-radius: var(--tblr-border-radius);
+        background: var(--tblr-bg-surface);
+        box-shadow: var(--tblr-box-shadow-dropdown);
+    }
+
+    .customer-result {
+        cursor: pointer;
+    }
+
+    .customer-result:hover,
+    .customer-result.active {
+        background: var(--tblr-bg-surface-secondary);
+    }
+
+    .selected-customer-card {
+        display: none;
+    }
+</style>
+
+<form
+    id="new-project-form"
+    method="post"
+    autocomplete="off"
+>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    {{ error }}
+</div>
+{% endif %}
+
+    <div class="row row-cards">
+
+        <div class="col-12 col-xl-8">
+
+            <div class="card mb-3">
+
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Información del proyecto
+                    </h3>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="mb-4 customer-lookup">
+
+                        <label
+                            for="customer-search"
+                            class="form-label required"
+                        >
+                            Cliente
+                        </label>
+
+                        <input
+                            type="text"
+                            id="customer-search"
+                            class="form-control"
+                            placeholder="Buscar por nombre, NIT o ciudad..."
+                            autocomplete="off"
+                        >
+
+                        <div
+                            id="customer-results"
+                            class="customer-results d-none"
+                        ></div>
+
+                        <div class="form-hint">
+                            Escribe al menos 2 caracteres y selecciona una sede.
+                        </div>
+
+                        <input
+                            type="hidden"
+                            name="customer_id"
+                            id="customer_id"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="customer_site_id"
+                            id="customer_site_id"
+                        >
+
+                    </div>
+
+                    <div
+                        id="selected-customer-card"
+                        class="selected-customer-card alert alert-info mb-4"
+                    >
+                        <div class="d-flex justify-content-between gap-3">
+
+                            <div>
+                                <div
+                                    id="selected-customer-name"
+                                    class="fw-bold"
+                                ></div>
+
+                                <div
+                                    id="selected-customer-location"
+                                    class="text-secondary mt-1"
+                                ></div>
+
+                                <div
+                                    id="selected-customer-address"
+                                    class="text-secondary small mt-1"
+                                ></div>
+                            </div>
+
+                            <button
+                                type="button"
+                                id="clear-customer"
+                                class="btn-close"
+                                aria-label="Quitar cliente"
+                            ></button>
+
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="sales_rep"
+                            class="form-label required"
+                        >
+                            Vendedor
+                        </label>
+
+                        <input
+                            type="text"
+                            id="sales_rep"
+                            name="sales_rep"
+                            class="form-control"
+                            placeholder="Se completa al seleccionar el cliente"
+                            required
+                        >
+
+                        <div class="form-hint">
+                            Se sugiere el vendedor asignado al cliente, pero puede modificarse.
+                        </div>
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="project_name"
+                            class="form-label required"
+                        >
+                            Nombre del proyecto
+                        </label>
+
+                        <input
+                            type="text"
+                            id="project_name"
+                            name="project_name"
+                            class="form-control"
+                            placeholder="Ej. Cambio de chumaceras"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="status"
+                            class="form-label required"
+                        >
+                            Estado
+                        </label>
+
+                        <select
+                            id="status"
+                            name="status"
+                            class="form-select"
+                        >
+                            <option value="prospect">
+                                Prospecto
+                            </option>
+
+                            <option value="quoting">
+                                Cotizando
+                            </option>
+
+                            <option value="waiting_customer">
+                                Esperando cliente
+                            </option>
+
+                            <option value="negotiation">
+                                Negociación
+                            </option>
+
+                            <option value="won">
+                                Ganado
+                            </option>
+
+                            <option value="lost">
+                                Perdido
+                            </option>
+                        </select>
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="objective"
+                            class="form-label required"
+                        >
+                            Objetivo
+                        </label>
+
+                        <textarea
+                            id="objective"
+                            name="objective"
+                            class="form-control"
+                            rows="4"
+                            placeholder="¿Qué problema estamos resolviendo?"
+                            required
+                        ></textarea>
+
+                    </div>
+
+                    <div class="mb-4">
+
+                        <label
+                            for="proposed_solution"
+                            class="form-label"
+                        >
+                            Nuestra solución
+                        </label>
+
+                        <textarea
+                            id="proposed_solution"
+                            name="proposed_solution"
+                            class="form-control"
+                            rows="3"
+                            placeholder="¿Qué estamos proponiendo?"
+                        ></textarea>
+
+                    </div>
+
+                    <div>
+
+                        <label
+                            for="current_blocker"
+                            class="form-label"
+                        >
+                            Bloqueo actual
+                        </label>
+
+                        <input
+                            type="text"
+                            id="current_blocker"
+                            name="current_blocker"
+                            class="form-control"
+                            placeholder="¿Qué impide avanzar hoy?"
+                        >
+
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+
+        <div class="col-12 col-xl-4">
+
+            <div class="card mb-3">
+
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Cotización opcional
+                    </h3>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="row g-3">
+
+                        <div class="col-4">
+
+                            <label
+                                for="quote_prefix"
+                                class="form-label"
+                            >
+                                Prefijo
+                            </label>
+
+                            <input
+                                type="text"
+                                id="quote_prefix"
+                                name="quote_prefix"
+                                class="form-control"
+                                value="CTC"
+                            >
+
+                        </div>
+
+                        <div class="col-8">
+
+                            <label
+                                for="quote_number"
+                                class="form-label"
+                            >
+                                Número
+                            </label>
+
+                            <input
+                                type="text"
+                                id="quote_number"
+                                name="quote_number"
+                                class="form-control"
+                                placeholder="43965"
+                            >
+
+                        </div>
+
+                        <div class="col-12">
+
+                            <label
+                                for="quote_amount"
+                                class="form-label"
+                            >
+                                Valor
+                            </label>
+
+                            <input
+                                type="number"
+                                id="quote_amount"
+                                name="quote_amount"
+                                class="form-control"
+                                min="0"
+                                step="0.01"
+                                placeholder="0"
+                            >
+
+                        </div>
+
+                        <div class="col-12">
+
+                            <label
+                                for="quote_date"
+                                class="form-label"
+                            >
+                                Fecha
+                            </label>
+
+                            <input
+                                type="date"
+                                id="quote_date"
+                                name="quote_date"
+                                class="form-control"
+                            >
+
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Marcas
+                    </h3>
+                </div>
+
+                <div class="card-body">
+
+                    {% set brands = [
+                        "SKF",
+                        "INA",
+                        "THK",
+                        "GJN",
+                        "NSK",
+                        "SNR",
+                        "REXNORD",
+                        "DOD",
+                        "TIMKEN"
+                    ] %}
+
+                    <div class="row">
+
+                        {% for brand in brands %}
+                        <div class="col-6">
+
+                            <label class="form-check mb-3">
+
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    name="brands"
+                                    value="{{ brand }}"
+                                >
+
+                                <span class="form-check-label">
+                                    {{ brand }}
+                                </span>
+
+                            </label>
+
+                        </div>
+                        {% endfor %}
+
+                    </div>
+
+                    <div class="mt-2">
+
+                        <label
+                            for="other_brand"
+                            class="form-label"
+                        >
+                            Otra marca
+                        </label>
+
+                        <input
+                            type="text"
+                            id="other_brand"
+                            name="other_brand"
+                            class="form-control"
+                            placeholder="Especificar otra marca"
+                        >
+
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+
+        <a
+            href="{{ url_for('workspace.project_list') }}"
+            class="btn btn-outline-secondary"
+        >
+            Cancelar
+        </a>
+
+        <button
+            type="submit"
+            class="btn btn-primary"
+        >
+            Crear proyecto
+        </button>
+
+    </div>
+
+</form>
+
+<script
+    src="{{ url_for(
+        'static',
+        filename='js/customer_lookup.js'
+    ) }}"
+></script>
+
+{% endblock %}
