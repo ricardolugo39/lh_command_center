@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Editar iniciativa · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Editar iniciativa
+{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+<form method="post">
+
+    {% include "workspace/partials/_initiative_form.html" %}
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+
+        <a
+            href="{{ url_for(
+                'workspace.initiative_detail',
+                initiative_id=initiative.id
+            ) }}"
+            class="btn btn-outline-secondary"
+        >
+            Cancelar
+        </a>
+
+        <button
+            type="submit"
+            class="btn btn-primary"
+        >
+            Guardar cambios
+        </button>
+
+    </div>
+
+</form>
+
+{% endblock %}

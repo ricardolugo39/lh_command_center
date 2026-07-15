@@ -401,3 +401,72 @@ class InitiativeRepository:
             )
 
             conn.commit()
+
+    @staticmethod
+    def update_initiative(
+        *,
+        initiative_id: int,
+        name: str,
+        status: str,
+        objective: str,
+        owner: str,
+        description: str | None = None,
+        strategy: str | None = None,
+        partner: str | None = None,
+        start_date: str | None = None,
+        expected_end_date: str | None = None,
+    ) -> None:
+        sql = """
+        UPDATE ws_initiatives
+        SET
+            name = ?,
+            status = ?,
+            objective = ?,
+            description = ?,
+            strategy = ?,
+            partner = ?,
+            owner = ?,
+            start_date = ?,
+            expected_end_date = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            closed_at = CASE
+                WHEN ? = 'completed'
+                THEN COALESCE(
+                    closed_at,
+                    CURRENT_TIMESTAMP
+                )
+                ELSE NULL
+            END
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    name.strip(),
+                    status,
+                    objective.strip(),
+                    description.strip()
+                    if description
+                    else None,
+                    strategy.strip()
+                    if strategy
+                    else None,
+                    partner.strip()
+                    if partner
+                    else None,
+                    owner.strip(),
+                    start_date or None,
+                    expected_end_date or None,
+                    status,
+                    initiative_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    "La iniciativa no existe."
+                )
+
+            conn.commit()

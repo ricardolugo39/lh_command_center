@@ -5,6 +5,7 @@ class ActivityType:
     FOLLOWUP_CREATED = "followup_created"
     FOLLOWUP_COMPLETED = "followup_completed"
     FOLLOWUP_RESCHEDULED = "followup_rescheduled"
+    PROJECT_UPDATED = "project_updated"
 
     CALL = "call"
     VISIT = "visit"

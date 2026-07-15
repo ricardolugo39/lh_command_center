@@ -13,41 +13,54 @@
 
 {% block content %}
 
-<div class="mb-4">
 
-    <span class="badge bg-blue-lt">
-        {{ initiative.status_label }}
-    </span>
+<div class="d-flex justify-content-between align-items-start mb-4">
 
-    {% if initiative.partner %}
-    <span class="badge bg-secondary-lt ms-2">
-        {{ initiative.partner }}
-    </span>
-    {% endif %}
+    <div>
 
-</div>
+        <span class="badge bg-blue-lt">
+            {{ initiative.status_label }}
+        </span>
 
-<div class="d-flex justify-content-end mb-4">
+        {% if initiative.partner %}
+        <span class="badge bg-secondary-lt ms-2">
+            {{ initiative.partner }}
+        </span>
+        {% endif %}
 
-    <form
-        method="post"
-        action="{{ url_for(
-            'workspace.delete_initiative',
-            initiative_id=initiative.id
-        ) }}"
-        onsubmit="return confirm(
-            '¿Eliminar esta iniciativa? Las oportunidades relacionadas no serán eliminadas, pero quedarán sin iniciativa. Esta acción no se puede deshacer.'
-        );"
-    >
+    </div>
 
-        <button
-            type="submit"
-            class="btn btn-outline-danger"
+    <div class="d-flex gap-2">
+
+        <a
+            href="{{ url_for(
+                'workspace.edit_initiative',
+                initiative_id=initiative.id
+            ) }}"
+            class="btn btn-primary"
         >
-            Eliminar iniciativa
-        </button>
+            Editar iniciativa
+        </a>
 
-    </form>
+        <form
+            method="post"
+            action="{{ url_for(
+                'workspace.delete_initiative',
+                initiative_id=initiative.id
+            ) }}"
+            onsubmit="return confirm(
+                '¿Eliminar esta iniciativa? Las oportunidades no serán eliminadas.'
+            );"
+        >
+            <button
+                type="submit"
+                class="btn btn-outline-danger"
+            >
+                Eliminar iniciativa
+            </button>
+        </form>
+
+    </div>
 
 </div>
 

@@ -1,0 +1,312 @@
+<div class="row row-cards">
+
+    <div class="col-12 col-xl-8">
+
+        <div class="card">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Información general
+                </h3>
+            </div>
+
+            <div class="card-body">
+
+                <div class="mb-4">
+
+                    <label
+                        for="name"
+                        class="form-label required"
+                    >
+                        Nombre
+                    </label>
+
+                    <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        class="form-control"
+                        value="{{
+                            form_data.get(
+                                'name',
+                                initiative.name
+                                if initiative
+                                else ''
+                            )
+                        }}"
+                        placeholder="Ej. DODGE - Reductores"
+                        required
+                    >
+
+                </div>
+
+                <div class="mb-4">
+
+                    <label
+                        for="objective"
+                        class="form-label required"
+                    >
+                        Objetivo
+                    </label>
+
+                    <textarea
+                        id="objective"
+                        name="objective"
+                        class="form-control"
+                        rows="3"
+                        required
+                    >{{
+                        form_data.get(
+                            'objective',
+                            initiative.objective
+                            if initiative
+                            else ''
+                        )
+                    }}</textarea>
+
+                </div>
+
+                <div class="mb-4">
+
+                    <label
+                        for="description"
+                        class="form-label"
+                    >
+                        Descripción
+                    </label>
+
+                    <textarea
+                        id="description"
+                        name="description"
+                        class="form-control"
+                        rows="4"
+                    >{{
+                        form_data.get(
+                            'description',
+                            initiative.description
+                            if initiative
+                            else ''
+                        )
+                    }}</textarea>
+
+                </div>
+
+                <div>
+
+                    <label
+                        for="strategy"
+                        class="form-label"
+                    >
+                        Estrategia / Playbook
+                    </label>
+
+                    <textarea
+                        id="strategy"
+                        name="strategy"
+                        class="form-control"
+                        rows="8"
+                    >{{
+                        form_data.get(
+                            'strategy',
+                            initiative.strategy
+                            if initiative
+                            else ''
+                        )
+                    }}</textarea>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="col-12 col-xl-4">
+
+        <div class="card">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Administración
+                </h3>
+            </div>
+
+            <div class="card-body">
+
+                {% set selected_status = form_data.get(
+                    'status',
+                    initiative.status
+                    if initiative
+                    else 'planning'
+                ) %}
+
+                <div class="mb-4">
+
+                    <label
+                        for="status"
+                        class="form-label required"
+                    >
+                        Estado
+                    </label>
+
+                    <select
+                        id="status"
+                        name="status"
+                        class="form-select"
+                        required
+                    >
+
+                        <option
+                            value="planning"
+                            {% if selected_status == "planning" %}
+                            selected
+                            {% endif %}
+                        >
+                            Planeación
+                        </option>
+
+                        <option
+                            value="active"
+                            {% if selected_status == "active" %}
+                            selected
+                            {% endif %}
+                        >
+                            En ejecución
+                        </option>
+
+                        <option
+                            value="paused"
+                            {% if selected_status == "paused" %}
+                            selected
+                            {% endif %}
+                        >
+                            Pausada
+                        </option>
+
+                        <option
+                            value="completed"
+                            {% if selected_status == "completed" %}
+                            selected
+                            {% endif %}
+                        >
+                            Finalizada
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="mb-4">
+
+                    <label
+                        for="partner"
+                        class="form-label"
+                    >
+                        Partner
+                    </label>
+
+                    <input
+                        type="text"
+                        id="partner"
+                        name="partner"
+                        class="form-control"
+                        value="{{
+                            form_data.get(
+                                'partner',
+                                initiative.partner
+                                if initiative
+                                else ''
+                            )
+                        }}"
+                    >
+
+                </div>
+
+                <div class="mb-4">
+
+                    <label
+                        for="owner"
+                        class="form-label required"
+                    >
+                        Responsable
+                    </label>
+
+                    <input
+                        type="text"
+                        id="owner"
+                        name="owner"
+                        class="form-control"
+                        value="{{
+                            form_data.get(
+                                'owner',
+                                initiative.owner
+                                if initiative
+                                else ''
+                            )
+                        }}"
+                        required
+                    >
+
+                </div>
+
+                <div class="mb-4">
+
+                    <label
+                        for="start_date"
+                        class="form-label"
+                    >
+                        Fecha de inicio
+                    </label>
+
+                    <input
+                        type="date"
+                        id="start_date"
+                        name="start_date"
+                        class="form-control"
+                        value="{{
+                            form_data.get(
+                                'start_date',
+                                initiative.start_date
+                                if initiative
+                                else ''
+                            )
+                        }}"
+                    >
+
+                </div>
+
+                <div>
+
+                    <label
+                        for="expected_end_date"
+                        class="form-label"
+                    >
+                        Fecha fin esperada
+                    </label>
+
+                    <input
+                        type="date"
+                        id="expected_end_date"
+                        name="expected_end_date"
+                        class="form-control"
+                        value="{{
+                            form_data.get(
+                                'expected_end_date',
+                                initiative.expected_end_date
+                                if initiative
+                                else ''
+                            )
+                        }}"
+                    >
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>

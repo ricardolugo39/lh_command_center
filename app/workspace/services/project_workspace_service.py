@@ -32,6 +32,10 @@ from app.workspace.services.project_health_service import (
     ProjectHealthService,
 )
 
+from app.workspace.repositories.project_file_repository import (
+    ProjectFileRepository,
+)
+
 
 class ProjectWorkspaceService:
 
@@ -256,10 +260,8 @@ class ProjectWorkspaceService:
             project_id
         )
 
-        brands = (
-            ProjectBrandRepository.list_project_brands(
-                project_id
-            )
+        files = ProjectFileRepository.list_project_files(
+            project_id
         )
 
         customer_site = None
@@ -279,6 +281,29 @@ class ProjectWorkspaceService:
             project_id
         )
 
+        commercial_activity_types = {
+            ActivityType.CALL,
+            ActivityType.VISIT,
+            ActivityType.MEETING,
+            ActivityType.EMAIL,
+            ActivityType.NOTE,
+            ActivityType.FOLLOWUP_COMPLETED,
+        }
+
+        commercial_activities = [
+            activity
+            for activity in activities
+            if activity["activity_type"]
+            in commercial_activity_types
+        ]
+
+        system_activities = [
+            activity
+            for activity in activities
+            if activity["activity_type"]
+            not in commercial_activity_types
+        ]
+
         workspace = {
             "customer": customer,
             "customer_site": customer_site,
@@ -288,8 +313,10 @@ class ProjectWorkspaceService:
             "followups": followups,
             "open_loops": [],
             "activities": activities,
+            "commercial_activities": commercial_activities,
+            "system_activities": system_activities,
             "notes": [],
-            "files": [],
+            "files": files,
         }
 
         workspace["health"] = (
@@ -613,7 +640,7 @@ class ProjectWorkspaceService:
 
         ActivityRepository.create_activity(
             project_id=project_id,
-            activity_type=ActivityType.NOTE,
+            activity_type=ActivityType.PROJECT_UPDATED,
             title="Proyecto actualizado",
             details="Se actualizaron los datos generales del proyecto.",
             created_by=created_by,

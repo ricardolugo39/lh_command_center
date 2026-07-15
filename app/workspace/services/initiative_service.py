@@ -426,3 +426,219 @@ class InitiativeService:
         InitiativeRepository.delete_initiative(
             initiative_id
         )
+
+    @staticmethod
+    def update_initiative(
+        *,
+        initiative_id: int,
+        name: str,
+        status: str,
+        objective: str,
+        owner: str,
+        description: str | None = None,
+        strategy: str | None = None,
+        partner: str | None = None,
+        start_date: str | None = None,
+        expected_end_date: str | None = None,
+        created_by: str = "system",
+    ) -> dict[str, Any]:
+        current = (
+            InitiativeRepository.get_initiative(
+                initiative_id
+            )
+        )
+
+        if current is None:
+            raise ValueError(
+                "La iniciativa no existe."
+            )
+
+        clean_name = name.strip()
+        clean_status = status.strip()
+        clean_objective = objective.strip()
+        clean_owner = owner.strip()
+
+        if not clean_name:
+            raise ValueError(
+                "El nombre de la iniciativa es obligatorio."
+            )
+
+        if (
+            clean_status
+            not in VALID_INITIATIVE_STATUSES
+        ):
+            raise ValueError(
+                "El estado de la iniciativa no es válido."
+            )
+
+        if not clean_objective:
+            raise ValueError(
+                "El objetivo de la iniciativa es obligatorio."
+            )
+
+        if not clean_owner:
+            raise ValueError(
+                "El responsable de la iniciativa es obligatorio."
+            )
+
+        if (
+            start_date
+            and expected_end_date
+            and expected_end_date < start_date
+        ):
+            raise ValueError(
+                "La fecha fin esperada no puede ser "
+                "anterior a la fecha de inicio."
+            )
+
+        InitiativeRepository.update_initiative(
+            initiative_id=initiative_id,
+            name=clean_name,
+            status=clean_status,
+            objective=clean_objective,
+            owner=clean_owner,
+            description=description,
+            strategy=strategy,
+            partner=partner,
+            start_date=start_date,
+            expected_end_date=expected_end_date,
+        )
+
+        changes = []
+
+        if current["status"] != clean_status:
+            changes.append(
+                "Estado: "
+                f"{InitiativeService.status_label(current['status'])}"
+                " → "
+                f"{InitiativeService.status_label(clean_status)}"
+            )
+
+        if current["name"] != clean_name:
+            changes.append(
+                f"Nombre: {current['name']} → {clean_name}"
+            )
+
+        InitiativeRepository.create_event(
+            initiative_id=initiative_id,
+            event_type="updated",
+            title="Iniciativa actualizada",
+            details=(
+                "\n".join(changes)
+                if changes
+                else "Se actualizó la información general."
+            ),
+            created_by=created_by,
+        )
+
+        return InitiativeService.get_initiative_page(
+            initiative_id
+        )
+
+    @staticmethod
+    def update_initiative(
+        *,
+        initiative_id: int,
+        name: str,
+        status: str,
+        objective: str,
+        owner: str,
+        description: str | None = None,
+        strategy: str | None = None,
+        partner: str | None = None,
+        start_date: str | None = None,
+        expected_end_date: str | None = None,
+        created_by: str = "system",
+    ) -> dict[str, Any]:
+        current = (
+            InitiativeRepository.get_initiative(
+                initiative_id
+            )
+        )
+
+        if current is None:
+            raise ValueError(
+                "La iniciativa no existe."
+            )
+
+        clean_name = name.strip()
+        clean_status = status.strip()
+        clean_objective = objective.strip()
+        clean_owner = owner.strip()
+
+        if not clean_name:
+            raise ValueError(
+                "El nombre de la iniciativa es obligatorio."
+            )
+
+        if (
+            clean_status
+            not in VALID_INITIATIVE_STATUSES
+        ):
+            raise ValueError(
+                "El estado de la iniciativa no es válido."
+            )
+
+        if not clean_objective:
+            raise ValueError(
+                "El objetivo de la iniciativa es obligatorio."
+            )
+
+        if not clean_owner:
+            raise ValueError(
+                "El responsable de la iniciativa es obligatorio."
+            )
+
+        if (
+            start_date
+            and expected_end_date
+            and expected_end_date < start_date
+        ):
+            raise ValueError(
+                "La fecha fin esperada no puede ser "
+                "anterior a la fecha de inicio."
+            )
+
+        InitiativeRepository.update_initiative(
+            initiative_id=initiative_id,
+            name=clean_name,
+            status=clean_status,
+            objective=clean_objective,
+            owner=clean_owner,
+            description=description,
+            strategy=strategy,
+            partner=partner,
+            start_date=start_date,
+            expected_end_date=expected_end_date,
+        )
+
+        changes = []
+
+        if current["status"] != clean_status:
+            changes.append(
+                "Estado: "
+                f"{InitiativeService.status_label(current['status'])}"
+                " → "
+                f"{InitiativeService.status_label(clean_status)}"
+            )
+
+        if current["name"] != clean_name:
+            changes.append(
+                f"Nombre: {current['name']} → {clean_name}"
+            )
+
+        InitiativeRepository.create_event(
+            initiative_id=initiative_id,
+            event_type="updated",
+            title="Iniciativa actualizada",
+            details=(
+                "\n".join(changes)
+                if changes
+                else "Se actualizó la información general."
+            ),
+            created_by=created_by,
+        )
+
+        return InitiativeService.get_initiative_page(
+            initiative_id
+        )

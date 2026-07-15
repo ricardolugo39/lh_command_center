@@ -106,21 +106,37 @@
         </div>
     
         <div class="d-grid gap-2">
-    
-            <a class="btn btn-primary">
+
+            <a
+                href="{{ url_for(
+                    'workspace.edit_project',
+                    project_id=project.id
+                ) }}"
+                class="btn btn-primary"
+            >
                 Editar proyecto
             </a>
-    
-            <form ...>
-    
+        
+            <form
+                method="post"
+                action="{{ url_for(
+                    'workspace.delete_project',
+                    project_id=project.id
+                ) }}"
+                onsubmit="return confirm(
+                    '¿Eliminar esta oportunidad? Esta acción no se puede deshacer.'
+                );"
+            >
+        
                 <button
-                    class="btn btn-outline-danger"
+                    type="submit"
+                    class="btn btn-outline-danger w-100"
                 >
                     Eliminar oportunidad
                 </button>
-    
+        
             </form>
-    
+        
         </div>
     
     </div>
@@ -541,6 +557,176 @@
 
 {% endif %}
 
+<div id="files" class="mt-5">
+
+    <h3 class="card-title mb-4">
+        Archivos
+    </h3>
+
+    <form
+        method="post"
+        enctype="multipart/form-data"
+        action="{{ url_for(
+            'workspace.upload_project_file',
+            project_id=project.id
+        ) }}"
+        class="row g-2 mb-4"
+    >
+
+        <div class="col-md-3">
+
+            <select
+                class="form-select"
+                name="category"
+            >
+
+                <option value="quote">
+                    Cotización
+                </option>
+
+                <option value="presentation">
+                    Presentación
+                </option>
+
+                <option value="technical">
+                    Técnico
+                </option>
+
+                <option value="meeting">
+                    Reunión
+                </option>
+
+                <option value="visit">
+                    Visita
+                </option>
+
+                <option value="other">
+                    Otro
+                </option>
+
+            </select>
+
+        </div>
+
+        <div class="col-md-6">
+
+            <input
+                class="form-control"
+                type="file"
+                name="file"
+                required
+            >
+
+        </div>
+
+        <div class="col-md-3">
+
+            <button
+                class="btn btn-primary w-100"
+            >
+                Subir archivo
+            </button>
+
+        </div>
+
+    </form>
+
+    <div class="table-responsive">
+
+        <table class="table table-vcenter">
+
+            <thead>
+
+                <tr>
+
+                    <th>Archivo</th>
+
+                    <th>Categoría</th>
+
+                    <th>Fecha</th>
+
+                    <th></th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for file in workspace.files %}
+
+                <tr>
+
+                    <td class="fw-bold">
+                        {{ file.original_name }}
+                    </td>
+
+                    <td>
+                        {{ file.category }}
+                    </td>
+
+                    <td>
+                        {{ file.created_at }}
+                    </td>
+
+                    <td class="text-end">
+
+                        <a
+                            href="{{ url_for(
+                                'workspace.download_project_file',
+                                file_id=file.id
+                            ) }}"
+                            class="btn btn-sm btn-outline-primary"
+                        >
+                            Descargar
+                        </a>
+
+                        <form
+                            method="post"
+                            action="{{ url_for(
+                                'workspace.delete_project_file',
+                                file_id=file.id
+                            ) }}"
+                            class="d-inline"
+                            onsubmit="return confirm('Eliminar archivo?')"
+                        >
+
+                            <button
+                                class="btn btn-sm btn-outline-danger"
+                            >
+                                Eliminar
+                            </button>
+
+                        </form>
+
+                    </td>
+
+                </tr>
+
+                {% else %}
+
+                <tr>
+
+                    <td
+                        colspan="4"
+                        class="text-center text-secondary py-4"
+                    >
+                        No hay archivos.
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
 <div class="row row-cards">
 
     <div class="col-12 col-xl-7">
@@ -548,115 +734,218 @@
         <div class="card">
 
             <div class="card-header">
-
+        
                 <ul class="nav nav-tabs card-header-tabs">
-
+        
                     <li class="nav-item">
                         <a class="nav-link active" href="#overview">
                             Resumen
                         </a>
                     </li>
-
+        
                     <li class="nav-item">
-                        <a class="nav-link" href="#timeline">
-                            Timeline
+                        <a
+                            class="nav-link"
+                            href="#files"
+                        >
+                            Archivos
                         </a>
                     </li>
-
-                    <li class="nav-item">
-                        <span class="nav-link disabled">
-                            Archivos
-                        </span>
-                    </li>
-
+        
                     <li class="nav-item">
                         <span class="nav-link disabled">
                             Historial de compras
                         </span>
                     </li>
-
+        
                     <li class="nav-item">
                         <span class="nav-link disabled">
                             Notas
                         </span>
                     </li>
-
+        
                 </ul>
-
+        
             </div>
-
+        
             <div class="card-body" id="overview">
-
+        
                 <div class="mb-5">
-
+        
                     <div class="d-flex gap-3">
-
+        
                         <div class="summary-icon">
                             ◇
                         </div>
-
+        
                         <div>
-
+        
                             <h3 class="card-title">
                                 Nuestra solución
                             </h3>
-
+        
                             <div class="text-secondary">
                                 {{ project.proposed_solution
                                    or "Sin solución registrada." }}
                             </div>
-
+        
                         </div>
-
+        
                     </div>
-
+        
                 </div>
-
+        
                 <hr>
-
+        
                 <div id="timeline" class="pt-3">
-
-                    <h3 class="card-title mb-4">
-                        Actividad reciente
-                    </h3>
-
-                    {% for activity in workspace.activities[:5] %}
-
-                        <div class="timeline-item">
-
-                            <span class="timeline-dot"></span>
-
-                            <div class="fw-bold">
-                                {{ activity.title }}
-                            </div>
-
-                            {% if activity.details %}
+        
+                    <div
+                        class="btn-group btn-group-sm mb-4"
+                        role="group"
+                        aria-label="Filtro de actividad"
+                    >
+        
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            data-timeline-filter="all"
+                        >
+                            Todo
+                        </button>
+        
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary"
+                            data-timeline-filter="commercial"
+                        >
+                            Comercial
+                        </button>
+        
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary"
+                            data-timeline-filter="system"
+                        >
+                            Sistema
+                        </button>
+        
+                    </div>
+        
+                    <div id="timeline-all">
+        
+                        {% for activity in workspace.activities[:5] %}
+        
+                            <div class="timeline-item">
+                                <span class="timeline-dot"></span>
+        
+                                <div class="fw-bold">
+                                    {{ activity.title }}
+                                </div>
+        
+                                {% if activity.details %}
                                 <div
                                     class="text-secondary mt-1"
                                     style="white-space: pre-line;"
                                 >
                                     {{ activity.details }}
                                 </div>
-                            {% endif %}
-
-                            <div class="small text-secondary mt-2">
-                                {{ activity.occurred_at }}
+                                {% endif %}
+        
+                                <div class="small text-secondary mt-2">
+                                    {{ activity.occurred_at }}
+                                </div>
                             </div>
-
-                        </div>
-
-                    {% else %}
-
-                        <div class="text-secondary">
-                            No hay actividad registrada.
-                        </div>
-
-                    {% endfor %}
-
+        
+                        {% else %}
+        
+                            <div class="text-secondary">
+                                No hay actividad registrada.
+                            </div>
+        
+                        {% endfor %}
+        
+                    </div>
+        
+                    <div
+                        id="timeline-commercial"
+                        class="d-none"
+                    >
+        
+                        {% for activity in workspace.commercial_activities[:5] %}
+        
+                            <div class="timeline-item">
+                                <span class="timeline-dot"></span>
+        
+                                <div class="fw-bold">
+                                    {{ activity.title }}
+                                </div>
+        
+                                {% if activity.details %}
+                                <div
+                                    class="text-secondary mt-1"
+                                    style="white-space: pre-line;"
+                                >
+                                    {{ activity.details }}
+                                </div>
+                                {% endif %}
+        
+                                <div class="small text-secondary mt-2">
+                                    {{ activity.occurred_at }}
+                                </div>
+                            </div>
+        
+                        {% else %}
+        
+                            <div class="text-secondary">
+                                No hay actividad comercial registrada.
+                            </div>
+        
+                        {% endfor %}
+        
+                    </div>
+        
+                    <div
+                        id="timeline-system"
+                        class="d-none"
+                    >
+        
+                        {% for activity in workspace.system_activities[:5] %}
+        
+                            <div class="timeline-item">
+                                <span class="timeline-dot"></span>
+        
+                                <div class="fw-bold">
+                                    {{ activity.title }}
+                                </div>
+        
+                                {% if activity.details %}
+                                <div
+                                    class="text-secondary mt-1"
+                                    style="white-space: pre-line;"
+                                >
+                                    {{ activity.details }}
+                                </div>
+                                {% endif %}
+        
+                                <div class="small text-secondary mt-2">
+                                    {{ activity.occurred_at }}
+                                </div>
+                            </div>
+        
+                        {% else %}
+        
+                            <div class="text-secondary">
+                                No hay actividad del sistema.
+                            </div>
+        
+                        {% endfor %}
+        
+                    </div>
+        
                 </div>
-
+        
             </div>
-
+        
         </div>
 
     </div>
@@ -1048,6 +1337,57 @@
             showButton.classList.remove("d-none");
 
         });
+    
+        const timelineButtons = document.querySelectorAll(
+    "[data-timeline-filter]"
+);
+
+const timelineSections = {
+    all: document.getElementById("timeline-all"),
+    commercial: document.getElementById(
+        "timeline-commercial"
+    ),
+    system: document.getElementById(
+        "timeline-system"
+    ),
+};
+
+timelineButtons.forEach((button) => {
+
+    button.addEventListener("click", () => {
+
+        const selected =
+            button.dataset.timelineFilter;
+
+        Object.entries(timelineSections).forEach(
+            ([key, section]) => {
+
+                section.classList.toggle(
+                    "d-none",
+                    key !== selected
+                );
+
+            }
+        );
+
+        timelineButtons.forEach((item) => {
+
+            item.classList.remove("btn-primary");
+            item.classList.add(
+                "btn-outline-primary"
+            );
+
+        });
+
+        button.classList.remove(
+            "btn-outline-primary"
+        );
+
+        button.classList.add("btn-primary");
+
+    });
+
+});
     });
     </script>
 {% endblock %}

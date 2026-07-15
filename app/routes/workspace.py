@@ -9,6 +9,7 @@ from flask import (
     render_template,
     request,
     url_for,
+     send_file,
 )
 
 from app.workspace.repositories.customer_repository import (
@@ -35,6 +36,17 @@ from app.workspace.services.workspace_dashboard_service import (
 
 from app.workspace.services.customer_detail_service import (
     CustomerDetailService,
+)
+
+from app.workspace.repositories.initiative_repository import (
+    InitiativeRepository,
+)
+
+
+from app.workspace.services.project_file_service import (
+
+    ProjectFileService,
+
 )
 
 workspace_bp = Blueprint(
@@ -757,4 +769,163 @@ def delete_initiative(
         url_for(
             "workspace.initiative_list"
         )
+    )
+
+@workspace_bp.route(
+    "/workspace/initiatives/"
+    "<int:initiative_id>/edit",
+    methods=["GET", "POST"],
+)
+def edit_initiative(
+    initiative_id: int,
+):
+    initiative = (
+        InitiativeRepository.get_initiative(
+            initiative_id
+        )
+    )
+
+    if initiative is None:
+        abort(404)
+
+    error = None
+    form_data = request.form.to_dict()
+
+    if request.method == "POST":
+        try:
+            InitiativeService.update_initiative(
+                initiative_id=initiative_id,
+                name=request.form.get(
+                    "name",
+                    "",
+                ),
+                status=request.form.get(
+                    "status",
+                    "planning",
+                ),
+                objective=request.form.get(
+                    "objective",
+                    "",
+                ),
+                description=request.form.get(
+                    "description",
+                    "",
+                ),
+                strategy=request.form.get(
+                    "strategy",
+                    "",
+                ),
+                partner=request.form.get(
+                    "partner",
+                    "",
+                ),
+                owner=request.form.get(
+                    "owner",
+                    "",
+                ),
+                start_date=request.form.get(
+                    "start_date",
+                    "",
+                ) or None,
+                expected_end_date=request.form.get(
+                    "expected_end_date",
+                    "",
+                ) or None,
+            )
+
+            return redirect(
+                url_for(
+                    "workspace.initiative_detail",
+                    initiative_id=initiative_id,
+                )
+            )
+
+        except ValueError as exc:
+            error = str(exc)
+
+            initiative = (
+                InitiativeRepository.get_initiative(
+                    initiative_id
+                )
+            )
+
+    return render_template(
+        "workspace/edit_initiative.html",
+        initiative=initiative,
+        form_data=form_data,
+        error=error,
+    )
+
+@workspace_bp.post(
+    "/workspace/projects/<int:project_id>/files"
+)
+def upload_project_file(project_id: int):
+
+    file = request.files.get("file")
+
+    if file is None:
+        return "Archivo requerido.", 400
+
+    try:
+        ProjectFileService.upload_file(
+            project_id=project_id,
+            file=file,
+            category=request.form.get(
+                "category",
+                "other",
+            ),
+        )
+
+    except ValueError as exc:
+        return str(exc), 400
+
+    return redirect(
+        url_for(
+            "workspace.project_detail",
+            project_id=project_id,
+        )
+    )
+
+@workspace_bp.post(
+    "/workspace/files/<int:file_id>/delete"
+)
+def delete_project_file(file_id: int):
+
+    record = (
+        ProjectFileService.get_file_path(
+            file_id
+        )[0]
+    )
+
+    ProjectFileService.delete_file(
+        file_id
+    )
+
+    return redirect(
+        url_for(
+            "workspace.project_detail",
+            project_id=record["project_id"],
+        )
+    )
+
+@workspace_bp.get(
+    "/workspace/files/<int:file_id>/download"
+)
+def download_project_file(file_id: int):
+    try:
+        record, path = (
+            ProjectFileService.get_file_path(
+                file_id
+            )
+        )
+    except ValueError:
+        abort(404)
+
+    if not path.exists():
+        abort(404)
+
+    return send_file(
+        path,
+        as_attachment=True,
+        download_name=record["original_name"],
     )
