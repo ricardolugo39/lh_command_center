@@ -24,15 +24,36 @@
 
 <div class="d-flex justify-content-end mb-4">
 
-    <a
-        href="{{ url_for(
-            'workspace.edit_agreement',
-            agreement_id=agreement.id
-        ) }}"
-        class="btn btn-primary"
-    >
-        Editar convenio
-    </a>
+    <div class="d-flex justify-content-between mb-4">
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'workspace.delete_agreement',
+                agreement_id=agreement.id
+            ) }}"
+            onsubmit="return confirm(
+                'Delete this agreement?'
+            );"
+        >
+            <button
+                class="btn btn-outline-danger"
+            >
+                Borrar
+            </button>
+        </form>
+    
+        <a
+            href="{{ url_for(
+                'workspace.edit_agreement',
+                agreement_id=agreement.id
+            ) }}"
+            class="btn btn-primary"
+        >
+            Editar Convenio
+        </a>
+    
+    </div>
 
 </div>
 

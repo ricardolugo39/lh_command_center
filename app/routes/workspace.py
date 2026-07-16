@@ -1165,3 +1165,29 @@ def edit_agreement(agreement_id: int):
         form_data=form_data,
         error=error,
     )
+
+@workspace_bp.post(
+    "/workspace/agreements/<int:agreement_id>/delete"
+)
+def delete_agreement(
+    agreement_id: int,
+):
+    agreement = AgreementService.get(
+        agreement_id
+    )
+
+    if agreement is None:
+        abort(404)
+
+    customer_id = agreement["customer_id"]
+
+    AgreementService.delete(
+        agreement_id
+    )
+
+    return redirect(
+        url_for(
+            "workspace.customer_detail",
+            customer_id=customer_id,
+        )
+    )
