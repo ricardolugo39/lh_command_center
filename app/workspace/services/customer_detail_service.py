@@ -30,6 +30,14 @@ from app.workspace.services.agreement_service import (
     AgreementService,
 )
 
+from app.workspace.builders.commercial_priority_builder import(
+    CommercialPriorityBuilder
+)
+
+from app.workspace.builders.customer_tag_builder import (
+    CustomerTagBuilder,
+)
+
 
 class CustomerDetailService:
 
@@ -166,12 +174,6 @@ class CustomerDetailService:
             )
         )
 
-        kpis = CustomerKPIBuilder.build(
-            sales=formatted_sales,
-            pipeline=pipeline_summary,
-            display_pipeline=display_pipeline,
-        )
-
         agreements = AgreementService.list_customer(
             customer_id
         )
@@ -180,6 +182,27 @@ class CustomerDetailService:
             agreements[0]
             if agreements
             else None
+        )
+        
+        kpis = CustomerKPIBuilder.build(
+            sales=formatted_sales,
+            pipeline=pipeline_summary,
+            display_pipeline=display_pipeline,
+            agreement=active_agreement,
+        )
+
+        tags = CustomerTagBuilder.build(
+            customer=customer,
+            agreement=active_agreement,
+            pipeline=pipeline_summary,
+        )
+
+        
+
+        priorities = CommercialPriorityBuilder.build(
+            projects=projects,
+            pipeline=pipeline_summary,
+            agreement=active_agreement,
         )
 
         return {
@@ -194,6 +217,8 @@ class CustomerDetailService:
             "display_pipeline": display_pipeline,
             "kpis": kpis,
             "agreement": active_agreement,
+            "priorities": priorities,
+            "tags": tags,
             "sales": {
                 **sales_summary,
                 "display_lifetime_sales": (
