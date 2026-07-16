@@ -10,6 +10,26 @@ from app.workspace.services.quote_service import (
     QuoteService,
 )
 
+from app.workspace.builders.customer_priority_builder import (
+    CustomerPriorityBuilder,
+)
+
+from app.workspace.builders.customer_insight_builder import (
+    CustomerInsightBuilder,
+)
+
+from app.workspace.builders.customer_project_builder import (
+    CustomerProjectBuilder,
+)
+
+from app.workspace.builders.customer_kpi_builder import (
+    CustomerKPIBuilder,
+)
+
+from app.workspace.services.agreement_service import (
+    AgreementService,
+)
+
 
 class CustomerDetailService:
 
@@ -72,60 +92,9 @@ class CustomerDetailService:
                 )
             )
 
-        projects = (
-            CustomerDetailRepository
-            .list_customer_projects(
-                customer_id
-            )
+        projects = CustomerProjectBuilder.build(
+            customer_id=customer_id
         )
-
-        enriched_projects = []
-
-        for project in projects:
-            quote = None
-
-            if project.get("quote_number"):
-                quote = QuoteService.enrich_quote(
-                    {
-                        "id": None,
-                        "project_id": project["id"],
-                        "prefix": (
-                            project.get("prefix")
-                            or "CTC"
-                        ),
-                        "quote_number": project[
-                            "quote_number"
-                        ],
-                        "amount": project.get(
-                            "amount"
-                        ),
-                        "currency_code": (
-                            project.get(
-                                "currency_code"
-                            )
-                            or "COP"
-                        ),
-                        "exchange_rate": project.get(
-                            "exchange_rate"
-                        ),
-                        "exchange_rate_type": None,
-                        "normalized_amount": (
-                            project.get(
-                                "normalized_amount"
-                            )
-                        ),
-                        "quote_date": None,
-                        "quote_status": None,
-                        "revision": 0,
-                    }
-                )
-
-            enriched_projects.append(
-                {
-                    **project,
-                    "quote": quote,
-                }
-            )
 
         pipeline_summary = (
             CustomerDetailRepository
@@ -134,12 +103,97 @@ class CustomerDetailService:
             )
         )
 
+        priorities = (
+            CustomerPriorityBuilder.build(
+                customer=customer,
+                projects=projects,
+                pipeline=pipeline_summary,
+                sales=sales_summary,
+            )
+        )
+
+        insights = CustomerInsightBuilder.build(
+            sales={
+                **sales_summary,
+                "display_current_year": (
+                    CustomerDetailService.format_cop(
+                        sales_summary.get(
+                            "sales_current_year"
+                        )
+                    )
+                ),
+                "display_last_12_months": (
+                    CustomerDetailService.format_cop(
+                        sales_summary.get(
+                            "sales_last_12_months"
+                        )
+                    )
+                ),
+            },
+            pipeline=pipeline_summary,
+        )
+
+        formatted_sales = {
+            **sales_summary,
+            "display_lifetime_sales": (
+                CustomerDetailService.format_cop(
+                    sales_summary.get(
+                        "lifetime_sales"
+                    )
+                )
+            ),
+            "display_last_12_months": (
+                CustomerDetailService.format_cop(
+                    sales_summary.get(
+                        "sales_last_12_months"
+                    )
+                )
+            ),
+            "display_current_year": (
+                CustomerDetailService.format_cop(
+                    sales_summary.get(
+                        "sales_current_year"
+                    )
+                )
+            ),
+        }
+
+        display_pipeline = (
+            CustomerDetailService.format_cop(
+                pipeline_summary.get(
+                    "open_pipeline_cop"
+                )
+            )
+        )
+
+        kpis = CustomerKPIBuilder.build(
+            sales=formatted_sales,
+            pipeline=pipeline_summary,
+            display_pipeline=display_pipeline,
+        )
+
+        agreements = AgreementService.list_customer(
+            customer_id
+        )
+
+        active_agreement = (
+            agreements[0]
+            if agreements
+            else None
+        )
+
         return {
             "customer": customer,
             "erp_summary": erp_summary,
             "sites": sites,
-            "projects": enriched_projects,
+            "projects": projects,
             "pipeline": pipeline_summary,
+            "priorities": priorities,
+            "insights": insights,
+            "sales": formatted_sales,
+            "display_pipeline": display_pipeline,
+            "kpis": kpis,
+            "agreement": active_agreement,
             "sales": {
                 **sales_summary,
                 "display_lifetime_sales": (

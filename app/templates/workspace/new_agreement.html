@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Nuevo convenio · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    Nuevo convenio
+{% endblock %}
+
+{% block content %}
+
+<div class="text-secondary mb-4">
+    Cliente: {{ customer.name }}
+</div>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+<form method="post">
+
+    <div class="card">
+
+        <div class="card-header">
+            <h3 class="card-title">
+                Información del convenio
+            </h3>
+        </div>
+
+        <div class="card-body">
+
+            {% set selected_status = form_data.get(
+                'status',
+                agreement.status if agreement else 'draft'
+            ) %}
+            
+            {% set selected_currency = form_data.get(
+                'currency',
+                agreement.currency if agreement else 'COP'
+            ) %}
+            
+            {% set selected_consignment = form_data.get(
+                'has_consignment',
+                '1' if agreement and agreement.has_consignment else '0'
+            ) %}
+            
+            <div class="row g-3">
+            
+                <div class="col-md-8">
+                    <label class="form-label required">
+                        Nombre
+                    </label>
+            
+                    <input
+                        class="form-control"
+                        name="name"
+                        value="{{ form_data.get('name', agreement.name if agreement else '') }}"
+                        required
+                    >
+                </div>
+            
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Número
+                    </label>
+            
+                    <input
+                        class="form-control"
+                        name="agreement_number"
+                        value="{{ form_data.get('agreement_number', agreement.agreement_number if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Estado
+                    </label>
+            
+                    <select
+                        class="form-select"
+                        name="status"
+                    >
+                        <option value="draft" {% if selected_status == "draft" %}selected{% endif %}>Borrador</option>
+                        <option value="active" {% if selected_status == "active" %}selected{% endif %}>Activo</option>
+                        <option value="renewal" {% if selected_status == "renewal" %}selected{% endif %}>Renovación</option>
+                        <option value="expired" {% if selected_status == "expired" %}selected{% endif %}>Vencido</option>
+                        <option value="closed" {% if selected_status == "closed" %}selected{% endif %}>Cerrado</option>
+                    </select>
+                </div>
+            
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Tipo
+                    </label>
+            
+                    <input
+                        class="form-control"
+                        name="agreement_type"
+                        value="{{ form_data.get('agreement_type', agreement.agreement_type if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Proveedor / marca
+                    </label>
+            
+                    <input
+                        class="form-control"
+                        name="supplier"
+                        value="{{ form_data.get('supplier', agreement.supplier if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Meta anual
+                    </label>
+            
+                    <input
+                        type="number"
+                        step="0.01"
+                        class="form-control"
+                        name="annual_target"
+                        value="{{ form_data.get('annual_target', agreement.annual_target if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-2">
+                    <label class="form-label">
+                        Moneda
+                    </label>
+            
+                    <select
+                        class="form-select"
+                        name="currency"
+                    >
+                        <option value="COP" {% if selected_currency == "COP" %}selected{% endif %}>COP</option>
+                        <option value="USD" {% if selected_currency == "USD" %}selected{% endif %}>USD</option>
+                    </select>
+                </div>
+            
+                <div class="col-md-3">
+                    <label class="form-label">
+                        Inicio
+                    </label>
+            
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="start_date"
+                        value="{{ form_data.get('start_date', agreement.start_date if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-3">
+                    <label class="form-label">
+                        Fin
+                    </label>
+            
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="end_date"
+                        value="{{ form_data.get('end_date', agreement.end_date if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-3">
+                    <label class="form-label">
+                        Renovación
+                    </label>
+            
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="renewal_date"
+                        value="{{ form_data.get('renewal_date', agreement.renewal_date if agreement else '') }}"
+                    >
+                </div>
+            
+                <div class="col-md-3">
+                    <label class="form-label">
+                        Consignación
+                    </label>
+            
+                    <select
+                        class="form-select"
+                        name="has_consignment"
+                    >
+                        <option value="0" {% if selected_consignment == "0" %}selected{% endif %}>No</option>
+                        <option value="1" {% if selected_consignment == "1" %}selected{% endif %}>Sí</option>
+                    </select>
+                </div>
+            
+                <div class="col-12">
+                    <label class="form-label">
+                        Notas
+                    </label>
+            
+                    <textarea
+                        class="form-control"
+                        name="notes"
+                        rows="4"
+                    >{{ form_data.get('notes', agreement.notes if agreement else '') }}</textarea>
+                </div>
+            
+            </div>
+
+        </div>
+
+        <div class="card-footer text-end">
+
+            <a
+                href="{{ url_for(
+                    'workspace.customer_detail',
+                    customer_id=customer.id
+                ) }}"
+                class="btn btn-outline-secondary"
+            >
+                Cancelar
+            </a>
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+                Crear convenio
+            </button>
+
+        </div>
+
+    </div>
+
+</form>
+
+{% endblock %}

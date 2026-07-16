@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {{ agreement.name }} · Commercial Command Center
+{% endblock %}
+
+{% block page_title %}
+    {{ agreement.name }}
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <a
+        href="{{ url_for(
+            'workspace.customer_detail',
+            customer_id=customer.id
+        ) }}"
+        class="text-secondary"
+    >
+        ← Volver a {{ customer.name }}
+    </a>
+</div>
+
+<div class="d-flex justify-content-end mb-4">
+
+    <a
+        href="{{ url_for(
+            'workspace.edit_agreement',
+            agreement_id=agreement.id
+        ) }}"
+        class="btn btn-primary"
+    >
+        Editar convenio
+    </a>
+
+</div>
+
+<div class="card">
+
+    <div class="card-header">
+        <h3 class="card-title">
+            Información del convenio
+        </h3>
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-4">
+
+            <div class="col-md-4">
+                <div class="text-secondary small">
+                    Estado
+                </div>
+                <div class="fw-bold">
+                    {{ agreement.status }}
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="text-secondary small">
+                    Proveedor
+                </div>
+                <div class="fw-bold">
+                    {{ agreement.supplier or "—" }}
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="text-secondary small">
+                    Número
+                </div>
+                <div class="fw-bold">
+                    {{ agreement.agreement_number or "—" }}
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="text-secondary small">
+                    Inicio
+                </div>
+                <div class="fw-bold">
+                    {{ agreement.start_date or "—" }}
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="text-secondary small">
+                    Fin
+                </div>
+                <div class="fw-bold">
+                    {{ agreement.end_date or "—" }}
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="text-secondary small">
+                    Meta anual
+                </div>
+                <div class="fw-bold">
+                    {{ agreement.currency }}
+                    {{ agreement.annual_target or 0 }}
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

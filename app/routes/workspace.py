@@ -49,6 +49,13 @@ from app.workspace.services.project_file_service import (
 
 )
 
+from app.workspace.repositories.customer_repository import (
+    CustomerRepository,
+)
+from app.workspace.services.agreement_service import (
+    AgreementService,
+)
+
 workspace_bp = Blueprint(
     "workspace",
     __name__,
@@ -928,4 +935,233 @@ def download_project_file(file_id: int):
         path,
         as_attachment=True,
         download_name=record["original_name"],
+    )
+
+@workspace_bp.route(
+    "/workspace/customers/<int:customer_id>/agreements/new",
+    methods=["GET", "POST"],
+)
+def new_agreement(customer_id: int):
+    customer = CustomerRepository.get_customer(
+        customer_id
+    )
+
+    if customer is None:
+        abort(404)
+
+    error = None
+    form_data = request.form.to_dict()
+
+    if request.method == "POST":
+        try:
+            annual_target_text = request.form.get(
+                "annual_target",
+                "",
+            ).strip()
+
+            annual_target = (
+                float(annual_target_text)
+                if annual_target_text
+                else None
+            )
+
+            AgreementService.create(
+                customer_id=customer_id,
+                agreement_number=request.form.get(
+                    "agreement_number",
+                    "",
+                ),
+                name=request.form.get(
+                    "name",
+                    "",
+                ),
+                status=request.form.get(
+                    "status",
+                    "draft",
+                ),
+                agreement_type=request.form.get(
+                    "agreement_type",
+                    "",
+                ),
+                supplier=request.form.get(
+                    "supplier",
+                    "",
+                ),
+                annual_target=annual_target,
+                currency=request.form.get(
+                    "currency",
+                    "COP",
+                ),
+                start_date=request.form.get(
+                    "start_date",
+                    "",
+                ) or None,
+                end_date=request.form.get(
+                    "end_date",
+                    "",
+                ) or None,
+                renewal_date=request.form.get(
+                    "renewal_date",
+                    "",
+                ) or None,
+                has_consignment=(
+                    request.form.get(
+                        "has_consignment"
+                    )
+                    == "1"
+                ),
+                notes=request.form.get(
+                    "notes",
+                    "",
+                ),
+            )
+
+            return redirect(
+                url_for(
+                    "workspace.customer_detail",
+                    customer_id=customer_id,
+                )
+            )
+
+        except (TypeError, ValueError) as exc:
+            error = str(exc)
+
+    return render_template(
+        "workspace/new_agreement.html",
+        customer=customer,
+        agreement=None,
+        form_data=form_data,
+        error=error,
+    )
+
+@workspace_bp.get(
+    "/workspace/agreements/<int:agreement_id>"
+)
+def agreement_detail(agreement_id: int):
+    agreement = AgreementService.get(
+        agreement_id
+    )
+
+    if agreement is None:
+        abort(404)
+
+    customer = CustomerRepository.get_customer(
+        agreement["customer_id"]
+    )
+
+    if customer is None:
+        abort(404)
+
+    return render_template(
+        "workspace/agreement_detail.html",
+        agreement=agreement,
+        customer=customer,
+    )
+
+@workspace_bp.route(
+    "/workspace/agreements/<int:agreement_id>/edit",
+    methods=["GET", "POST"],
+)
+def edit_agreement(agreement_id: int):
+    agreement = AgreementService.get(
+        agreement_id
+    )
+
+    if agreement is None:
+        abort(404)
+
+    customer = CustomerRepository.get_customer(
+        agreement["customer_id"]
+    )
+
+    if customer is None:
+        abort(404)
+
+    error = None
+    form_data = request.form.to_dict()
+
+    if request.method == "POST":
+        try:
+            annual_target_text = request.form.get(
+                "annual_target",
+                "",
+            ).strip()
+
+            annual_target = (
+                float(annual_target_text)
+                if annual_target_text
+                else None
+            )
+
+            AgreementService.update(
+                agreement_id=agreement_id,
+                agreement_number=request.form.get(
+                    "agreement_number",
+                    "",
+                ),
+                name=request.form.get(
+                    "name",
+                    "",
+                ),
+                status=request.form.get(
+                    "status",
+                    "draft",
+                ),
+                agreement_type=request.form.get(
+                    "agreement_type",
+                    "",
+                ),
+                supplier=request.form.get(
+                    "supplier",
+                    "",
+                ),
+                annual_target=annual_target,
+                currency=request.form.get(
+                    "currency",
+                    "COP",
+                ),
+                start_date=request.form.get(
+                    "start_date",
+                    "",
+                ) or None,
+                end_date=request.form.get(
+                    "end_date",
+                    "",
+                ) or None,
+                renewal_date=request.form.get(
+                    "renewal_date",
+                    "",
+                ) or None,
+                has_consignment=(
+                    request.form.get(
+                        "has_consignment"
+                    )
+                    == "1"
+                ),
+                notes=request.form.get(
+                    "notes",
+                    "",
+                ),
+            )
+
+            return redirect(
+                url_for(
+                    "workspace.agreement_detail",
+                    agreement_id=agreement_id,
+                )
+            )
+
+        except (TypeError, ValueError) as exc:
+            error = str(exc)
+
+            agreement = AgreementService.get(
+                agreement_id
+            )
+
+    return render_template(
+        "workspace/new_agreement.html",
+        customer=customer,
+        agreement=agreement,
+        form_data=form_data,
+        error=error,
     )
