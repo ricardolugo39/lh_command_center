@@ -3,6 +3,9 @@ from typing import Any
 from app.workspace.repositories.quote_repository import (
     QuoteRepository,
 )
+from app.workspace.services.project_access_policy import (
+    ProjectAccessPolicy,
+)
 
 
 VALID_CURRENCIES = {
@@ -184,6 +187,19 @@ class QuoteService:
         )
 
     @staticmethod
+    def get_quote_for_edit(
+        quote_id: int,
+    ) -> dict[str, Any] | None:
+        quote = QuoteService.get_quote(quote_id)
+
+        if quote is not None:
+            ProjectAccessPolicy.require_writable(
+                quote["project_id"]
+            )
+
+        return quote
+
+    @staticmethod
     def update_exchange_rate(
         *,
         quote_id: int,
@@ -198,6 +214,10 @@ class QuoteService:
             raise ValueError(
                 "Quote not found."
             )
+
+        ProjectAccessPolicy.require_writable(
+            quote["project_id"]
+        )
 
         clean_rate_type = (
             exchange_rate_type.strip().lower()
@@ -249,6 +269,10 @@ class QuoteService:
             raise ValueError(
                 "La cotización no existe."
             )
+
+        ProjectAccessPolicy.require_writable(
+            quote["project_id"]
+        )
 
         clean_prefix = prefix.strip().upper()
         clean_number = quote_number.strip()

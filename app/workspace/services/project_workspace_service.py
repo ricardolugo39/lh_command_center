@@ -3,7 +3,12 @@ from datetime import datetime
 
 from app.workspace.constants.activity_types import ActivityType
 from app.workspace.constants.followup_status import FollowupStatus
-from app.workspace.constants.project_status import ProjectStatus
+from app.workspace.constants.project_status import (
+    OPEN_STATUSES,
+    PIPELINE_STATUS_ORDER,
+    ProjectStatus,
+    is_open,
+)
 from app.workspace.repositories.activity_repository import (
     ActivityRepository,
 )
@@ -36,6 +41,10 @@ from app.workspace.repositories.project_file_repository import (
     ProjectFileRepository,
 )
 
+from app.workspace.services.project_access_policy import (
+    ProjectAccessPolicy,
+)
+
 
 class ProjectWorkspaceService:
 
@@ -51,6 +60,11 @@ class ProjectWorkspaceService:
         erp_customer_id: str | None = None,
         created_by: str = "system",
     ) -> dict[str, Any]:
+        if not is_open(status):
+            raise ValueError(
+                f"Invalid initial project status: {status}"
+            )
+
         customer = None
 
         if erp_customer_id:
@@ -95,7 +109,9 @@ class ProjectWorkspaceService:
         new_status: str,
         created_by: str = "system",
     ) -> dict[str, Any]:
-        project = ProjectRepository.get_project(project_id)
+        project = ProjectAccessPolicy.require_writable(
+            project_id
+        )
 
         if project is None:
             raise ValueError(
@@ -105,6 +121,11 @@ class ProjectWorkspaceService:
         if new_status not in ProjectStatus.LABELS:
             raise ValueError(
                 f"Invalid project status: {new_status}"
+            )
+
+        if not is_open(new_status):
+            raise ValueError(
+                "Use la decisión comercial para cerrar la oportunidad."
             )
 
         old_status = project["status"]
@@ -138,7 +159,9 @@ class ProjectWorkspaceService:
         new_blocker: str | None,
         created_by: str = "system",
     ) -> dict[str, Any]:
-        project = ProjectRepository.get_project(project_id)
+        project = ProjectAccessPolicy.require_writable(
+            project_id
+        )
 
         if project is None:
             raise ValueError(
@@ -178,7 +201,9 @@ class ProjectWorkspaceService:
         status: str = FollowupStatus.PENDING,
         created_by: str = "system",
     ) -> dict[str, Any]:
-        project = ProjectRepository.get_project(project_id)
+        project = ProjectAccessPolicy.require_writable(
+            project_id
+        )
 
         if project is None:
             raise ValueError(
@@ -317,6 +342,16 @@ class ProjectWorkspaceService:
             "system_activities": system_activities,
             "notes": [],
             "files": files,
+            "is_read_only": ProjectAccessPolicy.is_read_only(project),
+            "selectable_statuses": OPEN_STATUSES,
+            "stages": [
+                {
+                    "value": status,
+                    "label": ProjectStatus.label(status),
+                    "index": index,
+                }
+                for index, status in enumerate(PIPELINE_STATUS_ORDER)
+            ],
         }
 
         workspace["health"] = (
@@ -347,6 +382,10 @@ class ProjectWorkspaceService:
             return ProjectWorkspaceService.get_workspace(
                 followup["project_id"]
             )
+
+        ProjectAccessPolicy.require_writable(
+            followup["project_id"]
+        )
 
         FollowupRepository.complete_followup(
             followup_id
@@ -412,9 +451,9 @@ class ProjectWorkspaceService:
                 "El vendedor es obligatorio."
             )
 
-        if status not in ProjectStatus.LABELS:
+        if not is_open(status):
             raise ValueError(
-                f"Estado inválido: {status}"
+                f"Estado inicial inválido: {status}"
             )
 
         customer_site = (
@@ -503,7 +542,9 @@ class ProjectWorkspaceService:
         followup_description: str | None = None,
         created_by: str = "system",
     ) -> dict[str, Any]:
-        project = ProjectRepository.get_project(project_id)
+        project = ProjectAccessPolicy.require_writable(
+            project_id
+        )
 
         if project is None:
             raise ValueError(
@@ -589,7 +630,9 @@ class ProjectWorkspaceService:
         quote_amount: float | None = None,
         created_by: str = "system",
     ) -> dict[str, Any]:
-        project = ProjectRepository.get_project(project_id)
+        project = ProjectAccessPolicy.require_writable(
+            project_id
+        )
 
         if project is None:
             raise ValueError(
@@ -618,7 +661,6 @@ class ProjectWorkspaceService:
         ProjectRepository.update_project(
             project_id=project_id,
             name=clean_name,
-            status=project["status"],
             objective=clean_objective,
             proposed_solution=proposed_solution,
             current_blocker=current_blocker,
@@ -666,6 +708,10 @@ class ProjectWorkspaceService:
                 f"Follow-up does not exist: {followup_id}"
             )
 
+        ProjectAccessPolicy.require_writable(
+            followup["project_id"]
+        )
+
         old_due_date = followup["due_date"]
 
         if old_due_date == due_date:
@@ -691,12 +737,13 @@ class ProjectWorkspaceService:
         return ProjectWorkspaceService.get_workspace(
             followup["project_id"]
         )
+
     
     @staticmethod
     def delete_project(
         project_id: int,
     ) -> None:
-        project = ProjectRepository.get_project(
+        project = ProjectAccessPolicy.require_writable(
             project_id
         )
 

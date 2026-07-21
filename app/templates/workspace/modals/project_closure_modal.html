@@ -1,0 +1,462 @@
+{% if not workspace.is_read_only %}
+
+<div
+    class="modal modal-blur fade"
+    id="commercialDecisionModal"
+    tabindex="-1"
+    aria-labelledby="commercialDecisionModalTitle"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5
+                    class="modal-title"
+                    id="commercialDecisionModalTitle"
+                >
+                    Cerrar oportunidad
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Cerrar"
+                ></button>
+            </div>
+
+            <div class="modal-body">
+
+                <div class="mb-4">
+                    <label
+                        for="closureResult"
+                        class="form-label required"
+                    >
+                        Resultado de la oportunidad
+                    </label>
+
+                    <select
+                        id="closureResult"
+                        class="form-select"
+                    >
+                        <option value="">
+                            Seleccione un resultado
+                        </option>
+
+                        <option value="won">
+                            Ganada
+                        </option>
+
+                        <option value="lost">
+                            Perdida
+                        </option>
+
+                        <option value="cancelled">
+                            Cancelada
+                        </option>
+                    </select>
+                </div>
+
+                <form
+                    id="wonClosureForm"
+                    method="post"
+                    action="{{ url_for(
+                        'workspace.close_project_as_won',
+                        project_id=project.id
+                    ) }}"
+                    class="d-none"
+                >
+                    <div class="mb-3">
+                        <label
+                            for="wonAmount"
+                            class="form-label required"
+                        >
+                            Valor final de venta
+                        </label>
+
+                        <input
+                            id="wonAmount"
+                            type="number"
+                            name="won_amount"
+                            class="form-control"
+                            min="0.01"
+                            step="0.01"
+                            required
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="customerPo"
+                            class="form-label"
+                        >
+                            Orden de compra del cliente
+                        </label>
+
+                        <input
+                            id="customerPo"
+                            type="text"
+                            name="customer_po"
+                            class="form-control"
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="orderNumber"
+                            class="form-label"
+                        >
+                            Número de pedido
+                        </label>
+
+                        <input
+                            id="orderNumber"
+                            type="text"
+                            name="order_number"
+                            class="form-control"
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="wonComments"
+                            class="form-label"
+                        >
+                            Comentarios
+                        </label>
+
+                        <textarea
+                            id="wonComments"
+                            name="comments"
+                            class="form-control"
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal"
+                        >
+                            Volver
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="btn btn-success"
+                        >
+                            Cerrar como ganada
+                        </button>
+                    </div>
+                </form>
+
+                <form
+                    id="lostClosureForm"
+                    method="post"
+                    action="{{ url_for(
+                        'workspace.close_project_as_lost',
+                        project_id=project.id
+                    ) }}"
+                    class="d-none"
+                >
+                    <div class="mb-3">
+                        <label
+                            for="lostReason"
+                            class="form-label required"
+                        >
+                            Motivo principal
+                        </label>
+
+                        <select
+                            id="lostReason"
+                            name="lost_reason"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Seleccione un motivo
+                            </option>
+
+                            <option value="price">
+                                Precio
+                            </option>
+
+                            <option value="delivery">
+                                Tiempo de entrega
+                            </option>
+
+                            <option value="inventory">
+                                Inventario
+                            </option>
+
+                            <option value="technical_specification">
+                                Especificación técnica
+                            </option>
+
+                            <option value="customer_cancelled">
+                                Cancelada por el cliente
+                            </option>
+
+                            <option value="no_budget">
+                                Sin presupuesto
+                            </option>
+
+                            <option value="commercial_relationship">
+                                Relación comercial
+                            </option>
+
+                            <option value="other">
+                                Otro
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="resultChanger"
+                            class="form-label"
+                        >
+                            ¿Qué hubiera cambiado el resultado?
+                        </label>
+
+                        <select
+                            id="resultChanger"
+                            name="result_changer"
+                            class="form-select"
+                        >
+                            <option value="">
+                                Seleccione una opción
+                            </option>
+
+                            <option value="better_price">
+                                Mejor precio
+                            </option>
+
+                            <option value="greater_availability">
+                                Mayor disponibilidad
+                            </option>
+
+                            <option value="special_skf_discount">
+                                Descuento especial SKF
+                            </option>
+
+                            <option value="engineering_support">
+                                Soporte de ingeniería
+                            </option>
+
+                            <option value="technical_visit">
+                                Visita técnica
+                            </option>
+
+                            <option value="training">
+                                Capacitación
+                            </option>
+
+                            <option value="immediate_delivery">
+                                Entrega inmediata
+                            </option>
+
+                            <option value="other">
+                                Otro
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="competitorCompany"
+                            class="form-label"
+                        >
+                            Empresa competidora
+                        </label>
+
+                        <input
+                            id="competitorCompany"
+                            type="text"
+                            name="competitor_company"
+                            class="form-control"
+                            maxlength="150"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="competitorType"
+                            class="form-label"
+                        >
+                            Tipo de competidor
+                        </label>
+
+                        <select
+                            id="competitorType"
+                            name="competitor_type"
+                            class="form-select"
+                        >
+                            <option value="">
+                                Seleccione un tipo
+                            </option>
+
+                            <option value="skf_distributor">
+                                Distribuidor SKF
+                            </option>
+
+                            <option value="skf_reseller">
+                                Revendedor SKF
+                            </option>
+
+                            <option value="bearing_distributor">
+                                Distribuidor de rodamientos
+                            </option>
+
+                            <option value="oem">
+                                OEM
+                            </option>
+
+                            <option value="machine_builder">
+                                Fabricante de maquinaria
+                            </option>
+
+                            <option value="end_user">
+                                Usuario final
+                            </option>
+
+                            <option value="other">
+                                Otro
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="competitorBrand"
+                            class="form-label"
+                        >
+                            Marca competidora
+                        </label>
+
+                        <select
+                            id="competitorBrand"
+                            name="competitor_brand"
+                            class="form-select"
+                        >
+                            <option value="">
+                                Seleccione una marca
+                            </option>
+
+                            <option value="SKF">SKF</option>
+                            <option value="FAG">FAG</option>
+                            <option value="Timken">Timken</option>
+                            <option value="NSK">NSK</option>
+                            <option value="NTN">NTN</option>
+                            <option value="INA">INA</option>
+                            <option value="THK">THK</option>
+                            <option value="Thomson">Thomson</option>
+                            <option value="Otra">Otra</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="lostComments"
+                            class="form-label"
+                        >
+                            Comentarios
+                        </label>
+
+                        <textarea
+                            id="lostComments"
+                            name="comments"
+                            class="form-control"
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal"
+                        >
+                            Volver
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="btn btn-danger"
+                        >
+                            Cerrar como perdida
+                        </button>
+                    </div>
+                </form>
+
+                <form
+                    id="cancelClosureForm"
+                    method="post"
+                    action="{{ url_for(
+                        'workspace.cancel_project',
+                        project_id=project.id
+                    ) }}"
+                    class="d-none"
+                >
+                    <div class="mb-3">
+                        <label
+                            for="cancellationReason"
+                            class="form-label required"
+                        >
+                            Motivo de cancelación
+                        </label>
+
+                        <input
+                            id="cancellationReason"
+                            type="text"
+                            name="reason"
+                            class="form-control"
+                            required
+                            maxlength="250"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="cancelComments"
+                            class="form-label"
+                        >
+                            Comentarios
+                        </label>
+
+                        <textarea
+                            id="cancelComments"
+                            name="comments"
+                            class="form-control"
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal"
+                        >
+                            Volver
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="btn btn-warning"
+                        >
+                            Cancelar oportunidad
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}

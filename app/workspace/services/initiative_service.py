@@ -15,6 +15,9 @@ from app.workspace.repositories.project_repository import (
 from app.workspace.repositories.customer_repository import (
     CustomerRepository,
 )
+from app.workspace.services.project_access_policy import (
+    ProjectAccessPolicy,
+)
 
 
 INITIATIVE_STATUS_LABELS = {
@@ -166,12 +169,15 @@ class InitiativeService:
             )
 
             status = opportunity["status"]
+            is_read_only = ProjectAccessPolicy.is_read_only(
+                opportunity
+            )
 
             if status == "won":
                 won_count += 1
             elif status == "lost":
                 lost_count += 1
-            else:
+            elif not is_read_only:
                 active_count += 1
 
                 pipeline_cop += float(
@@ -221,6 +227,7 @@ class InitiativeService:
                 {
                     **opportunity,
                     "quote": quote,
+                    "is_read_only": is_read_only,
                 }
             )
 
@@ -229,9 +236,11 @@ class InitiativeService:
             limit=20,
         )
 
-        available_opportunities = (
-            ProjectRepository.list_unassigned_projects()
-        )
+        available_opportunities = [
+            project
+            for project in ProjectRepository.list_unassigned_projects()
+            if not ProjectAccessPolicy.is_read_only(project)
+        ]
 
         return {
             "initiative": {
@@ -297,14 +306,7 @@ class InitiativeService:
                 "La iniciativa no existe."
             )
 
-        project = ProjectRepository.get_project(
-            project_id
-        )
-
-        if project is None:
-            raise ValueError(
-                "La oportunidad no existe."
-            )
+        project = ProjectAccessPolicy.require_writable(project_id)
 
         current_initiative_id = project.get(
             "initiative_id"
@@ -368,14 +370,7 @@ class InitiativeService:
                 "La iniciativa no existe."
             )
 
-        project = ProjectRepository.get_project(
-            project_id
-        )
-
-        if project is None:
-            raise ValueError(
-                "La oportunidad no existe."
-            )
+        project = ProjectAccessPolicy.require_writable(project_id)
 
         if project.get("initiative_id") != initiative_id:
             raise ValueError(

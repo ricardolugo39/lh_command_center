@@ -81,3 +81,21 @@ class AgreementItemRepository:
                 dict(zip(columns, row))
                 for row in cursor.fetchall()
             ]
+
+    @staticmethod
+    def count_items(
+        agreement_id: int,
+    ) -> int:
+
+        with get_connection() as conn:
+
+            cursor = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM ws_agreement_items
+                WHERE agreement_id = ?
+                """,
+                (agreement_id,),
+            )
+
+            return cursor.fetchone()[0]

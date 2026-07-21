@@ -1,6 +1,8 @@
 from datetime import date, datetime
 from typing import Any
 
+from app.workspace.constants.project_status import is_open
+
 
 class CommercialPriorityBuilder:
 
@@ -13,18 +15,31 @@ class CommercialPriorityBuilder:
     ) -> list[dict[str, Any]]:
         priorities: list[dict[str, Any]] = []
 
-        active_project_count = int(
-            pipeline.get(
-                "active_project_count",
-                0,
-            )
-            or 0
-        )
+        active_projects = [
+            project
+            for project in projects
+            if is_open(project.get("status"))
+        ]
 
-        if agreement:
+        blocked_projects = [
+            project
+            for project in active_projects
+            if project.get("current_blocker")
+        ]
+
+        if agreement is None:
+            priorities.append(
+                {
+                    "severity": "danger",
+                    "title": "Formalizar convenio comercial",
+                    "description": (
+                        "El cliente no tiene un convenio registrado."
+                    ),
+                }
+            )
+        else:
             days_until_end = (
-                CommercialPriorityBuilder
-                ._days_until(
+                CommercialPriorityBuilder._days_until(
                     agreement.get("end_date")
                 )
             )
@@ -35,14 +50,11 @@ class CommercialPriorityBuilder:
             ):
                 priorities.append(
                     {
-                        "severity": "danger",
-                        "title": (
-                            "Convenio próximo a vencer"
-                        ),
+                        "severity": "warning",
+                        "title": "Iniciar renovación del convenio",
                         "description": (
                             f"El convenio vence en "
-                            f"{days_until_end} días. "
-                            "Iniciar preparación de renovación."
+                            f"{days_until_end} días."
                         ),
                     }
                 )
@@ -54,84 +66,62 @@ class CommercialPriorityBuilder:
                 priorities.append(
                     {
                         "severity": "danger",
-                        "title": "Convenio vencido",
+                        "title": "Regularizar convenio vencido",
                         "description": (
-                            "Revisar renovación o cierre "
-                            "del convenio."
+                            "El convenio registrado ya venció."
                         ),
                     }
                 )
 
-        else:
-            priorities.append(
-                {
-                    "severity": "warning",
-                    "title": "Sin convenio comercial",
-                    "description": (
-                        "El cliente no tiene un convenio "
-                        "registrado."
-                    ),
-                }
-            )
-
-        if active_project_count > 0:
+        if active_projects:
             priorities.append(
                 {
                     "severity": "info",
                     "title": (
-                        f"{active_project_count} "
-                        "proyecto"
-                        if active_project_count == 1
-                        else (
-                            f"{active_project_count} "
-                            "proyectos activos"
-                        )
+                        f"Dar seguimiento a "
+                        f"{len(active_projects)} "
+                        f"{'proyecto activo' if len(active_projects) == 1 else 'proyectos activos'}"
                     ),
                     "description": (
-                        "Revisar ejecución, bloqueos "
-                        "y próximas acciones."
+                        "Revisar ejecución y próximas acciones."
                     ),
                 }
             )
-
         else:
             priorities.append(
                 {
                     "severity": "secondary",
-                    "title": "Sin oportunidades activas",
+                    "title": "Generar nuevas oportunidades comerciales",
                     "description": (
-                        "El cliente no tiene proyectos "
-                        "comerciales activos."
+                        "El cliente no tiene proyectos activos."
                     ),
                 }
             )
-
-        blocked_projects = [
-            project
-            for project in projects
-            if (
-                project.get("current_blocker")
-                and project.get("status")
-                not in {"won", "lost"}
-            )
-        ]
 
         if blocked_projects:
             priorities.append(
                 {
                     "severity": "warning",
                     "title": (
+                        f"Resolver "
                         f"{len(blocked_projects)} "
-                        "proyecto bloqueado"
-                        if len(blocked_projects) == 1
-                        else (
-                            f"{len(blocked_projects)} "
-                            "proyectos bloqueados"
-                        )
+                        f"{'proyecto bloqueado' if len(blocked_projects) == 1 else 'proyectos bloqueados'}"
                     ),
                     "description": (
-                        "Revisar los bloqueos que están "
-                        "afectando el avance comercial."
+                        "Revisar los bloqueos que afectan el avance."
+                    ),
+                }
+            )
+
+        if agreement and not active_projects:
+            priorities.append(
+                {
+                    "severity": "warning",
+                    "title": (
+                        "Aprovechar el convenio para generar proyectos"
+                    ),
+                    "description": (
+                        "El cliente tiene convenio pero no oportunidades activas."
                     ),
                 }
             )
@@ -150,10 +140,7 @@ class CommercialPriorityBuilder:
                 value,
                 "%Y-%m-%d",
             ).date()
-
         except ValueError:
             return None
 
-        return (
-            target_date - date.today()
-        ).days
+        return (target_date - date.today()).days

@@ -341,6 +341,7 @@
 
                             <td class="text-end">
 
+                                {% if not opportunity.is_read_only %}
                                 <form
                                     method="post"
                                     action="{{ url_for(
@@ -361,6 +362,7 @@
                                     </button>
 
                                 </form>
+                                {% endif %}
 
                             </td>
 

@@ -7,25 +7,12 @@
 {% set quotes = workspace.quotes %}
 {% set brands = workspace.brands %}
 
-{% set stages = [
-    ("prospect", "Prospecto"),
-    ("quoting", "Cotización"),
-    ("waiting_customer", "Esperando cliente"),
-    ("negotiation", "Negociación"),
-    ("won", "Ganado"),
-    ("lost", "Perdido")
-] %}
-
-{% set stage_order = {
-    "prospect": 0,
-    "quoting": 1,
-    "waiting_customer": 2,
-    "negotiation": 3,
-    "won": 4,
-    "lost": 5
-} %}
-
-{% set current_stage_index = stage_order.get(project.status, 0) %}
+{% set current_stage = workspace.stages
+    | selectattr("value", "equalto", project.status)
+    | first
+%}
+{% set current_stage_index = current_stage.index if current_stage else 0 %}
+{% set project_is_closed = workspace.is_read_only %}
 {% set pending_followups = workspace.followups
     | selectattr("status", "equalto", "pending")
     | list
@@ -39,6 +26,20 @@
 {% endblock %}
 
 {% block content %}
+
+{% if project_is_closed %}
+
+<div class="alert alert-info mb-4">
+
+    <strong>Oportunidad cerrada.</strong>
+
+    Esta oportunidad es de solo lectura.
+    El historial comercial permanece disponible,
+    pero ya no es posible modificar información.
+
+</div>
+
+{% endif %}
 
 <div class="project-header mb-4">
 
@@ -107,6 +108,8 @@
     
         <div class="d-grid gap-2">
 
+            {% if not project_is_closed %}
+
             <a
                 href="{{ url_for(
                     'workspace.edit_project',
@@ -116,26 +119,31 @@
             >
                 Editar proyecto
             </a>
+
+            {% endif %}
         
-            <form
-                method="post"
-                action="{{ url_for(
-                    'workspace.delete_project',
-                    project_id=project.id
-                ) }}"
-                onsubmit="return confirm(
-                    '¿Eliminar esta oportunidad? Esta acción no se puede deshacer.'
-                );"
+            <div>
+        
+            {% if not project_is_closed %}
+
+            <button
+                type="button"
+                class="btn btn-primary w-100"
+                data-bs-toggle="modal"
+                data-bs-target="#commercialDecisionModal"
             >
+                Decisión comercial
+            </button>
+
+            {% else %}
+
+            <div class="alert alert-info mb-0">
+                Esta oportunidad se encuentra cerrada.
+            </div>
+
+            {% endif %}
         
-                <button
-                    type="submit"
-                    class="btn btn-outline-danger w-100"
-                >
-                    Eliminar oportunidad
-                </button>
-        
-            </form>
+            </div>
         
         </div>
     
@@ -148,9 +156,9 @@
 
     <div class="stage-track">
 
-        {% for stage_value, stage_label in stages %}
+        {% for stage in workspace.stages %}
 
-            {% set stage_index = stage_order[stage_value] %}
+            {% set stage_index = stage.index %}
 
             <form
                 method="post"
@@ -161,7 +169,7 @@
                 class="stage-item
                     {% if stage_index < current_stage_index %}
                         completed
-                    {% elif stage_value == project.status %}
+                    {% elif stage.value == project.status %}
                         active
                     {% endif %}
                 "
@@ -170,16 +178,19 @@
                 <input
                     type="hidden"
                     name="new_status"
-                    value="{{ stage_value }}"
+                    value="{{ stage.value }}"
                 >
 
                 <button
                     type="submit"
                     class="stage-button"
-                    {% if stage_value == project.status %}
+                    {% if stage.value == project.status
+                        or project_is_closed
+                        or stage.value not in workspace.selectable_statuses
+                    %}
                         disabled
                     {% endif %}
-                    title="Cambiar estado a {{ stage_label }}"
+                    title="Cambiar estado a {{ stage.label }}"
                 >
 
                     <div class="stage-dot">
@@ -191,7 +202,7 @@
                     </div>
 
                     <div class="stage-label">
-                        {{ stage_label }}
+                        {{ stage.label }}
                     </div>
 
                 </button>
@@ -251,7 +262,7 @@
                 <div class="d-flex align-items-center gap-3 mb-4">
     
                     <div class="summary-icon">
-                        ↗
+
                     </div>
     
                     <h3 class="card-title mb-0">
@@ -301,6 +312,8 @@
                            or "Sin bloqueo actual." }}
                     </div>
                 
+                    {% if not project_is_closed %}
+
                     <button
                         type="button"
                         class="btn btn-sm btn-ghost-primary"
@@ -308,6 +321,8 @@
                     >
                         Editar
                     </button>
+
+                    {% endif %}
                 
                 </div>
                 
@@ -532,6 +547,7 @@
 
                     <td class="text-end">
 
+                        {% if not project_is_closed %}
                         <a
                             href="{{ url_for(
                                 'workspace.edit_quote',
@@ -541,6 +557,7 @@
                         >
                             Editar
                         </a>
+                        {% endif %}
 
                     </td>
 
@@ -563,6 +580,7 @@
         Archivos
     </h3>
 
+    {% if not project_is_closed %}
     <form
         method="post"
         enctype="multipart/form-data"
@@ -630,6 +648,7 @@
         </div>
 
     </form>
+    {% endif %}
 
     <div class="table-responsive">
 
@@ -681,6 +700,7 @@
                             Descargar
                         </a>
 
+                        {% if not project_is_closed %}
                         <form
                             method="post"
                             action="{{ url_for(
@@ -698,6 +718,7 @@
                             </button>
 
                         </form>
+                        {% endif %}
 
                     </td>
 
@@ -963,6 +984,7 @@
 
             <div class="card-body border-bottom">
 
+                {% if not project_is_closed %}
                 <form
                     method="post"
                     action="{{ url_for(
@@ -1117,6 +1139,7 @@
                     </div>
 
                 </form>
+                {% endif %}
             
             </div>
 
@@ -1148,6 +1171,7 @@
                                         {{ followup.due_date }}
                                     </div>
                             
+                                    {% if not project_is_closed %}
                                     <div class="d-flex gap-2 mt-3">
                             
                                         <form
@@ -1204,6 +1228,7 @@
                                         </details>
                             
                                     </div>
+                                    {% endif %}
                             
                                 </div>
                             
@@ -1235,159 +1260,189 @@
 
 </div>
 
+{% include "workspace/modals/project_closure_modal.html" %}
+
+{% include "workspace/modals/project_closure_modal_script.html" %}
+
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const typeInput = document.getElementById("activity_type");
-        const activityButtons = document.querySelectorAll(
-            "[data-activity-type]"
-        );
-    
-        const followupCheckbox = document.getElementById(
-            "schedule-followup"
-        );
-    
-        const followupFields = document.getElementById(
-            "followup-fields"
-        );
-    
-        const followupDate = document.getElementById(
-            "followup-due-date"
-        );
-    
-        const followupDescription = document.getElementById(
-            "followup-description"
-        );
-    
-        activityButtons.forEach((button) => {
-            button.addEventListener("click", () => {
-                activityButtons.forEach((item) => {
-                    item.classList.remove("active");
-                });
-    
-                button.classList.add("active");
-                typeInput.value = button.dataset.activityType;
+document.addEventListener("DOMContentLoaded", () => {
+    const typeInput = document.getElementById(
+        "activity_type"
+    );
+
+    const activityButtons = document.querySelectorAll(
+        "[data-activity-type]"
+    );
+
+    const followupCheckbox = document.getElementById(
+        "schedule-followup"
+    );
+
+    const followupFields = document.getElementById(
+        "followup-fields"
+    );
+
+    const followupDate = document.getElementById(
+        "followup-due-date"
+    );
+
+    const followupDescription = document.getElementById(
+        "followup-description"
+    );
+
+    activityButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            activityButtons.forEach((item) => {
+                item.classList.remove("active");
             });
-        });
-    
-        followupCheckbox.addEventListener("change", () => {
-            const enabled = followupCheckbox.checked;
-    
-            followupFields.classList.toggle(
-                "d-none",
-                !enabled
-            );
-    
-            followupDate.required = enabled;
-            followupDescription.required = enabled;
-    
-            if (!enabled) {
-                followupDate.value = "";
-                followupDescription.value = "";
+
+            button.classList.add("active");
+
+            if (typeInput) {
+                typeInput.value =
+                    button.dataset.activityType;
             }
         });
+    });
 
-        const showButton = document.getElementById(
+    if (
+        followupCheckbox
+        && followupFields
+        && followupDate
+        && followupDescription
+    ) {
+        followupCheckbox.addEventListener(
+            "change",
+            () => {
+                const enabled =
+                    followupCheckbox.checked;
 
-            "show-blocker-form"
-
-        );
-
-        const cancelButton = document.getElementById(
-
-            "cancel-blocker-edit"
-
-        );
-
-        const blockerForm = document.getElementById(
-
-            "blocker-form"
-
-        );
-
-        if (!showButton || !blockerForm) {
-
-            return;
-
-        }
-
-        showButton.addEventListener("click", () => {
-
-            blockerForm.classList.remove("d-none");
-
-            showButton.classList.add("d-none");
-
-            const textarea = blockerForm.querySelector(
-
-                "textarea"
-
-            );
-
-            if (textarea) {
-
-                textarea.focus();
-
-            }
-
-        });
-
-        cancelButton?.addEventListener("click", () => {
-
-            blockerForm.classList.add("d-none");
-
-            showButton.classList.remove("d-none");
-
-        });
-    
-        const timelineButtons = document.querySelectorAll(
-    "[data-timeline-filter]"
-);
-
-const timelineSections = {
-    all: document.getElementById("timeline-all"),
-    commercial: document.getElementById(
-        "timeline-commercial"
-    ),
-    system: document.getElementById(
-        "timeline-system"
-    ),
-};
-
-timelineButtons.forEach((button) => {
-
-    button.addEventListener("click", () => {
-
-        const selected =
-            button.dataset.timelineFilter;
-
-        Object.entries(timelineSections).forEach(
-            ([key, section]) => {
-
-                section.classList.toggle(
+                followupFields.classList.toggle(
                     "d-none",
-                    key !== selected
+                    !enabled
                 );
 
+                followupDate.required = enabled;
+                followupDescription.required =
+                    enabled;
+
+                if (!enabled) {
+                    followupDate.value = "";
+                    followupDescription.value = "";
+                }
+            }
+        );
+    }
+
+    const showButton = document.getElementById(
+        "show-blocker-form"
+    );
+
+    const cancelButton = document.getElementById(
+        "cancel-blocker-edit"
+    );
+
+    const blockerForm = document.getElementById(
+        "blocker-form"
+    );
+
+    if (showButton && blockerForm) {
+        showButton.addEventListener(
+            "click",
+            () => {
+                blockerForm.classList.remove(
+                    "d-none"
+                );
+
+                showButton.classList.add(
+                    "d-none"
+                );
+
+                const textarea =
+                    blockerForm.querySelector(
+                        "textarea"
+                    );
+
+                if (textarea) {
+                    textarea.focus();
+                }
             }
         );
 
-        timelineButtons.forEach((item) => {
+        cancelButton?.addEventListener(
+            "click",
+            () => {
+                blockerForm.classList.add(
+                    "d-none"
+                );
 
-            item.classList.remove("btn-primary");
-            item.classList.add(
-                "btn-outline-primary"
-            );
+                showButton.classList.remove(
+                    "d-none"
+                );
+            }
+        );
+    }
 
-        });
-
-        button.classList.remove(
-            "btn-outline-primary"
+    const timelineButtons =
+        document.querySelectorAll(
+            "[data-timeline-filter]"
         );
 
-        button.classList.add("btn-primary");
+    const timelineSections = {
+        all: document.getElementById(
+            "timeline-all"
+        ),
+        commercial: document.getElementById(
+            "timeline-commercial"
+        ),
+        system: document.getElementById(
+            "timeline-system"
+        ),
+    };
 
+    timelineButtons.forEach((button) => {
+        button.addEventListener(
+            "click",
+            () => {
+                const selected =
+                    button.dataset.timelineFilter;
+
+                Object.entries(
+                    timelineSections
+                ).forEach(([key, section]) => {
+                    if (!section) {
+                        return;
+                    }
+
+                    section.classList.toggle(
+                        "d-none",
+                        key !== selected
+                    );
+                });
+
+                timelineButtons.forEach(
+                    (item) => {
+                        item.classList.remove(
+                            "btn-primary"
+                        );
+
+                        item.classList.add(
+                            "btn-outline-primary"
+                        );
+                    }
+                );
+
+                button.classList.remove(
+                    "btn-outline-primary"
+                );
+
+                button.classList.add(
+                    "btn-primary"
+                );
+            }
+        );
     });
-
 });
-    });
-    </script>
+</script>
+
 {% endblock %}

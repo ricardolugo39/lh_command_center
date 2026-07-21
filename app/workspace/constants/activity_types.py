@@ -6,6 +6,8 @@ class ActivityType:
     FOLLOWUP_COMPLETED = "followup_completed"
     FOLLOWUP_RESCHEDULED = "followup_rescheduled"
     PROJECT_UPDATED = "project_updated"
+    OPPORTUNITY_CLOSED = "opportunity_closed"
+    CANCELLED = "cancelled"
 
     CALL = "call"
     VISIT = "visit"
@@ -20,6 +22,8 @@ class ActivityType:
         FOLLOWUP_CREATED: "Follow-up programado",
         FOLLOWUP_COMPLETED: "Follow-up completado",
         FOLLOWUP_RESCHEDULED: "Follow-up reprogramado",
+        OPPORTUNITY_CLOSED: "Oportunidad cerrada",
+        CANCELLED: "Cancelada",
         CALL: "Llamada",
         VISIT: "Visita",
         MEETING: "Reunión",

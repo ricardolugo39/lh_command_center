@@ -7,6 +7,9 @@ from werkzeug.datastructures import FileStorage
 from app.workspace.repositories.project_file_repository import (
     ProjectFileRepository,
 )
+from app.workspace.services.project_access_policy import (
+    ProjectAccessPolicy,
+)
 
 UPLOAD_ROOT = Path("uploads/projects")
 
@@ -36,6 +39,8 @@ class ProjectFileService:
         category: str,
         uploaded_by: str = "system",
     ):
+
+        ProjectAccessPolicy.require_writable(project_id)
 
         if file.filename == "":
             raise ValueError(
@@ -99,6 +104,10 @@ class ProjectFileService:
             raise ValueError(
                 "Archivo no encontrado."
             )
+
+        ProjectAccessPolicy.require_writable(
+            record["project_id"]
+        )
 
         path = (
             UPLOAD_ROOT

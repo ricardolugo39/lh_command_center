@@ -23,15 +23,23 @@ class CustomerProjectBuilder:
         )
 
         result = []
+        seen_project_ids = set()
 
         for project in projects:
+            project_id = project["id"]
+
+            if project_id in seen_project_ids:
+                continue
+
+            seen_project_ids.add(project_id)
+
             quote = None
 
             if project.get("quote_number"):
                 quote = QuoteService.enrich_quote(
                     {
                         "id": None,
-                        "project_id": project["id"],
+                        "project_id": project_id,
                         "prefix": (
                             project.get("prefix")
                             or "CTC"
@@ -61,6 +69,8 @@ class CustomerProjectBuilder:
                 {
                     **project,
                     "quote": quote,
+                    "last_activity": "—",
+                    "next_action": "—",
                 }
             )
 

@@ -1,0 +1,78 @@
+{% if not workspace.is_read_only %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const resultSelect = document.getElementById(
+        "closureResult"
+    );
+
+    const modalElement = document.getElementById(
+        "commercialDecisionModal"
+    );
+
+    const forms = {
+        won: document.getElementById(
+            "wonClosureForm"
+        ),
+        lost: document.getElementById(
+            "lostClosureForm"
+        ),
+        cancelled: document.getElementById(
+            "cancelClosureForm"
+        ),
+    };
+
+    if (!resultSelect || !modalElement) {
+        return;
+    }
+
+    function hideAllForms() {
+        Object.values(forms).forEach(function (form) {
+            if (!form) {
+                return;
+            }
+
+            form.classList.add("d-none");
+        });
+    }
+
+    function resetForms() {
+        Object.values(forms).forEach(function (form) {
+            if (!form) {
+                return;
+            }
+
+            form.reset();
+            form.classList.add("d-none");
+        });
+
+        resultSelect.value = "";
+    }
+
+    resultSelect.addEventListener(
+        "change",
+        function () {
+            hideAllForms();
+
+            const selectedForm = forms[
+                resultSelect.value
+            ];
+
+            if (selectedForm) {
+                selectedForm.classList.remove(
+                    "d-none"
+                );
+            }
+        }
+    );
+
+    modalElement.addEventListener(
+        "hidden.bs.modal",
+        function () {
+            resetForms();
+        }
+    );
+});
+</script>
+
+{% endif %}

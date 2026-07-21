@@ -38,6 +38,10 @@ from app.workspace.builders.customer_tag_builder import (
     CustomerTagBuilder,
 )
 
+from app.workspace.repositories.agreement_item_repository import(
+    AgreementItemRepository
+)
+
 
 class CustomerDetailService:
 
@@ -183,6 +187,22 @@ class CustomerDetailService:
             if agreements
             else None
         )
+
+        if active_agreement:
+
+            active_agreement["item_count"] = (
+                AgreementItemRepository
+                .count_items(
+                    active_agreement["id"]
+                )
+            )
+
+            active_agreement["display_target"] = (
+                CustomerDetailService.format_currency(
+                    active_agreement.get("annual_target"),
+                    active_agreement.get("currency"),
+                )
+            )
         
         kpis = CustomerKPIBuilder.build(
             sales=formatted_sales,
@@ -282,3 +302,15 @@ class CustomerDetailService:
         value = float(amount or 0)
 
         return f"COP {value:,.0f}"
+
+    @staticmethod
+    def format_currency(
+        amount,
+        currency="COP",
+    ):
+
+        value = float(amount or 0)
+
+        return (
+            f"{currency} {value:,.0f}"
+        )

@@ -264,19 +264,11 @@
                             </td>
 
                             <td class="text-secondary">
-                                {{
-                                    project.last_activity_at
-                                    if project.last_activity_at is defined
-                                    else "—"
-                                }}
+                                {{ project.last_activity }}
                             </td>
-
+                            
                             <td>
-                                {{
-                                    project.next_action
-                                    if project.next_action is defined
-                                    else "—"
-                                }}
+                                {{ project.next_action }}
                             </td>
 
                             <td class="text-secondary">
@@ -322,99 +314,90 @@
             <div class="card-body">
 
                 {% if customer_page.agreement %}
-
+                
+                <div class="mb-3">
+                
+                    <div class="fw-bold fs-4">
+                        {{ customer_page.agreement.supplier }}
+                    </div>
+                
+                    <span class="badge bg-green-lt">
+                        {{ customer_page.agreement.status }}
+                    </span>
+                
+                </div>
+                
+                <div class="mb-3">
+                
+                    <div class="text-secondary small">
+                        Referencias
+                    </div>
+                
                     <div class="fw-bold">
-                        {{ customer_page.agreement.name }}
+                        {{ customer_page.agreement.item_count }}
                     </div>
-
-                    <div class="mt-2">
-                        <span class="badge bg-green-lt">
-                            {{ customer_page.agreement.status }}
-                        </span>
+                
+                </div>
+                
+                <div class="mb-3">
+                
+                    <div class="text-secondary small">
+                        Meta anual
                     </div>
-
-                    <div class="mt-4">
-
-                        <div class="text-secondary small">
-                            Referencias
-                        </div>
-
-                        <div class="fw-bold mt-1">
-                            {{
-                                customer_page.agreement.item_count
-                                if customer_page.agreement.item_count
-                                is defined
-                                else "—"
-                            }}
-                        </div>
-
+                
+                    <div class="fw-bold">
+                        {{ customer_page.agreement.display_target }}
                     </div>
-
-                    <div class="mt-4">
-
-                        <div class="text-secondary small">
-                            Renovación
-                        </div>
-
-                        <div class="fw-bold mt-1">
-                            {{
-                                customer_page.agreement.renewal_date
-                                or customer_page.agreement.end_date
-                                or "—"
-                            }}
-                        </div>
-
+                
+                </div>
+                
+                <div class="mb-4">
+                
+                    <div class="text-secondary small">
+                        Renovación
                     </div>
-
-                    <div class="mt-4">
-
-                        <div class="text-secondary small">
-                            Meta anual
-                        </div>
-
-                        <div class="fw-bold mt-1">
-                            {{ customer_page.agreement.currency }}
-                            {{
-                                "{:,.0f}".format(
-                                    customer_page
-                                    .agreement
-                                    .annual_target
-                                    or 0
-                                )
-                            }}
-                        </div>
-
+                
+                    <div class="fw-bold">
+                        {{
+                            customer_page.agreement.renewal_date
+                            or customer_page.agreement.end_date
+                            or "—"
+                        }}
                     </div>
-
-                    <a
-                        href="{{ url_for(
-                            'workspace.agreement_detail',
-                            agreement_id=customer_page.agreement.id
-                        ) }}"
-                        class="btn btn-outline-primary w-100 mt-4"
-                    >
-                        Abrir convenio
-                    </a>
-
+                
+                </div>
+                
+                <a
+                    href="{{ url_for(
+                        'workspace.agreement_detail',
+                        agreement_id=customer_page.agreement.id
+                    ) }}"
+                    class="btn btn-primary w-100"
+                >
+                    Abrir Convenio
+                </a>
+                
                 {% else %}
-
-                    <div class="text-secondary">
-                        Este cliente no tiene convenio registrado.
-                    </div>
-
-                    <a
-                        href="{{ url_for(
-                            'workspace.new_agreement',
-                            customer_id=customer.id
-                        ) }}"
-                        class="btn btn-outline-primary w-100 mt-4"
-                    >
-                        Crear convenio
-                    </a>
-
+                
+                <div class="text-secondary mb-3">
+                
+                    Este cliente aún no tiene un convenio comercial.
+                
+                </div>
+                
+                <a
+                    href="{{ url_for(
+                        'workspace.new_agreement',
+                        customer_id=customer.id
+                    ) }}"
+                    class="btn btn-primary w-100"
+                >
+                    Crear Convenio
+                </a>
+                
                 {% endif %}
-
-            </div>
+                
+                </div>
 
         </div>
 

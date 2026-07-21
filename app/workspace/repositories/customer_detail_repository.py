@@ -149,7 +149,7 @@ class CustomerDetailRepository:
         SELECT
             COUNT(
                 DISTINCT CASE
-                    WHEN p.status NOT IN ('won', 'lost')
+                    WHEN p.closed_at IS NULL
                     THEN p.id
                 END
             ) AS active_project_count,
@@ -171,7 +171,7 @@ class CustomerDetailRepository:
             COALESCE(
                 SUM(
                     CASE
-                        WHEN p.status NOT IN ('won', 'lost')
+                        WHEN p.closed_at IS NULL
                         THEN q.normalized_amount
                         ELSE 0
                     END

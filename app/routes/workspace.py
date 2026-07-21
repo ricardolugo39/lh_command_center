@@ -56,6 +56,10 @@ from app.workspace.services.agreement_service import (
     AgreementService,
 )
 
+from app.workspace.services.project_closure_service import (
+    ProjectClosureService,
+)
+
 workspace_bp = Blueprint(
     "workspace",
     __name__,
@@ -268,6 +272,14 @@ def edit_project(project_id: int):
     except ValueError:
         abort(404)
 
+    if workspace["is_read_only"]:
+        return redirect(
+            url_for(
+                "workspace.project_detail",
+                project_id=project_id,
+            )
+        )
+
     error = None
 
     if request.method == "POST":
@@ -388,9 +400,12 @@ def complete_followup(followup_id: int):
     if followup is None:
         abort(404)
 
-    ProjectWorkspaceService.complete_followup(
-        followup_id=followup_id,
-    )
+    try:
+        ProjectWorkspaceService.complete_followup(
+            followup_id=followup_id,
+        )
+    except ValueError as exc:
+        return str(exc), 400
 
     return redirect(
         url_for(
@@ -412,13 +427,16 @@ def reschedule_followup(
     if followup is None:
         abort(404)
 
-    ProjectWorkspaceService.reschedule_followup(
-        followup_id=followup_id,
-        due_date=request.form.get(
-            "due_date",
-            "",
-        ),
-    )
+    try:
+        ProjectWorkspaceService.reschedule_followup(
+            followup_id=followup_id,
+            due_date=request.form.get(
+                "due_date",
+                "",
+            ),
+        )
+    except ValueError as exc:
+        return str(exc), 400
 
     return redirect(
         url_for(
@@ -437,9 +455,20 @@ def reschedule_followup(
 def edit_quote(
     quote_id: int,
 ):
-    quote = QuoteService.get_quote(
-        quote_id
-    )
+    try:
+        quote = QuoteService.get_quote_for_edit(quote_id)
+    except ValueError:
+        quote = QuoteService.get_quote(quote_id)
+
+        if quote is None:
+            abort(404)
+
+        return redirect(
+            url_for(
+                "workspace.project_detail",
+                project_id=quote["project_id"],
+            )
+        )
 
     if quote is None:
         abort(404)
@@ -894,19 +923,131 @@ def upload_project_file(project_id: int):
     )
 
 @workspace_bp.post(
+    "/workspace/projects/<int:project_id>/close-won"
+)
+def close_project_as_won(project_id: int):
+    try:
+        won_amount = request.form.get(
+            "won_amount",
+            "",
+        ).strip()
+
+        ProjectClosureService.close_as_won(
+            project_id=project_id,
+            won_amount=won_amount,
+            customer_po=request.form.get(
+                "customer_po",
+                "",
+            ),
+            order_number=request.form.get(
+                "order_number",
+                "",
+            ),
+            comments=request.form.get(
+                "comments",
+                "",
+            ),
+        )
+
+    except ValueError as exc:
+        return str(exc), 400
+
+    return redirect(
+        url_for(
+            "workspace.project_detail",
+            project_id=project_id,
+        )
+    )
+
+
+@workspace_bp.post(
+    "/workspace/projects/<int:project_id>/close-lost"
+)
+def close_project_as_lost(project_id: int):
+    try:
+        ProjectClosureService.close_as_lost(
+            project_id=project_id,
+            lost_reason=request.form.get(
+                "lost_reason",
+                "",
+            ),
+            result_changer=request.form.get(
+                "result_changer",
+                "",
+            ),
+            competitor_company=request.form.get(
+                "competitor_company",
+                "",
+            ),
+            competitor_type=request.form.get(
+                "competitor_type",
+                "",
+            ),
+            competitor_brand=request.form.get(
+                "competitor_brand",
+                "",
+            ),
+            comments=request.form.get(
+                "comments",
+                "",
+            ),
+        )
+
+    except ValueError as exc:
+        return str(exc), 400
+
+    return redirect(
+        url_for(
+            "workspace.project_detail",
+            project_id=project_id,
+        )
+    )
+
+
+@workspace_bp.post(
+    "/workspace/projects/<int:project_id>/cancel"
+)
+def cancel_project(project_id: int):
+    try:
+        ProjectClosureService.cancel(
+            project_id=project_id,
+            reason=request.form.get(
+                "reason",
+                "",
+            ),
+            comments=request.form.get(
+                "comments",
+                "",
+            ),
+        )
+
+    except ValueError as exc:
+        return str(exc), 400
+
+    return redirect(
+        url_for(
+            "workspace.project_detail",
+            project_id=project_id,
+        )
+    )
+
+
+@workspace_bp.post(
     "/workspace/files/<int:file_id>/delete"
 )
 def delete_project_file(file_id: int):
+    try:
+        record = (
+            ProjectFileService.get_file_path(
+                file_id
+            )[0]
+        )
 
-    record = (
-        ProjectFileService.get_file_path(
+        ProjectFileService.delete_file(
             file_id
-        )[0]
-    )
-
-    ProjectFileService.delete_file(
-        file_id
-    )
+        )
+    except ValueError as exc:
+        return str(exc), 400
 
     return redirect(
         url_for(

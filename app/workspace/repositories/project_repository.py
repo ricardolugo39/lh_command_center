@@ -3,16 +3,6 @@ from typing import Any
 from app.database.connection import get_connection
 
 
-VALID_STATUSES = {
-    "prospect",
-    "quoting",
-    "waiting_customer",
-    "negotiation",
-    "won",
-    "lost",
-}
-
-
 class ProjectRepository:
 
     @staticmethod
@@ -26,11 +16,6 @@ class ProjectRepository:
         customer_site_id: str | None = None,
         sales_rep: str | None = None,
     ) -> int:
-        if status not in VALID_STATUSES:
-            raise ValueError(
-                f"Invalid project status: {status}"
-            )
-
         clean_name = name.strip()
         clean_objective = objective.strip()
 
@@ -149,17 +134,11 @@ class ProjectRepository:
         project_id: int,
         *,
         name: str,
-        status: str,
         objective: str,
         proposed_solution: str | None,
         current_blocker: str | None,
         sales_rep: str | None = None,
     ) -> None:
-        if status not in VALID_STATUSES:
-            raise ValueError(
-                f"Invalid project status: {status}"
-            )
-
         clean_name = name.strip()
         clean_objective = objective.strip()
 
@@ -177,20 +156,11 @@ class ProjectRepository:
         UPDATE ws_projects
         SET
             name = ?,
-            status = ?,
             objective = ?,
             proposed_solution = ?,
             current_blocker = ?,
             sales_rep = ?,
-            updated_at = CURRENT_TIMESTAMP,
-            closed_at = CASE
-                WHEN ? IN ('won', 'lost')
-                THEN COALESCE(
-                    closed_at,
-                    CURRENT_TIMESTAMP
-                )
-                ELSE NULL
-            END
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """
 
@@ -199,7 +169,6 @@ class ProjectRepository:
                 sql,
                 (
                     clean_name,
-                    status,
                     clean_objective,
                     proposed_solution.strip()
                     if proposed_solution
@@ -210,7 +179,6 @@ class ProjectRepository:
                     sales_rep.strip()
                     if sales_rep
                     else None,
-                    status,
                     project_id,
                 ),
             )
@@ -227,11 +195,6 @@ class ProjectRepository:
         project_id: int,
         new_status: str,
     ) -> None:
-        if new_status not in VALID_STATUSES:
-            raise ValueError(
-                f"Invalid project status: {new_status}"
-            )
-
         sql = """
         UPDATE ws_projects
         SET
@@ -382,6 +345,151 @@ class ProjectRepository:
 
             conn.commit()
 
+    @staticmethod
+    def close_as_won(
+        *,
+        project_id: int,
+        won_amount: float,
+        customer_po: str | None,
+        order_number: str | None,
+        comments: str | None,
+    ) -> None:
+        sql = """
+        UPDATE ws_projects
+        SET
+            status = 'won',
+            closed_at = CURRENT_TIMESTAMP,
+            won_amount = ?,
+            customer_po = ?,
+            order_number = ?,
+            close_comments = ?,
+            close_reason = NULL,
+            result_changer = NULL,
+            competitor_company = NULL,
+            competitor_type = NULL,
+            competitor_brand = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    won_amount,
+                    customer_po.strip() if customer_po else None,
+                    order_number.strip() if order_number else None,
+                    comments.strip() if comments else None,
+                    project_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
+            conn.commit()
+
+    @staticmethod
+    def close_as_lost(
+        *,
+        project_id: int,
+        lost_reason: str,
+        result_changer: str | None,
+        competitor_company: str | None,
+        competitor_type: str | None,
+        competitor_brand: str | None,
+        comments: str | None,
+    ) -> None:
+        sql = """
+        UPDATE ws_projects
+        SET
+            status = 'lost',
+            closed_at = CURRENT_TIMESTAMP,
+            close_reason = ?,
+            result_changer = ?,
+            competitor_company = ?,
+            competitor_type = ?,
+            competitor_brand = ?,
+            close_comments = ?,
+            won_amount = NULL,
+            customer_po = NULL,
+            order_number = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    lost_reason.strip(),
+                    result_changer.strip()
+                    if result_changer
+                    else None,
+                    competitor_company.strip()
+                    if competitor_company
+                    else None,
+                    competitor_type.strip()
+                    if competitor_type
+                    else None,
+                    competitor_brand.strip()
+                    if competitor_brand
+                    else None,
+                    comments.strip() if comments else None,
+                    project_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
+            conn.commit()
+
+    @staticmethod
+    def cancel_project(
+        *,
+        project_id: int,
+        reason: str,
+        comments: str | None,
+    ) -> None:
+        sql = """
+        UPDATE ws_projects
+        SET
+            status = 'cancelled',
+            closed_at = CURRENT_TIMESTAMP,
+            close_reason = ?,
+            close_comments = ?,
+            result_changer = NULL,
+            won_amount = NULL,
+            customer_po = NULL,
+            order_number = NULL,
+            competitor_company = NULL,
+            competitor_type = NULL,
+            competitor_brand = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    reason.strip(),
+                    comments.strip() if comments else None,
+                    project_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Project does not exist: {project_id}"
+                )
+
+            conn.commit()
     @staticmethod
     def delete_project(
         project_id: int,
