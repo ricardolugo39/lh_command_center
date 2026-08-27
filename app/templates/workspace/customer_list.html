@@ -1,69 +1,41 @@
 {% extends "base.html" %}
-
-{% block title %}
-    Clientes · Commercial Command Center
-{% endblock %}
-
-{% block page_title %}
-    Clientes
-{% endblock %}
-
+{% block title %}Portafolio comercial · Commercial Command Center{% endblock %}
+{% block page_title %}Clientes{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/customer-portfolio.css') }}">{% endblock %}
+{% macro portfolio_url(q=none, filter=none, office=none, advisor=none, sort=none, direction=none, page_number=1) -%}
+{{ url_for('workspace.customer_list', q=page.query.q if q is none else q, filter=page.query.filter if filter is none else filter, office=page.query.office if office is none else office, advisor=page.query.advisor if advisor is none else advisor, sort=page.query.sort if sort is none else sort, direction=page.query.direction if direction is none else direction, page=page_number) }}
+{%- endmacro %}
+{% macro sort_link(label, key) -%}
+{% set next_direction = 'asc' if page.query.sort != key or page.query.direction == 'desc' else 'desc' %}
+<a href="{{ portfolio_url(sort=key, direction=next_direction) }}">{{ label }}{% if page.query.sort == key %}<span>{{ '↑' if page.query.direction == 'asc' else '↓' }}</span>{% endif %}</a>
+{%- endmacro %}
 {% block content %}
+<main class="cp-dashboard">
+<header class="cp-header"><div><p>Commercial Command Center</p><h1>Portafolio comercial</h1><span>Priorice las cuentas que requieren atención y acción comercial.</span></div></header>
 
-<div class="card">
+<form class="cp-search" method="get"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input name="q" value="{{ page.query.q }}" placeholder="Buscar cliente, NIT, ERP o contacto" aria-label="Buscar clientes"><input type="hidden" name="filter" value="{{ page.query.filter }}"><input type="hidden" name="office" value="{{ page.query.office }}"><input type="hidden" name="advisor" value="{{ page.query.advisor }}"><button>Buscar</button>{% if page.query.q %}<a href="{{ portfolio_url(q='') }}">Limpiar</a>{% endif %}</form>
 
-    <div class="table-responsive">
-        <table class="table table-vcenter card-table">
+<section class="cp-scope" aria-label="Alcance del portafolio"><label>Sede<select onchange="window.location.assign(this.value)"><option value="{{ portfolio_url(office='') }}">Todas</option>{% for office in page.dimensions.offices %}<option value="{{ portfolio_url(office=office) }}" {{ 'selected' if page.query.office == office }}>{{ office }}</option>{% endfor %}</select></label><label>Asesor comercial<select onchange="window.location.assign(this.value)"><option value="{{ portfolio_url(advisor='') }}">Todos</option><option value="{{ portfolio_url(advisor='mine') }}" {{ 'selected' if page.query.advisor == 'mine' }} {{ 'disabled' if not page.current_advisor }}>Mi cartera{% if not page.current_advisor %} · requiere inicio de sesión{% endif %}</option>{% for advisor in page.dimensions.advisors %}<option value="{{ portfolio_url(advisor=advisor) }}" {{ 'selected' if page.query.advisor == advisor }}>{{ advisor }}</option>{% endfor %}</select></label></section>
 
-            <thead>
-                <tr>
-                    <th>Cliente</th>
-                    <th>ID ERP</th>
-                    <th>Creado</th>
-                </tr>
-            </thead>
+<section class="cp-kpis" aria-label="Indicadores del portafolio">{% for label,value in page.kpis %}<article><small>{{ label }}</small><strong>{{ value }}</strong></article>{% endfor %}</section>
 
-            <tbody>
+<section class="cp-toolbar"><nav class="cp-chips" aria-label="Filtros rápidos">{% for chip in page.filters %}<a class="{{ 'active' if chip.active }}" href="{{ portfolio_url(filter=chip.value) }}">{{ chip.label }} <span>{{ chip.count }}</span></a>{% endfor %}</nav><details class="cp-more"><summary>Ordenar</summary><form method="get"><input type="hidden" name="q" value="{{ page.query.q }}"><input type="hidden" name="filter" value="{{ page.query.filter }}"><input type="hidden" name="office" value="{{ page.query.office }}"><input type="hidden" name="advisor" value="{{ page.query.advisor }}"><label>Ordenar por<select name="sort"><option value="state" {{ 'selected' if page.query.sort == 'state' }}>Estado</option><option value="sales" {{ 'selected' if page.query.sort == 'sales' }}>Ventas</option><option value="growth" {{ 'selected' if page.query.sort == 'growth' }}>Variación</option><option value="purchase" {{ 'selected' if page.query.sort == 'purchase' }}>Días sin compra</option><option value="opportunities" {{ 'selected' if page.query.sort == 'opportunities' }}>Oportunidades</option><option value="name" {{ 'selected' if page.query.sort == 'name' }}>Cliente</option></select></label><label>Dirección<select name="direction"><option value="desc" {{ 'selected' if page.query.direction == 'desc' }}>Mayor prioridad</option><option value="asc" {{ 'selected' if page.query.direction == 'asc' }}>Menor prioridad</option></select></label><button>Aplicar</button></form></details></section>
 
-                {% for customer in customers %}
-                <tr>
-
-                    <td>
-                        <a
-                            href="{{ url_for(
-                                'workspace.customer_detail',
-                                customer_id=customer.id
-                            ) }}"
-                            class="fw-bold text-reset"
-                        >
-                            {{ customer.name }}
-                        </a>
-                    </td>
-
-                    <td class="text-secondary">
-                        {{ customer.erp_customer_id or "—" }}
-                    </td>
-
-                    <td class="text-secondary">
-                        {{ customer.created_at }}
-                    </td>
-
-                </tr>
-                {% else %}
-                <tr>
-                    <td
-                        colspan="3"
-                        class="text-center text-secondary py-5"
-                    >
-                        No hay clientes.
-                    </td>
-                </tr>
-                {% endfor %}
-
-            </tbody>
-        </table>
-    </div>
-
-</div>
-
+<section class="cp-table-card"><div class="table-responsive"><table class="cp-table"><thead><tr class="cp-column-groups"><th>Identidad</th><th colspan="4">Estado comercial</th><th colspan="3">Actividad comercial</th><th>Acciones</th></tr><tr><th>{{ sort_link('Cliente','name') }}</th><th>{{ sort_link('Estado','state') }}</th><th>{{ sort_link('Ventas YTD','sales') }}</th><th>{{ sort_link('Variación vs LY','growth') }}</th><th>{{ sort_link('Días sin compra','purchase') }}</th><th>Acuerdo</th><th>{{ sort_link('Oportunidades','opportunities') }}</th><th>Próxima acción</th><th><span class="visually-hidden">Acciones</span></th></tr></thead><tbody>
+{% for customer in page.customers %}{% set workspace_url = url_for('workspace.strategic_account_overview', customer_id=customer.workspace_id) if customer.workspace_id else url_for('workspace.open_erp_customer', erp_customer_id=customer.erp_customer_id) %}
+<tr class="cp-row" tabindex="0" data-href="{{ workspace_url }}">
+<td><div class="cp-customer"><div><a href="{{ workspace_url }}">{{ customer.customer_name }}</a><small>ERP {{ customer.erp_customer_id }}</small></div></div></td>
+<td><span class="cp-health cp-health-{{ customer.status.tone }}">{{ customer.status.label }}</span></td>
+<td><strong title="{{ customer.exact_revenue }}">{{ customer.display_revenue }}</strong></td><td><span class="cp-growth cp-tone-{{ customer.growth_tone }}">{{ customer.growth_label }}</span><small>vs LY</small></td>
+<td><span class="cp-purchase cp-purchase-{{ customer.purchase_tone }}">{{ customer.purchase_days_label }}</span></td>
+<td><strong>{{ customer.agreement_label }}</strong>{% if customer.additional_agreements %}<small>+{{ customer.additional_agreements }} activo(s)</small>{% endif %}</td>
+<td><strong>{{ customer.open_opportunities }}</strong><small>Abiertas</small></td>
+<td><span class="cp-action cp-action-{{ customer.next_action.tone }}">{{ customer.next_action.label }}</span><small>{{ customer.next_action.detail }}</small></td>
+<td><div class="dropdown"><button class="cp-menu dropdown-toggle" data-bs-toggle="dropdown" aria-label="Acciones para {{ customer.customer_name }}">•••</button><div class="dropdown-menu dropdown-menu-end"><a class="dropdown-item" href="{{ workspace_url }}">Abrir workspace</a>{% if customer.workspace_id %}<a class="dropdown-item" href="{{ url_for('workspace.strategic_account_agreement', customer_id=customer.workspace_id) }}">Ver acuerdos</a><a class="dropdown-item" href="{{ url_for('workspace.project_list', customer=customer.customer_name) }}">Ver oportunidades</a>{% endif %}</div></div></td>
+</tr>
+{% else %}<tr><td colspan="9"><div class="cp-empty"><strong>No se encontraron clientes</strong><p>Pruebe con otros criterios de búsqueda o filtros.</p></div></td></tr>{% endfor %}
+</tbody></table></div>
+<footer class="cp-pagination"><span>{{ page.pagination.total }} clientes · Página {{ page.pagination.page }} de {{ page.pagination.pages }}</span><div>{% if page.pagination.has_previous %}<a href="{{ portfolio_url(page_number=page.pagination.page-1) }}">Anterior</a>{% endif %}{% if page.pagination.has_next %}<a href="{{ portfolio_url(page_number=page.pagination.page+1) }}">Siguiente</a>{% endif %}</div></footer></section>
+</main>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/customer-portfolio.js') }}"></script>{% endblock %}

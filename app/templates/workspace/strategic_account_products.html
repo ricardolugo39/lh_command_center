@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Diagnóstico de ventas · {{ page.account.name }}{% endblock %}
+{% block page_title %}Dashboard de ventas{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static',filename='css/sales-dashboard.css') }}">{% endblock %}
+{% block content %}
+{% set b=page.behavior %}{% set d=page.diagnosis %}
+<main class="sd" data-monthly='{{ b.monthly|tojson }}'>
+ <header class="sd-header"><div><span>Diagnóstico comercial · comparación YTD alineada</span><h1>{{ page.account.name }}</h1><p>Datos hasta {{ d.generated_for }}</p></div><a class="btn" href="{{ url_for('workspace.strategic_account_overview',customer_id=page.account.id) }}">Volver al resumen</a></header>
+
+ <section class="sd-diagnosis">
+  <div><small>QUÉ ESTÁ PASANDO</small><h2>{{ d.headline }}</h2><p>Conclusión calculada con ventas, documentos, referencias y visitas. Las causas no confirmadas se muestran como preguntas.</p></div>
+  <div class="sd-change {{ 'negative' if d.delta < 0 else 'positive' }}"><small>Variación YTD</small><strong>{{ d.change|round(1) if d.change is not none else '—' }}%</strong><span>{{ d.display_delta }}</span></div>
+ </section>
+
+ <section class="sd-kpis sd-kpis-four">
+  <article><small>Ventas actuales</small><h2>{{ d.current }}</h2><p>Anterior: {{ d.previous }}</p></article>
+  <article><small>Documentos</small><h2>{{ d.documents.current }}</h2><p>Anterior: {{ d.documents.previous }}</p></article>
+  <article><small>Ticket mediano</small><h2>{{ d.ticket_median.current }}</h2><p>{{ d.ticket_median.change|round(1) if d.ticket_median.change is not none else '—' }}% · anterior {{ d.ticket_median.previous }}</p></article>
+  <article><small>Días con compra</small><h2>{{ d.purchase_days.current }}</h2><p>Anterior: {{ d.purchase_days.previous }}</p></article>
+ </section>
+
+ <section class="sd-card sd-drivers">
+  <header><div><small>EXPLICACIÓN DE LA VARIACIÓN</small><h2>Qué sumó y qué restó frente al año anterior</h2></div><span>La suma de estos movimientos corresponde a {{ d.display_delta }}</span></header>
+  <div class="sd-driver-grid">{% for item in d.components %}<div class="sd-driver {{ item.tone }}"><small>{{ item.count }} referencias</small><strong>{{ item.display_value }}</strong><span>{{ item.label }}</span></div>{% endfor %}</div>
+ </section>
+
+ <section class="sd-main-grid">
+  <article class="sd-card sd-chart"><header><div><small>SERIE DE TIEMPO · 24 MESES</small><h2>Ventas y documentos por mes</h2></div><div class="sd-legend"><span>Ventas COP</span><span>Documentos</span><span>Mes atípico</span></div></header><svg id="sales-behavior-chart" role="img" aria-label="Ventas mensuales y documentos"></svg><p>Los marcadores rojos señalan meses estadísticamente atípicos; son candidatos a proyecto, no una clasificación definitiva.</p></article>
+  <article class="sd-card"><header><div><small>EVIDENCIA DE CALENDARIO</small><h2>Compras grandes no repetidas</h2></div></header>{% for item in d.large_previous_documents %}<div class="sd-evidence"><div><strong>{{ item.id }}</strong><span>{{ item.date }}</span></div><b>{{ item.display_value }}</b></div>{% else %}<p>No se detectaron documentos extraordinarios en el periodo anterior.</p>{% endfor %}<p class="sd-help">Confirme si fueron proyectos, paradas o reposiciones extraordinarias.</p></article>
+ </section>
+
+ <section class="sd-impact-grid">
+  {% for title,items in [('Impacto por familia',d.family_impacts),('Impacto por marca',d.brand_impacts)] %}
+  <article class="sd-card"><header><div><small>DÓNDE CAMBIÓ</small><h2>{{ title }}</h2></div></header>{% for item in items[:7] %}<div class="sd-impact"><div><strong>{{ item.name }}</strong><b class="{{ 'negative' if item.delta < 0 else 'positive' }}">{{ item.display_delta }}</b></div><i><span class="{{ 'negative' if item.delta < 0 else 'positive' }}" style="width:{{ item.bar_width }}%"></span></i><small>Actual {{ item.display_current }} · anterior {{ item.display_previous }}</small></div>{% endfor %}</article>
+  {% endfor %}
+ </section>
+
+ <section class="sd-main-grid">
+  <article class="sd-card"><header><div><small>PORTAFOLIO PERDIDO</small><h2>Referencias de mayor impacto que no se repitieron</h2></div></header><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Referencia</th><th>Descripción</th><th>Impacto</th></tr></thead><tbody>{% for item in d.lost_products %}<tr><td><strong>{{ item.id }}</strong></td><td>{{ item.name or '—' }}</td><td class="negative">{{ item.display_impact }}</td></tr>{% else %}<tr><td colspan="3">No hay referencias perdidas.</td></tr>{% endfor %}</tbody></table></div></article>
+  <article class="sd-card"><header><div><small>VISITAS Y EJECUCIÓN</small><h2>¿El trabajo comercial explica la caída?</h2></div><span>{{ d.visit_reading.count }} visitas</span></header><p class="sd-callout">{{ d.visit_reading.message }}</p>{% for item in d.visit_reading.pending %}<div class="sd-action"><div><strong>{{ item.action }}</strong><span>Visita {{ item.visit_date }}</span></div><b class="{{ 'negative' if item.overdue else '' }}">{{ 'Vencida · ' if item.overdue else '' }}{{ item.due }}</b></div>{% else %}<p class="sd-help">No hay compromisos abiertos registrados.</p>{% endfor %}<div class="sd-pipeline"><small>Pipeline abierto relacionado</small><strong>{{ d.pipeline.value }}</strong><span>{{ d.pipeline.count }} oportunidades</span></div></article>
+ </section>
+
+ <section class="sd-card sd-next"><header><div><small>SIGUIENTE CONVERSACIÓN COMERCIAL</small><h2>Lo que todavía necesitamos confirmar</h2></div></header><ol>{% for item in d.unknowns %}<li>{{ item }}</li>{% endfor %}<li>Revisar con el cliente las primeras 20 referencias perdidas antes de asumir pérdida frente a un competidor.</li></ol><p>Estas son hipótesis trazables, no conclusiones generadas por AI.</p></section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/sales-dashboard.js') }}"></script>{% endblock %}

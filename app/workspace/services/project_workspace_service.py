@@ -1,5 +1,6 @@
 from typing import Any
 from datetime import datetime
+import json
 
 from app.workspace.constants.activity_types import ActivityType
 from app.workspace.constants.followup_status import FollowupStatus
@@ -9,6 +10,7 @@ from app.workspace.constants.project_status import (
     ProjectStatus,
     is_open,
 )
+from app.workspace.constants.opportunity_origin import OpportunityOrigin
 from app.workspace.repositories.activity_repository import (
     ActivityRepository,
 )
@@ -33,6 +35,9 @@ from app.workspace.repositories.project_quote_repository import (
 from app.workspace.services.quote_service import (
     QuoteService,
 )
+from app.workspace.services.commercial_interest_quote_service import (
+    CommercialInterestQuoteService,
+)
 from app.workspace.services.project_health_service import (
     ProjectHealthService,
 )
@@ -44,11 +49,25 @@ from app.workspace.repositories.project_file_repository import (
 from app.workspace.services.project_access_policy import (
     ProjectAccessPolicy,
 )
+from app.database.transaction import transactional
+from app.workspace.services.commercial_approval_service import (
+    CommercialApprovalService,
+)
+from app.workspace.services.opportunity_timeline_service import (
+    OpportunityTimelineService,
+)
+from app.workspace.services.opportunity_dashboard_service import (
+    OpportunityDashboardService,
+)
+from app.workspace.services.opportunity_next_action_service import (
+    OpportunityNextActionService,
+)
 
 
 class ProjectWorkspaceService:
 
     @staticmethod
+    @transactional
     def start_project(
         *,
         customer_name: str,
@@ -87,6 +106,7 @@ class ProjectWorkspaceService:
             status=status,
             proposed_solution=proposed_solution,
             current_blocker=current_blocker,
+            origin=OpportunityOrigin.MANUAL,
         )
 
         ActivityRepository.create_activity(
@@ -103,6 +123,7 @@ class ProjectWorkspaceService:
         return ProjectWorkspaceService.get_workspace(project_id)
 
     @staticmethod
+    @transactional
     def change_status(
         *,
         project_id: int,
@@ -117,6 +138,25 @@ class ProjectWorkspaceService:
             raise ValueError(
                 f"Project does not exist: {project_id}"
             )
+
+        project["crm_source"] = None
+        if project.get("origin") == OpportunityOrigin.CRM and project.get("import_metadata"):
+            try:
+                facts = json.loads(project["import_metadata"]).get("source_facts", {})
+                source_date = facts.get("source_updated_at")
+                age_days = None
+                if source_date:
+                    parsed = datetime.fromisoformat(str(source_date).replace("Z", "+00:00"))
+                    age_days = (datetime.now(parsed.tzinfo).date() - parsed.date()).days
+                project["crm_source"] = {
+                    "date": source_date,
+                    "age_days": age_days,
+                    "status": facts.get("crm_status"),
+                    "stage": facts.get("crm_stage"),
+                    "city": facts.get("customer_city"),
+                }
+            except (TypeError, ValueError, json.JSONDecodeError):
+                project["crm_source"] = None
 
         if new_status not in ProjectStatus.LABELS:
             raise ValueError(
@@ -153,6 +193,7 @@ class ProjectWorkspaceService:
         return ProjectWorkspaceService.get_workspace(project_id)
 
     @staticmethod
+    @transactional
     def change_blocker(
         *,
         project_id: int,
@@ -193,6 +234,7 @@ class ProjectWorkspaceService:
         return ProjectWorkspaceService.get_workspace(project_id)
 
     @staticmethod
+    @transactional
     def create_followup(
         *,
         project_id: int,
@@ -284,6 +326,9 @@ class ProjectWorkspaceService:
         quotes = QuoteService.list_project_quotes(
             project_id
         )
+        commercial_interest = CommercialInterestQuoteService.get_interest(
+            project_id
+        )
 
         files = ProjectFileRepository.list_project_files(
             project_id
@@ -306,6 +351,18 @@ class ProjectWorkspaceService:
             project_id
         )
 
+        activities = [
+            OpportunityTimelineService.present(activity)
+            for activity in activities
+        ]
+
+        timeline = OpportunityTimelineService.get_timeline(
+            project_id,
+            activities=activities,
+            quotes=quotes,
+            files=files,
+        )
+
         commercial_activity_types = {
             ActivityType.CALL,
             ActivityType.VISIT,
@@ -313,7 +370,7 @@ class ProjectWorkspaceService:
             ActivityType.EMAIL,
             ActivityType.NOTE,
             ActivityType.FOLLOWUP_COMPLETED,
-        }
+        } | ActivityType.COMMERCIAL_APPROVAL_TYPES
 
         commercial_activities = [
             activity
@@ -334,14 +391,17 @@ class ProjectWorkspaceService:
             "customer_site": customer_site,
             "project": project,
             "quotes": quotes,
+            "commercial_interest": commercial_interest,
             "brands": brands,
             "followups": followups,
             "open_loops": [],
             "activities": activities,
+            "timeline": timeline,
             "commercial_activities": commercial_activities,
             "system_activities": system_activities,
             "notes": [],
             "files": files,
+            "commercial_approval": CommercialApprovalService.get_summary(project_id),
             "is_read_only": ProjectAccessPolicy.is_read_only(project),
             "selectable_statuses": OPEN_STATUSES,
             "stages": [
@@ -360,9 +420,30 @@ class ProjectWorkspaceService:
             )
         )
 
+        workspace["dashboard"] = OpportunityDashboardService.get_dashboard(
+            opportunity=project,
+            customer=customer,
+            timeline=timeline,
+            followups=followups,
+            quotes=quotes,
+            files=files,
+            approval=workspace["commercial_approval"],
+            crm_potential_value=commercial_interest["potential_total"],
+        )
+        workspace["next_actions"] = OpportunityNextActionService.get_actions(
+            opportunity=project,
+            followups=followups,
+            pending_approval_count=(
+                workspace["dashboard"].counts["pending_approvals"]
+            ),
+            timeline=timeline,
+            quotes=quotes,
+        )
+
         return workspace
     
     @staticmethod
+    @transactional
     def complete_followup(
         *,
         followup_id: int,
@@ -403,6 +484,7 @@ class ProjectWorkspaceService:
             followup["project_id"]
         )
     @staticmethod
+    @transactional
     def create_project_mvp(
         *,
         erp_customer_id: str,
@@ -419,6 +501,7 @@ class ProjectWorkspaceService:
         quote_date: str | None = None,
         quote_amount: float | None = None,
         created_by: str = "system",
+        source_visit_id: int | None = None,
     ) -> dict[str, Any]:
         clean_customer_id = erp_customer_id.strip()
         clean_site_id = customer_site_id.strip()
@@ -500,6 +583,14 @@ class ProjectWorkspaceService:
             status=status,
             proposed_solution=proposed_solution,
             current_blocker=current_blocker,
+            origin=(
+                OpportunityOrigin.VISIT
+                if source_visit_id
+                else OpportunityOrigin.MANUAL
+            ),
+            origin_reference=(
+                str(source_visit_id) if source_visit_id else None
+            ),
         )
 
         for brand in brands or []:
@@ -528,11 +619,18 @@ class ProjectWorkspaceService:
             created_by=created_by,
         )
 
+        if source_visit_id:
+            from app.workspace.services.commercial_visit_service import (
+                CommercialVisitService,
+            )
+            CommercialVisitService.link_to_project(source_visit_id,project_id)
+
         return ProjectWorkspaceService.get_workspace(
             project_id
         )
 
     @staticmethod
+    @transactional
     def add_activity(
         *,
         project_id: int,
@@ -615,6 +713,7 @@ class ProjectWorkspaceService:
         )
     
     @staticmethod
+    @transactional
     def update_project_details(
         *,
         project_id: int,
@@ -692,6 +791,7 @@ class ProjectWorkspaceService:
             project_id
         )
     @staticmethod
+    @transactional
     def reschedule_followup(
         *,
         followup_id: int,
@@ -740,6 +840,7 @@ class ProjectWorkspaceService:
 
     
     @staticmethod
+    @transactional
     def delete_project(
         project_id: int,
     ) -> None:

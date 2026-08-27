@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ page.approval.number }}{% endblock %}
+{% block page_title %}Aprobación comercial{% endblock %}
+{% block content %}
+{% set a=page.approval %}
+{% if approval_updated %}<div class="alert alert-success">Solicitud aprobada. El monto de la oportunidad fue actualizado a {{ updated_currency }} {{ updated_amount }}.</div>{% endif %}
+<div class="d-flex justify-content-between mb-4">
+  <div><div class="text-secondary">{{ a.number }} · {{ a.type_name }}</div><h1>{{ a.opportunity_name }}</h1><span class="badge bg-blue-lt">{{ a.status_label }}</span></div>
+  <div><a class="btn" href="{{ url_for('workspace.commercial_approval_list',project_id=a.project_id) }}">Volver</a>
+    {% if a.status in ['draft','returned'] and not page.is_read_only %}<a class="btn" href="{{ url_for('workspace.commercial_approval_edit',approval_id=a.id) }}">Editar</a><form class="d-inline" method="post" action="{{ url_for('workspace.commercial_approval_submit',approval_id=a.id) }}"><button class="btn btn-primary">Enviar a aprobación</button></form>{% endif %}
+    {% if a.status in ['draft','submitted','pending_approval','returned'] and not page.is_read_only %}<form class="d-inline" method="post" action="{{ url_for('workspace.commercial_approval_cancel',approval_id=a.id) }}"><input type="hidden" name="comments" value="Cancelada por el solicitante"><button class="btn btn-outline-danger">Cancelar solicitud</button></form>{% endif %}
+    {% if a.status=='approved' and not page.is_read_only %}<form class="d-inline" method="post" action="{{ url_for('workspace.commercial_approval_expire',approval_id=a.id) }}"><button class="btn btn-outline-secondary">Marcar vencida</button></form>{% endif %}
+  </div>
+</div>
+<div class="row row-cards">
+  <div class="col-lg-8">
+    <div class="card mb-3"><div class="card-header"><h2 class="card-title">Información comercial y precios</h2></div><div class="card-body"><div class="row g-3">
+      {% for label,value in [('Cliente',a.customer_name),('Fabricante',a.manufacturer),('Referencia de producto',a.product_reference or a.product),('Familia',a.product_family),('Cantidad',a.quantity),('Competidor',a.competitor),('Precio de lista ERP',a.list_price),('Precio solicitado',a.requested_price),('Descuento solicitado',('%.2f%%'|format(a.requested_discount))),('Margen estimado',a.estimated_margin),('Ingreso esperado',a.expected_revenue),('Moneda',a.currency)] %}<div class="col-md-4"><div class="text-secondary small">{{ label }}</div><strong>{{ value if value is not none else '—' }}</strong></div>{% endfor %}
+    </div></div></div>
+    <div class="card mb-3"><div class="card-header"><h2 class="card-title">Impacto en la oportunidad</h2></div><div class="card-body"><div class="row g-3">
+      <div class="col-md-4"><div class="text-secondary small">Monto actual de la oportunidad</div><strong>{% if page.impact.current_amount is not none %}{{ page.impact.current_currency }} {{ page.impact.current_amount }}{% else %}Sin monto registrado{% endif %}</strong></div>
+      <div class="col-md-4"><div class="text-secondary small">Precio solicitado calculado</div><strong>{% if page.impact.proposed %}{{ page.impact.proposed.currency }} {{ page.impact.proposed.approved_unit_price }}{% else %}—{% endif %}</strong></div>
+      <div class="col-md-4"><div class="text-secondary small">Monto solicitado calculado</div><strong>{% if page.impact.proposed %}{{ page.impact.proposed.currency }} {{ page.impact.proposed.approved_total_amount }}{% else %}—{% endif %}</strong></div>
+      {% if page.decisions %}{% set d=page.decisions[-1] %}<div class="col-md-4"><div class="text-secondary small">Monto aprobado</div><strong>{% if d.approved_total_amount %}{{ d.decision_currency }} {{ d.approved_total_amount }}{% else %}—{% endif %}</strong></div>{% endif %}
+    </div></div></div>
+    {% if page.decisions %}{% set d=page.decisions[-1] %}<div class="card mb-3"><div class="card-header"><h2 class="card-title">Decisión final</h2></div><div class="card-body"><div class="row g-3">
+      {% if d.decision == 'approved' %}{% set decision_values=[('Estado','Aprobada'),('Descuento solicitado',d.requested_discount_percent),('Descuento aprobado',d.approved_discount_percent),('Precio final aprobado',d.approved_unit_price),('Monto total aprobado',d.approved_total_amount),('Aprobado por',d.decided_by or d.approver),('Fecha de decisión',d.decided_at),('Comentarios',d.decision_comments or d.comments)] %}{% else %}{% set decision_values=[('Estado','Rechazada' if d.decision == 'rejected' else 'Devuelta'),('Decidido por',d.decided_by or d.approver),('Fecha de decisión',d.decided_at),('Comentarios',d.decision_comments or d.comments)] %}{% endif %}
+      {% for label,value in decision_values %}<div class="col-md-4"><div class="text-secondary small">{{ label }}</div><strong>{{ value if value is not none else '—' }}{% if label in ['Descuento solicitado','Descuento aprobado'] and value is not none %}%{% endif %}</strong></div>{% endfor %}
+    </div></div></div>{% endif %}
+    <div class="card"><div class="card-header"><h2 class="card-title">Justificación</h2></div><div class="card-body"><strong>{{ a.reason_label }}</strong><p class="mt-2">{{ a.justification }}</p><p class="text-secondary">{{ a.business_notes or '' }}</p></div></div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card mb-3"><div class="card-header"><h2 class="card-title">Línea de tiempo</h2></div><div class="card-body">{% for event in page.history|reverse %}<div class="border-start ps-3 pb-3"><strong>{{ event.to_label or event.event_type }}</strong><div class="small">{{ event.actor }} · {{ event.created_at }}</div><div class="text-secondary small">{{ event.comments }}</div></div>{% endfor %}</div></div>
+    {% if a.status=='pending_approval' and not page.is_read_only %}
+    <div class="card" data-approval-calculator data-list-price="{{ a.list_price or '' }}" data-quantity="{{ a.quantity or '' }}" data-current-amount="{{ page.impact.current_amount or 0 }}" data-has-current="{{ 'true' if page.impact.current_amount is not none else 'false' }}" data-currency="{{ a.currency }}">
+      <div class="card-header"><h2 class="card-title">Decisión de Ricardo Lugo</h2></div><div class="card-body"><form method="post" action="{{ url_for('workspace.commercial_approval_decision',approval_id=a.id) }}">
+        <label class="form-label">Descuento solicitado</label><div class="mb-3"><strong>{{ '%.4g%%'|format(a.requested_discount) }}</strong></div>
+        <label class="form-label">Precio de lista ERP unitario</label><div class="mb-3"><strong>{{ a.currency }} {{ a.list_price if a.list_price is not none else '—' }}</strong></div>
+        <label class="form-label">Descuento aprobado</label><input class="form-control mb-3" type="number" min="0" max="100" step="0.0001" name="approved_discount" value="{{ a.requested_discount }}" required>
+        <div class="row g-2 mb-3"><div class="col-6"><div class="text-secondary small">Precio final unitario</div><strong data-approved-unit>—</strong></div><div class="col-6"><div class="text-secondary small">Monto total aprobado</div><strong data-approved-total>—</strong></div><div class="col-12"><div class="text-secondary small">Diferencia frente al monto actual</div><strong data-amount-difference>—</strong></div></div>
+        <label class="form-label">Vencimiento opcional</label><input class="form-control mb-3" type="date" name="expiration_date">
+        <label class="form-label">Comentarios</label><textarea class="form-control mb-3" name="comments" required></textarea>
+        <div class="d-grid gap-2"><button class="btn btn-primary" name="decision" value="approved">Aprobar</button><button class="btn btn-outline-secondary" name="decision" value="returned">Devolver</button><button class="btn btn-outline-danger" name="decision" value="rejected">Rechazar</button></div>
+      </form></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/commercial-approval.js') }}"></script>{% endblock %}

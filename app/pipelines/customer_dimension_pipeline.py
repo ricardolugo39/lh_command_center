@@ -3,6 +3,9 @@ import pandas as pd
 from app.database.reader import read_table
 from app.database.writer import save_dataframe
 from app.pipelines.base_pipeline import BasePipeline
+from app.workspace.repositories.customer_portfolio_repository import (
+    CustomerPortfolioRepository,
+)
 
 
 class CustomerDimensionPipeline(BasePipeline):
@@ -217,3 +220,4 @@ class CustomerDimensionPipeline(BasePipeline):
             df=df,
             table_name=self.TABLE_OUT,
         )
+        CustomerPortfolioRepository.sync_metadata_from_master()

@@ -18,6 +18,7 @@ from app.workspace.repositories.customer_repository import (
 from app.workspace.services.project_access_policy import (
     ProjectAccessPolicy,
 )
+from app.database.transaction import transactional
 
 
 INITIATIVE_STATUS_LABELS = {
@@ -289,6 +290,7 @@ class InitiativeService:
         return f"COP {float(amount or 0):,.0f}"
 
     @staticmethod
+    @transactional
     def assign_opportunity(
         *,
         initiative_id: int,
@@ -353,6 +355,7 @@ class InitiativeService:
         )
 
     @staticmethod
+    @transactional
     def remove_opportunity(
         *,
         initiative_id: int,

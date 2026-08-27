@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Revisar importación{% endblock %}
+{% block page_title %}Revisar acuerdo{% endblock %}
+{% block content %}
+<div class="mb-3"><strong>{{ page.customer.name }}</strong> · {{ page.state.metadata.name }} · {{ page.state.original_name }}</div>
+{% for error in page.validation.blocking_errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+{% for warning in page.validation.metadata_warnings %}<div class="alert alert-warning">{{ warning }}</div>{% endfor %}
+
+{% if page.parsed.detected_metadata %}
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">Metadatos detectados en el archivo</h3></div><div class="card-body row g-3">
+{% for key,label in [('agreement_type','Tipo'),('customer_name','Cliente'),('start_date','Fecha inicial'),('end_date','Fecha final')] %}
+<div class="col-md-3"><div class="text-secondary small">{{ label }}</div><strong>{{ page.parsed.detected_metadata.get(key, '—') }}</strong></div>
+{% endfor %}
+</div></div>
+{% endif %}
+
+{% if page.parsed.detected_table_count > 1 %}
+<div class="alert alert-info">Se detectaron {{ page.parsed.detected_table_count }} tablas. Se seleccionó automáticamente {{ page.parsed.selected_worksheet }} con {{ page.validation.summary.total }} productos.</div>
+{% endif %}
+
+<div class="row row-cards mb-3">
+{% for key,label in [('total','Leídas'),('valid','Válidas'),('warnings','Advertencias'),('errors','Errores'),('duplicates','Duplicadas'),('blank','Vacías ignoradas')] %}
+<div class="col-6 col-md-2"><div class="card card-body"><small class="text-secondary">{{ label }}</small><strong class="h2">{{ page.validation.summary[key] }}</strong></div></div>
+{% endfor %}
+</div>
+
+<form method="post">
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">Información del acuerdo</h3></div><div class="card-body row g-3">
+<div class="col-md-6"><label class="form-label">Nombre del acuerdo</label><input class="form-control" name="metadata_name" value="{{ page.state.metadata.name }}" required></div>
+<div class="col-md-6"><label class="form-label">Proveedor</label><input class="form-control" name="metadata_supplier" value="{{ page.state.metadata.supplier }}" required></div>
+<div class="col-md-4"><label class="form-label">Moneda del acuerdo</label><select class="form-select" name="metadata_currency" required><option value="">Seleccione</option>{% for currency in ['COP','USD','EUR'] %}<option {{ 'selected' if page.state.metadata.currency == currency }}>{{ currency }}</option>{% endfor %}</select></div>
+<div class="col-md-4"><label class="form-label">Fecha inicial</label><input type="date" class="form-control" name="metadata_start_date" value="{{ page.state.metadata.start_date }}" required></div>
+<div class="col-md-4"><label class="form-label">Fecha final</label><input type="date" class="form-control" name="metadata_end_date" value="{{ page.state.metadata.end_date }}" required></div>
+<div class="col-md-6"><label class="form-label">Tipo de acuerdo</label><input class="form-control" name="metadata_agreement_type" value="{{ page.state.metadata.agreement_type or '' }}"></div>
+<div class="col-md-6"><label class="form-label">Notas</label><input class="form-control" name="metadata_notes" value="{{ page.state.metadata.notes or '' }}"></div>
+</div></div>
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">Hoja y mapeo de columnas</h3></div><div class="card-body">
+<label class="form-label">Hoja o tabla</label><select class="form-select mb-3" name="worksheet">
+{% for sheet in page.parsed.worksheets %}
+{% set detail = page.parsed.worksheet_details|selectattr('name','equalto',sheet)|first %}
+<option value="{{ sheet }}" {{ 'selected' if sheet == page.parsed.selected_worksheet }}>{{ detail.label if detail else sheet }}</option>
+{% endfor %}</select>
+<div class="row g-2">{% for field in page.destinations %}<div class="col-md-4"><label class="form-label">{{ page.destination_labels[field] }}</label><select class="form-select" name="mapping_{{ field }}"><option value="">Sin mapear</option>{% for header in page.parsed.headers %}<option value="{{ header }}" {{ 'selected' if page.state.mapping.get(field) == header }}>{{ header }}</option>{% endfor %}</select></div>{% endfor %}</div>
+<button class="btn mt-3">Aplicar mapeo y validar</button></div></div></form>
+
+<div class="card mb-3"><div class="table-responsive"><table class="table"><thead><tr><th>Fila</th><th>Referencia</th><th>Descripción</th><th>Precio</th><th>Estado</th><th>Mensajes</th></tr></thead><tbody>
+{% for row in page.preview_rows %}<tr><td>{{ row.source_row_number }}</td><td>{{ row.internal_sku or row.manufacturer_part_number or '—' }}</td><td>{{ row.description or '—' }}</td><td>{{ row.currency or '' }} {{ row.negotiated_price if row.negotiated_price is not none else '—' }}</td><td><span class="badge bg-{{ 'green' if row.status == 'valid' else 'yellow' if row.status == 'warning' else 'red' }}-lt">{{ 'Válida' if row.status == 'valid' else 'Advertencia' if row.status == 'warning' else 'Error' }}</span></td><td>{{ (row.errors + row.warnings)|join(' ') }}</td></tr>{% endfor %}
+</tbody></table></div></div>
+<form method="post" action="{{ url_for('workspace.strategic_account_agreement_confirm', customer_id=page.customer.id, import_token=page.state.token) }}">{% if page.active_agreement %}<div class="alert alert-warning"><label><input type="checkbox" name="replace_active" value="1" required> Confirmo que deseo reemplazar el acuerdo activo “{{ page.active_agreement.name }}”. El registro anterior se conservará como vencido.</label></div>{% endif %}<button class="btn btn-primary" {{ 'disabled' if not page.validation.can_confirm }}>Confirmar importación</button></form>
+<form class="d-inline" method="post" action="{{ url_for('workspace.strategic_account_agreement_cancel', customer_id=page.customer.id, import_token=page.state.token) }}"><button class="btn mt-2">Cancelar importación</button></form>
+{% endblock %}

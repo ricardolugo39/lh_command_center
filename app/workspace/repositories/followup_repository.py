@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class FollowupRepository:
@@ -23,7 +23,7 @@ class FollowupRepository:
         LIMIT 1
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             row = conn.execute(
                 sql,
                 (
@@ -55,7 +55,7 @@ class FollowupRepository:
         VALUES (?, ?, ?, ?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -66,7 +66,6 @@ class FollowupRepository:
                     created_by,
                 ),
             )
-            conn.commit()
 
             return int(cursor.lastrowid)
 
@@ -80,7 +79,7 @@ class FollowupRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             row = conn.execute(
                 sql,
                 (followup_id,),
@@ -99,7 +98,7 @@ class FollowupRepository:
         ORDER BY due_date ASC, id ASC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             rows = conn.execute(
                 sql,
                 (project_id,),
@@ -119,7 +118,7 @@ class FollowupRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (followup_id,),
@@ -130,7 +129,22 @@ class FollowupRepository:
                     f"Follow-up does not exist: {followup_id}"
                 )
 
-            conn.commit()
+    @staticmethod
+    def complete_pending_for_project(project_id: int) -> int:
+        """Close every open loop when its opportunity reaches a terminal state."""
+        with connection_scope() as conn:
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ws_followups'"
+            ).fetchone() is None:
+                return 0
+            cursor = conn.execute(
+                """UPDATE ws_followups
+                SET status='completed', completed_at=CURRENT_TIMESTAMP
+                WHERE project_id=? AND status='pending'""",
+                (project_id,),
+            )
+        return int(cursor.rowcount)
+
 
     @staticmethod
     def list_due_followups() -> list[dict[str, Any]]:
@@ -152,6 +166,7 @@ class FollowupRepository:
             ON c.id = p.customer_id
         WHERE
             f.status = 'pending'
+            AND p.status NOT IN ('won', 'lost', 'cancelled')
             AND f.due_date <= DATE('now')
         ORDER BY
             f.due_date ASC,
@@ -159,7 +174,7 @@ class FollowupRepository:
             p.name ASC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             rows = conn.execute(sql).fetchall()
 
         return [dict(row) for row in rows]
@@ -175,7 +190,7 @@ class FollowupRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             row = conn.execute(
                 sql,
                 (followup_id,),
@@ -201,7 +216,7 @@ class FollowupRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -214,5 +229,3 @@ class FollowupRepository:
                 raise ValueError(
                     f"Follow-up does not exist: {followup_id}"
                 )
-
-            conn.commit()

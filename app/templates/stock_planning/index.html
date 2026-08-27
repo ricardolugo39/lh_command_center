@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Planeación de inventario · Commercial Command Center{% endblock %}
+{% block page_title %}Planeación de inventario{% endblock %}
+{% block content %}
+{% if message %}<div class="alert alert-info">{{ message }}</div>{% endif %}
+
+<div class="mb-4">
+  <p class="text-secondary mb-0">
+    Prepare un pedido de importación usando las ventas, el inventario y el
+    tránsito que ya existen en el Command Center.
+  </p>
+</div>
+
+<section class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-lg-7">
+        <label class="form-label">Marca</label>
+        <select name="profile_id" class="form-select form-select-lg">
+          {% for profile in page.profiles %}
+          <option value="{{ profile.id }}" {% if profile.id == page.selected_profile_id %}selected{% endif %}>{{ profile.vendor_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto"><button class="btn btn-primary btn-lg">Seleccionar</button></div>
+    </form>
+  </div>
+</section>
+
+{% if page.selected_profile %}
+{% set source = page.source_status %}
+<div class="row row-cards mb-4">
+  <div class="col-md-3"><div class="card h-100"><div class="card-body">
+    <div class="text-secondary">Inventario actualizado al</div>
+    <div class="h2 mb-1">{{ source.inventory_date or 'No disponible' }}</div>
+    <div class="small text-secondary">Bogotá y Cali</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body">
+    <div class="text-secondary">Ventas actualizadas al</div>
+    <div class="h2 mb-1">{{ source.sales_date or 'No disponible' }}</div>
+    <div class="small text-secondary">Historial de la marca</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body">
+    <div class="text-secondary">Productos identificados</div>
+    <div class="h1 mb-1">{{ source.product_count }}</div>
+    <div class="small text-secondary">Ventas e inventario combinados</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body">
+    <div class="text-secondary">Unidades en tránsito</div>
+    <div class="h1 mb-1">{{ source.transit_units|round(0)|int }}</div>
+    <div class="small text-secondary">Tomadas directamente del ERP</div>
+  </div></div></div>
+</div>
+
+{% if not source.inventory_date or not source.sales_date %}
+<div class="alert alert-warning">
+  Faltan datos de inventario o ventas para esta marca. Actualice las fuentes
+  antes de preparar el pedido.
+</div>
+{% endif %}
+
+<section class="card mb-4">
+  <div class="card-header">
+    <div>
+      <div class="text-secondary small">Pedido preparado hoy · {{ page.today }}</div>
+      <h3 class="card-title mb-0">Defina el horizonte del pedido</h3>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('stock_planning.create_snapshot') }}">
+    <input type="hidden" name="profile_id" value="{{ page.selected_profile_id }}">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4 col-xl">
+          <label class="form-label">Fabricación</label>
+          <div class="input-group"><input required type="number" min="0" name="manufacturing_days" class="form-control" value="{{ page.selected_profile.default_manufacturing_days or '' }}"><span class="input-group-text">días</span></div>
+        </div>
+        <div class="col-md-4 col-xl">
+          <label class="form-label">Transporte internacional</label>
+          <div class="input-group"><input required type="number" min="0" name="international_shipping_days" class="form-control" value="{{ page.selected_profile.default_shipping_days or '' }}"><span class="input-group-text">días</span></div>
+        </div>
+        <div class="col-md-4 col-xl">
+          <label class="form-label">Nacionalización y recepción</label>
+          <div class="input-group"><input required type="number" min="0" name="receiving_days" class="form-control" value="{{ page.selected_profile.default_receiving_days or 0 }}"><span class="input-group-text">días</span></div>
+        </div>
+        <div class="col-md-4 col-xl">
+          <label class="form-label">Traslado adicional a Cali</label>
+          <div class="input-group"><input required type="number" min="0" name="cali_transfer_days" class="form-control" value="{{ page.selected_profile.default_cali_transfer_days or 0 }}"><span class="input-group-text">días</span></div>
+        </div>
+        <div class="col-md-4 col-xl">
+          <label class="form-label">Cobertura después de llegada</label>
+          <div class="input-group"><input required type="number" min="0.5" step="0.5" name="coverage_months" class="form-control" value="6"><span class="input-group-text">meses</span></div>
+        </div>
+      </div>
+      <div class="mt-4 p-3 bg-blue-lt rounded">
+        <strong>El sistema hará automáticamente:</strong>
+        consolidación Bogotá/Cali, lectura del tránsito del ERP, identificación
+        de familias, detección de rieles cortados y revisión de ventas atípicas.
+        Solo le pedirá intervenir en ambigüedades importantes.
+      </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <span class="text-secondary">No es necesario registrar productos, bodegas, familias ni tránsito.</span>
+      <button class="btn btn-primary btn-lg" {% if not source.inventory_date or not source.sales_date %}disabled{% endif %}>
+        Analizar pedido de hoy
+      </button>
+    </div>
+  </form>
+</section>
+
+{% if page.snapshots %}
+<section class="card">
+  <div class="card-header"><h3 class="card-title">Análisis anteriores</h3></div>
+  <div class="table-responsive"><table class="table card-table">
+    <thead><tr><th>Fecha</th><th>Marca</th><th>Inventario utilizado</th><th>Productos</th><th>Excepciones</th><th></th></tr></thead>
+    <tbody>{% for s in page.snapshots %}<tr>
+      <td>{{ s.as_of_date }} {% if loop.first %}<span class="badge bg-green-lt">Más reciente</span>{% endif %}</td>
+      <td>{{ s.vendor_name }}</td><td>{{ s.inventory_snapshot_date or 'No disponible' }}</td>
+      <td>{{ s.product_count }}</td><td>{{ s.issue_count }}</td>
+      <td><a class="btn btn-sm" href="{{ url_for('stock_planning.snapshot', snapshot_id=s.id) }}">Ver análisis</a></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% else %}
+<div class="alert alert-info">No hay marcas disponibles para planeación.</div>
+{% endif %}
+{% endblock %}

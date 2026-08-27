@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Acuerdo · {{ customer.name }}{% endblock %}
+{% block page_title %}Espacio de cuenta{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/strategic-account.css') }}">{% endblock %}
+{% block content %}
+<main class="sa-dashboard" data-revenue='{{ (analytics.monthly if analytics else []) | tojson }}'>
+<section class="sa-hero"><div><div class="sa-eyebrow"><span></span> Cuenta comercial</div><h1>{{ customer.name }}</h1></div></section>
+<nav class="sa-tabs"><a class="sa-tab" href="{{ url_for('workspace.strategic_account_overview', customer_id=customer.id) }}">Resumen</a><span class="sa-tab active">Acuerdo</span></nav>
+{% if not agreement %}
+<section class="sa-card sa-empty mt-4"><strong>Acuerdo estratégico</strong><p>Cargue el acuerdo comercial y su listado de productos negociados para comenzar a medir su desempeño.</p><a class="sa-button sa-button-primary mt-3" href="{{ url_for('workspace.strategic_account_agreement_upload', customer_id=customer.id) }}">Cargar acuerdo</a></section>
+{% else %}
+<section class="sa-card mt-4"><header><div><p class="sa-section-label">Acuerdo estratégico</p><h2>{{ agreement.name }}</h2></div><span class="sa-status">{{ agreement.status }}</span></header><div class="sa-account-meta"><div><small>Proveedor</small><strong>{{ agreement.supplier or 'Sin registro' }}</strong></div><div><small>Vigencia</small><strong>{{ agreement.start_date or '—' }} — {{ agreement.end_date or '—' }}</strong></div><div><small>Referencia histórica</small><strong>{{ analytics.reference_label }}</strong></div>{% if document %}<div><small>Archivo original</small><a href="{{ url_for('workspace.strategic_account_agreement_document', customer_id=customer.id) }}">{{ document.original_name }}</a></div>{% endif %}</div></section>
+
+<section class="sa-kpi-grid sa-agreement-kpis">
+{% set kpis = [
+('Productos negociados', analytics.negotiated_products, 'Universo del acuerdo'),
+('Productos comprados', analytics.purchased_products, 'Con venta en el periodo'),
+('Cobertura', '%.1f%%'|format(analytics.coverage), 'Productos negociados con compra'),
+('Sin compra comparable', analytics.never_purchased, 'Sin compra en los periodos comparados'),
+('Productos nunca vendidos', analytics.never_sold, 'Sin ventas en el historial disponible'),
+('Ingresos del acuerdo', analytics.display_agreement_revenue, analytics.period),
+('Crecimiento', analytics.growth.label, analytics.reference_label),
+('Participación cuenta', '%.1f%%'|format(analytics.share_of_account), 'Sobre ingresos de la cuenta') ] %}
+{% for label,value,subtitle in kpis %}<article class="sa-card sa-kpi {{ 'sa-kpi-primary' if label == 'Ingresos del acuerdo' else '' }}"><div class="sa-kpi-top"><span class="sa-icon">{{ '↗' if label == 'Ingresos del acuerdo' else '◇' }}</span></div><p>{{ label }}</p><strong>{{ value }}</strong><small>{{ subtitle }}</small></article>{% endfor %}
+</section>
+
+<section class="sa-grid sa-grid-main">
+<article class="sa-card sa-chart-card"><header><div><p class="sa-section-label">Tendencia</p><h2>Ingresos de productos negociados</h2></div><span>{{ analytics.reference_label }}</span></header>
+{% if analytics.monthly %}<div class="sa-line-chart"><svg id="revenue-chart" role="img" aria-label="Ingresos mensuales del acuerdo"></svg><div id="revenue-tooltip" class="sa-chart-tooltip" hidden></div></div><div class="sa-series-legend"><span class="current">Periodo actual</span><span class="previous">Referencia histórica</span></div><div class="sa-chart-legend" id="revenue-legend"></div>{% else %}<div class="sa-empty sa-empty-compact"><strong>Sin ventas del acuerdo</strong><p>No hay movimientos conciliados para el periodo seleccionado.</p></div>{% endif %}</article>
+<article class="sa-card"><header><div><p class="sa-section-label">Estado del portafolio negociado</p><h2>Señales ejecutivas</h2></div></header><div class="sa-agreement-signals"><div><strong>{{ analytics.new_products }}</strong><span>Productos nuevos</span></div><div><strong>{{ analytics.inactive_products }}</strong><span>Productos inactivos</span></div><div><strong>{{ analytics.lost_products_label }}</strong><span>Productos perdidos</span></div><div><strong>{{ analytics.display_previous_revenue }}</strong><span>Ingresos de referencia</span></div></div><p class="sa-chart-note">{{ analytics.reference_detail }}</p></article>
+</section>
+
+<section class="sa-card sa-priority-panel"><header><div><p class="sa-section-label">Centro de acción comercial</p><h2>Oportunidades prioritarias</h2></div><span>Ordenadas por impacto observable</span></header>{% if analytics.priorities %}<div class="sa-priority-list">{% for priority in analytics.priorities %}<article class="sa-priority sa-priority-{{ priority.tone }}"><div><small>{{ priority.type }}</small><strong>{{ priority.title }}</strong><span>{{ priority.detail }}</span></div><b>{{ priority.value }}</b></article>{% endfor %}</div>{% else %}<div class="sa-empty sa-empty-compact"><strong>Sin alertas prioritarias</strong><p>No se identificaron brechas accionables con la información disponible.</p></div>{% endif %}</section>
+
+<section class="sa-card mt-3"><header><div><p class="sa-section-label">Composición</p><h2>Familias compradas bajo acuerdo</h2></div></header>{% if analytics.families %}<div class="sa-family-list">{% for family in analytics.families[:8] %}<div><div><span>{{ family.name }}</span><strong>{{ family.display_revenue }}</strong></div><p>{{ '%.1f'|format(family.share) }}% del ingreso del acuerdo</p><i><b style="width:{{ family.share }}%"></b></i></div>{% endfor %}</div>{% else %}<div class="sa-empty sa-empty-compact"><p>No hay familias conciliadas con ventas.</p></div>{% endif %}</section>
+
+<section class="sa-card mt-3"><header><div><p class="sa-section-label">Productos negociados</p><h2>Desempeño por producto</h2></div><a href="{{ url_for('workspace.strategic_account_agreement_upload', customer_id=customer.id) }}">Cargar nueva versión</a></header>
+<form method="get" class="sa-filter-bar"><input class="form-control" name="q" value="{{ analytics.filters.q }}" placeholder="Buscar referencia, descripción o línea"><select class="form-select" name="status" onchange="this.form.submit()"><option value="">Todos los estados</option>{% for value,label in [('active','Activos'),('new','Nuevos'),('inactive','Inactivos'),('never','Nunca comprados')] %}<option value="{{ value }}" {{ 'selected' if analytics.filters.status == value }}>{{ label }}</option>{% endfor %}</select><button class="sa-button sa-button-secondary">Buscar</button>{% if analytics.filters.q or analytics.filters.status %}<a class="sa-button sa-button-secondary" href="{{ url_for('workspace.strategic_account_agreement', customer_id=customer.id) }}">Limpiar</a>{% endif %}</form>
+<div class="table-responsive"><table class="table"><thead><tr><th>Referencia interna</th><th>Referencia fabricante</th><th>Descripción</th><th>Estado</th><th>Ingreso del periodo</th><th>Matching</th></tr></thead><tbody>{% for item in analytics.products %}<tr><td>{{ item.internal_sku or item.part_number or '—' }}</td><td>{{ item.manufacturer_part_number or '—' }}</td><td>{{ item.description or '—' }}</td><td><span class="sa-status">{{ item.status_label }}</span></td><td>{{ item.display_revenue }}</td><td>{{ 'Conciliado' if item.matched else 'Sin coincidencia' }}</td></tr>{% else %}<tr><td colspan="6" class="text-secondary">No hay productos que coincidan con los filtros.</td></tr>{% endfor %}</tbody></table></div>
+{% if analytics.pagination.pages > 1 %}<nav class="sa-pagination">{% if analytics.pagination.has_previous %}<a href="{{ url_for('workspace.strategic_account_agreement', customer_id=customer.id, q=analytics.filters.q, status=analytics.filters.status, page=analytics.pagination.page-1) }}">Anterior</a>{% endif %}<span>Página {{ analytics.pagination.page }} de {{ analytics.pagination.pages }} · {{ analytics.pagination.total }} productos</span>{% if analytics.pagination.has_next %}<a href="{{ url_for('workspace.strategic_account_agreement', customer_id=customer.id, q=analytics.filters.q, status=analytics.filters.status, page=analytics.pagination.page+1) }}">Siguiente</a>{% endif %}</nav>{% endif %}
+</section>
+
+<section class="sa-card mt-3"><header><div><p class="sa-section-label">Calidad de datos</p><h2>Conciliación de productos</h2></div></header><div class="sa-data-quality"><div><small>Productos conciliados</small><strong>{{ analytics.negotiated_products - analytics.unmatched_products }} de {{ analytics.negotiated_products }}</strong></div><div><small>Tasa de matching</small><strong>{{ '%.1f%%'|format(analytics.matching_success) }}</strong></div><div><small>Sin coincidencia</small><strong>{{ analytics.unmatched_products }}</strong></div></div><p class="sa-chart-note">El matching compara referencias internas y del fabricante con el historial de ventas disponible. Estas métricas describen calidad de conciliación, no desempeño comercial.</p></section>
+{% endif %}</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/strategic-account.js') }}"></script>{% endblock %}

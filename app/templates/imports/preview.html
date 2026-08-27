@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Vista previa ERP · Commercial Command Center{% endblock %}
+{% block page_title %}Revisar importación ERP{% endblock %}
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row">
+      <div class="col"><div class="text-secondary">Archivo</div>
+        <strong>{{ preview.original_filename }}</strong></div>
+      <div class="col"><div class="text-secondary">Tipo</div>
+        <strong>{{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario'}.get(preview.import_type, preview.import_type) }}</strong></div>
+      <div class="col"><div class="text-secondary">Filas</div>
+        <strong>{{ preview.rows_read }}</strong></div>
+      {% if preview.import_type == 'inventory' %}
+      <div class="col"><div class="text-secondary">Fecha del snapshot</div>
+        <strong>{{ preview.snapshot_date }}</strong></div>
+      {% endif %}
+    </div>
+    <div class="text-secondary small mt-3">SHA-256: {{ preview.file_hash }}</div>
+  </div>
+</div>
+{% for warning in preview.warnings %}
+<div class="alert alert-warning">{{ warning }}</div>
+{% endfor %}
+{% if preview.import_type == 'customers' %}
+<div class="row row-cards mb-3">
+  <div class="col-md-6"><div class="card h-100"><div class="card-header"><h3 class="card-title">Clientes</h3></div>
+    <div class="card-body"><div class="row text-center">
+      <div class="col"><strong class="h2">{{ preview.sync_metrics.customers_inserted }}</strong><div class="text-secondary">Nuevos</div></div>
+      <div class="col"><strong class="h2">{{ preview.sync_metrics.customers_updated }}</strong><div class="text-secondary">Actualizados</div></div>
+      <div class="col"><strong class="h2">{{ preview.sync_metrics.customers_unchanged }}</strong><div class="text-secondary">Sin cambios</div></div>
+    </div></div></div></div>
+  <div class="col-md-6"><div class="card h-100"><div class="card-header"><h3 class="card-title">Ubicaciones</h3></div>
+    <div class="card-body"><div class="row text-center">
+      <div class="col"><strong class="h2">{{ preview.sync_metrics.customer_sites_inserted }}</strong><div class="text-secondary">Nuevas</div></div>
+      <div class="col"><strong class="h2">{{ preview.sync_metrics.customer_sites_updated }}</strong><div class="text-secondary">Actualizadas</div></div>
+      <div class="col"><strong class="h2">{{ preview.sync_metrics.customer_sites_unchanged }}</strong><div class="text-secondary">Sin cambios</div></div>
+    </div></div></div></div>
+</div>
+{% endif %}
+{% if preview.import_type == 'inventory' %}
+<div class="row row-cards mb-3">
+  {% for label, value in [
+    ('Filas válidas', preview.sync_metrics.rows_valid),
+    ('Bodegas', preview.sync_metrics.warehouses_count),
+    ('Unidades', '{:,.0f}'.format(preview.sync_metrics.total_units)),
+    ('Disponibles', '{:,.0f}'.format(preview.sync_metrics.total_available)),
+    ('En tránsito', '{:,.0f}'.format(preview.sync_metrics.total_transit)),
+    ('Valor a costo', '${:,.0f}'.format(preview.sync_metrics.total_cost_value))
+  ] %}
+  <div class="col-md-4 col-lg-2"><div class="card h-100"><div class="card-body">
+    <div class="text-secondary">{{ label }}</div><strong class="h3">{{ value }}</strong>
+  </div></div></div>
+  {% endfor %}
+</div>
+{% if preview.sync_metrics.existing_keys %}
+<div class="alert alert-warning">
+  {{ preview.sync_metrics.existing_keys }} filas ya existen para esta fecha.
+  Si confirma, se sobrescribirán con los valores del archivo.
+</div>
+{% endif %}
+{% if preview.validation_issues %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Filas con observaciones</h3></div>
+  <div class="table-responsive"><table class="table table-sm card-table">
+    <thead><tr><th>Fila</th><th>Nivel</th><th>Código</th><th>Detalle</th></tr></thead>
+    <tbody>{% for issue in preview.validation_issues %}
+      <tr><td>{{ issue.row_number or '—' }}</td><td>{{ issue.severity }}</td>
+        <td>{{ issue.code }}</td><td>{{ issue.message }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endif %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Correspondencia de columnas</h3></div>
+  <div class="card-body">
+    {% for source, canonical in preview.header_mapping %}
+      <span class="badge bg-secondary-lt me-2 mb-2">{{ source }} → {{ canonical }}</span>
+    {% endfor %}
+  </div>
+</div>
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Muestra de datos</h3></div>
+  <div class="table-responsive">
+    <table class="table table-sm card-table">
+      <thead><tr>{% for column in preview.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for row in preview.sample_rows %}<tr>
+        {% for column in preview.columns %}<td>{{ row.get(column, '') }}</td>{% endfor %}
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</div>
+<div class="d-flex gap-2">
+  {% if preview.can_confirm %}
+  <form method="post" action="{{ url_for('imports.confirm', execution_id=preview.execution_id) }}">
+    {% if preview.import_type == 'inventory' and preview.sync_metrics.existing_keys %}
+    <input type="hidden" name="overwrite_existing" value="1">
+    <button class="btn btn-warning">Confirmar y sobrescribir</button>
+    {% else %}
+    <button class="btn btn-primary">Confirmar importación</button>
+    {% endif %}
+  </form>
+  {% else %}
+  <button class="btn btn-primary" disabled>Corrija los errores para continuar</button>
+  {% endif %}
+  <a class="btn btn-outline-secondary" href="{{ url_for('imports.index') }}">Cancelar</a>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Cargar acuerdo · {{ customer.name }}{% endblock %}
+{% block page_title %}Cargar acuerdo{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-xl-8">
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<form method="post" enctype="multipart/form-data">
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">Información del acuerdo</h3></div><div class="card-body row g-3">
+<div class="col-12"><label class="form-label">Cliente</label><input class="form-control" value="{{ customer.name }}" disabled></div>
+<div class="col-md-6"><label class="form-label">Nombre del acuerdo</label><input class="form-control" name="name" required></div>
+<div class="col-md-6"><label class="form-label">Fabricante o proveedor</label><input class="form-control" name="supplier" required></div>
+<div class="col-md-6"><label class="form-label">Moneda del acuerdo</label><select class="form-select" name="currency"><option value="">Detectar del archivo</option><option>COP</option><option>USD</option><option>EUR</option></select></div>
+<div class="col-md-6"><label class="form-label">Tipo de acuerdo</label><input class="form-control" name="agreement_type" placeholder="Opcional"></div>
+<div class="col-md-6"><label class="form-label">Fecha inicial</label><input type="date" class="form-control" name="start_date"></div>
+<div class="col-md-6"><label class="form-label">Fecha final</label><input type="date" class="form-control" name="end_date"></div>
+<div><label class="form-label">Notas</label><textarea class="form-control" name="notes"></textarea></div>
+</div></div>
+<div class="card mb-3"><div class="card-body">
+<label class="form-label">Archivo del acuerdo</label>
+<input type="file" class="form-control" name="file" accept=".xls,.xlsx" required>
+<small class="text-secondary">Formatos soportados: .xlsx, .xls (Excel) y .xls exportado por sistemas ERP · máximo 10 MB · máximo 5.000 filas</small>
+</div></div>
+<div class="d-flex justify-content-end gap-2"><a class="btn" href="{{ url_for('workspace.strategic_account_agreement', customer_id=customer.id) }}">Cancelar</a><button class="btn btn-primary">Continuar</button></div>
+</form></div></div>
+{% endblock %}

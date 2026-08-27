@@ -18,9 +18,12 @@ def search_customers():
         "",
     )
 
-    customers = CustomerLookupRepository.search(
-        text=query,
-        limit=20,
-    )
+    limit = min(max(request.args.get("limit", 10, type=int), 1), 20)
+    if request.args.get("scope") == "workspace":
+        customers = CustomerLookupRepository.search_workspace_customers(
+            text=query, limit=limit,
+        )
+    else:
+        customers = CustomerLookupRepository.search(text=query, limit=limit)
 
     return jsonify(customers)

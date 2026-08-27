@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class ProjectQuoteRepository:
@@ -40,7 +40,7 @@ class ProjectQuoteRepository:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -58,7 +58,6 @@ class ProjectQuoteRepository:
                     else None,
                 ),
             )
-            conn.commit()
 
             return int(cursor.lastrowid)
 
@@ -80,7 +79,7 @@ class ProjectQuoteRepository:
 
         clean_prefix = prefix.strip().upper() or "CTC"
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             conn.execute(
                 """
                 DELETE FROM ws_project_quotes
@@ -114,7 +113,6 @@ class ProjectQuoteRepository:
                     ),
                 )
 
-            conn.commit()
 
     @staticmethod
     def list_project_quotes(
@@ -137,7 +135,7 @@ class ProjectQuoteRepository:
         ORDER BY quote_date DESC, id DESC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             rows = conn.execute(
                 sql,
                 (project_id,),

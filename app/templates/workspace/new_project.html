@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}
-    Nuevo proyecto · Commercial Command Center
+    Nueva oportunidad · Commercial Command Center
 {% endblock %}
 
 {% block page_title %}
-    Nuevo proyecto
+    Nueva oportunidad
 {% endblock %}
 
 {% block content %}
@@ -48,6 +48,7 @@
     method="post"
     autocomplete="off"
 >
+<input type="hidden" name="source_visit_id" value="{{ form_data.get('source_visit_id','') }}">
 
 {% if error %}
 <div class="alert alert-danger" role="alert">
@@ -63,7 +64,7 @@
 
                 <div class="card-header">
                     <h3 class="card-title">
-                        Información del proyecto
+                        Información de la oportunidad
                     </h3>
                 </div>
 
@@ -81,6 +82,7 @@
                         <input
                             type="text"
                             id="customer-search"
+                            value="{{ form_data.get('customer_name','') }}"
                             class="form-control"
                             placeholder="Buscar por nombre, NIT o ciudad..."
                             autocomplete="off"
@@ -99,6 +101,7 @@
                             type="hidden"
                             name="customer_id"
                             id="customer_id"
+                            value="{{ form_data.get('customer_id','') }}"
                         >
 
                         <input
@@ -155,6 +158,7 @@
                             type="text"
                             id="sales_rep"
                             name="sales_rep"
+                            value="{{ form_data.get('sales_rep','') }}"
                             class="form-control"
                             placeholder="Se completa al seleccionar el cliente"
                             required
@@ -172,13 +176,14 @@
                             for="project_name"
                             class="form-label required"
                         >
-                            Nombre del proyecto
+                            Nombre de la oportunidad
                         </label>
 
                         <input
                             type="text"
                             id="project_name"
                             name="project_name"
+                            value="{{ form_data.get('project_name','') }}"
                             class="form-control"
                             placeholder="Ej. Cambio de chumaceras"
                             required
@@ -243,7 +248,7 @@
                             rows="4"
                             placeholder="¿Qué problema estamos resolviendo?"
                             required
-                        ></textarea>
+                        >{{ form_data.get('objective','') }}</textarea>
 
                     </div>
 
@@ -262,7 +267,7 @@
                             class="form-control"
                             rows="3"
                             placeholder="¿Qué estamos proponiendo?"
-                        ></textarea>
+                        >{{ form_data.get('proposed_solution','') }}</textarea>
 
                     </div>
 
@@ -279,6 +284,7 @@
                             type="text"
                             id="current_blocker"
                             name="current_blocker"
+                            value="{{ form_data.get('current_blocker','') }}"
                             class="form-control"
                             placeholder="¿Qué impide avanzar hoy?"
                         >
@@ -475,7 +481,7 @@
             type="submit"
             class="btn btn-primary"
         >
-            Crear proyecto
+            Crear oportunidad
         </button>
 
     </div>

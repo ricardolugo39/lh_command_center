@@ -23,19 +23,22 @@
         rel="stylesheet"
         href="{{ url_for('static', filename='css/workspace.css') }}"
     >
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
+    {% block styles %}{% endblock %}
 </head>
 
 <body>
 <div class="page">
 
-    <aside class="navbar navbar-vertical navbar-expand-lg">
+    <aside class="navbar navbar-vertical navbar-expand-lg ccc-sidebar" id="ccc-sidebar">
         <div class="container-fluid">
 
             <h1 class="navbar-brand navbar-brand-autodark">
                 <a href="{{ url_for('home.home') }}">
-                    Commercial Command Center
+                    <span class="ccc-brand-mark">CC</span><span class="ccc-nav-label">Commercial Command Center</span>
                 </a>
             </h1>
+            <button class="ccc-sidebar-toggle" id="ccc-sidebar-toggle" type="button" aria-label="Expandir navegación" aria-expanded="false">›</button>
 
             <button
                 class="navbar-toggler"
@@ -63,73 +66,61 @@
                             {% endif %}"
                             href="{{ url_for('home.home') }}"
                         >
+                            <span class="ccc-nav-icon" aria-hidden="true">⌂</span>
                             <span class="nav-link-title">
-                                Workspace
+                                Inicio
                             </span>
                         </a>
                     </li>
 
                     <li class="nav-item">
-                        <a
-                            class="nav-link
-                            {% if request.endpoint == 'workspace.project_list' %}
-                                active
-                            {% endif %}"
-                            href="{{ url_for('workspace.project_list') }}"
-                        >
-                            <span class="nav-link-title">
-                                Proyectos
-                            </span>
+                        <a class="nav-link {% if request.endpoint == 'workspace.project_list' %}active{% endif %}"
+                           href="{{ url_for('workspace.project_list') }}">
+                            <span class="ccc-nav-icon" aria-hidden="true">◇</span>
+                            <span class="nav-link-title">Oportunidades</span>
                         </a>
                     </li>
 
                     <li class="nav-item">
-                        <a
-                            class="nav-link
-                            {% if request.endpoint == 'workspace.customer_list' %}
-                                active
-                            {% endif %}"
-                            href="{{ url_for('workspace.customer_list') }}"
-                        >
-                            <span class="nav-link-title">
-                                Clientes
-                            </span>
+                        <a class="nav-link {% if request.endpoint == 'home.activities' %}active{% endif %}" href="{{ url_for('home.activities') }}">
+                            <span class="ccc-nav-icon" aria-hidden="true">✓</span>
+                            <span class="nav-link-title">Actividades</span>
                         </a>
                     </li>
 
                     <li class="nav-item">
-                        <a
-                            href="{{ url_for(
-                                'workspace.initiative_list'
-                            ) }}"
-                            class="nav-link"
-                        >
-                            Iniciativas
+                        <a class="nav-link {% if request.endpoint == 'workspace.customer_list' %}active{% endif %}"
+                           href="{{ url_for('workspace.customer_list') }}">
+                            <span class="ccc-nav-icon" aria-hidden="true">◎</span>
+                            <span class="nav-link-title">Cuentas</span>
                         </a>
-
-                    </li>
-                    
-
-                    <li class="nav-item mt-3">
-                        <div class="nav-link disabled">
-                            <span class="nav-link-title text-secondary">
-                                Analytics
-                            </span>
-                        </div>
                     </li>
 
                     <li class="nav-item">
-                        <a
-                            class="nav-link
-                            {% if request.endpoint == 'purchase_history.purchase_history' %}
-                                active
-                            {% endif %}"
-                            href="{{ url_for('purchase_history.purchase_history') }}"
-                        >
-                            <span class="nav-link-title">
-                                Historial de compras
-                            </span>
+                        <a class="nav-link {% if request.endpoint == 'workspace.company_sales_dashboard' %}active{% endif %}"
+                           href="{{ url_for('workspace.company_sales_dashboard') }}">
+                            <span class="ccc-nav-icon" aria-hidden="true">▦</span>
+                            <span class="nav-link-title">Equipo</span>
                         </a>
+                    </li>
+
+                    {% set tools_active = request.blueprint in ('ask', 'rfqs', 'quotes', 'stock_planning', 'integrations', 'imports', 'purchase_history') or request.endpoint in ('workspace.initiative_list', 'workspace.visit_integration', 'workspace.visit_data_quality') %}
+                    <li class="nav-item ccc-tools-item">
+                        <details class="ccc-tools" {% if tools_active %}open{% endif %}>
+                            <summary class="nav-link {% if tools_active %}active{% endif %}">
+                                <span class="ccc-nav-icon" aria-hidden="true">•••</span>
+                                <span class="nav-link-title">Herramientas</span>
+                            </summary>
+                            <div class="ccc-tools-menu">
+                                <a href="{{ url_for('ask.index') }}">Ask</a>
+                                <a href="{{ url_for('rfqs.index') }}">RFQs</a>
+                                <a href="{{ url_for('quotes.index') }}">Cotizaciones</a>
+                                <a href="{{ url_for('stock_planning.index') }}">Planeación de inventario</a>
+                                <a href="{{ url_for('integrations.index') }}">Integraciones</a>
+                                <a href="{{ url_for('workspace.initiative_list') }}">Iniciativas</a>
+                                <a href="{{ url_for('purchase_history.purchase_history') }}">Historial de compras</a>
+                            </div>
+                        </details>
                     </li>
 
                 </ul>
@@ -157,6 +148,19 @@
 
                     {% block page_actions %}
                     {% endblock %}
+                    {% if current_user %}
+                    <div class="col-auto ms-auto">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="text-end">
+                                <div class="fw-semibold">{{ current_user.display_name }}</div>
+                                <div class="text-secondary small">{{ current_user.email }} · {{ role_labels.get(current_user.role, current_user.role) }}</div>
+                            </div>
+                            <form method="post" action="{{ url_for('auth.logout') }}">
+                                <button class="btn btn-outline-secondary btn-sm">Cerrar sesión</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endif %}
 
                 </div>
             </div>
@@ -177,5 +181,7 @@
 <script
     src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js">
 </script>
+<script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

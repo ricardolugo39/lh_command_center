@@ -57,6 +57,61 @@
 
 </form>
 
+{% if quote.quote_status == 'draft' and not quote.issued_at and not quote.sent_at %}
+<form method="post" action="{{ url_for('quotes.delete', quote_id=quote.id) }}"
+      class="mt-3 text-end"
+      onsubmit="return confirm('¿Eliminar esta versión en borrador? Esta acción no se puede deshacer.')">
+    <button class="btn btn-outline-danger">Eliminar esta versión</button>
+</form>
+{% endif %}
+
+{% if quote_lines %}
+<div class="card mt-4">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title">Líneas de cotización</h3>
+            <div class="text-secondary small">Las referencias CRM se conservan como evidencia; los valores de esta cotización son editables.</div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% for line in quote_lines %}
+        <form method="post" action="{{ url_for('workspace.edit_quote_line', line_id=line.id) }}" class="border rounded p-3 mb-3">
+            {% if line.imported_commercial_line_id %}
+            <div class="text-secondary small mb-2">Origen CRM · línea {{ line.source_line_key }}</div>
+            {% endif %}
+            <div class="row g-2">
+                <div class="col-md-2"><input class="form-control" name="brand" value="{{ line.brand or '' }}" placeholder="Marca"></div>
+                <div class="col-md-2"><input class="form-control" name="part_number" value="{{ line.part_number or '' }}" placeholder="Parte"></div>
+                <div class="col-md-3"><input class="form-control" name="description" required value="{{ line.description }}" placeholder="Descripción"></div>
+                <div class="col-md-1"><input class="form-control" name="quantity" type="number" min="0" step="any" required value="{{ line.quantity }}"></div>
+                <div class="col-md-2"><input class="form-control" name="unit_price" type="number" min="0" step="any" required value="{{ line.unit_price }}"></div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button class="btn btn-outline-primary" type="submit">Guardar</button>
+                    <button class="btn btn-outline-danger" type="submit" formaction="{{ url_for('workspace.delete_quote_line', line_id=line.id) }}">Eliminar</button>
+                </div>
+            </div>
+        </form>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if quote.generated_from_crm_lines %}
+<div class="card mt-4">
+    <div class="card-header"><h3 class="card-title">Agregar línea</h3></div>
+    <form method="post" action="{{ url_for('workspace.add_quote_line', quote_id=quote.id) }}">
+        <div class="card-body row g-2">
+            <div class="col-md-2"><input class="form-control" name="brand" placeholder="Marca"></div>
+            <div class="col-md-2"><input class="form-control" name="part_number" placeholder="Parte"></div>
+            <div class="col-md-3"><input class="form-control" name="description" required placeholder="Descripción"></div>
+            <div class="col-md-2"><input class="form-control" name="quantity" type="number" min="0" step="any" required value="1"></div>
+            <div class="col-md-2"><input class="form-control" name="unit_price" type="number" min="0" step="any" required value="0"></div>
+            <div class="col-md-1"><button class="btn btn-primary" type="submit">Agregar</button></div>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const currencyInput = document.getElementById(

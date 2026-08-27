@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Cotizaciones · Commercial Command Center{% endblock %}
+{% block page_title %}<div class="d-flex align-items-center justify-content-between"><span>Cotizaciones</span><a class="btn btn-primary" href="{{ url_for('rfqs.index') }}">Crear desde RFQ</a></div>{% endblock %}
+{% block content %}
+<div class="alert alert-info">La cotización se crea normalmente desde una RFQ para heredar cliente, vendedor, comentarios, adjuntos y líneas. Abra la RFQ correspondiente y seleccione <strong>Crear cotización desde RFQ</strong>.</div>
+<div class="card mb-3"><div class="card-body"><form method="get" class="row g-2">
+  <div class="col-md-3"><select class="form-select" name="status"><option value="">Todos los estados</option>{% for value,label in statuses.items() %}<option value="{{ value }}" {{ 'selected' if filters.status==value }}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><input class="form-control" name="brand" value="{{ filters.brand or '' }}" placeholder="Marca"></div>
+  <div class="col-md-3"><select class="form-select" name="office"><option value="">Todas las sedes</option>{% for value in offices %}<option value="{{ value }}" {{ 'selected' if filters.office==value }}>{{ value }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><button class="btn btn-primary">Filtrar</button></div>
+</form></div></div>
+<div class="card"><div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>Número</th><th>Rev.</th><th>Fecha</th><th>Cliente</th><th>Asesor</th><th>Productos</th><th>Marcas</th><th>USD</th><th>COP estimado</th><th>Margen</th><th>Estado</th><th>Seguimiento</th></tr></thead><tbody>
+{% for q in quotes %}<tr><td><a href="{{ url_for('quotes.workspace',quote_id=q.id) }}"><strong>{{ q.prefix }}-{{ q.quote_number }}</strong></a></td><td>{{ q.revision }}</td><td>{{ q.quote_date or '—' }}</td><td>{{ q.customer_name or '—' }}</td><td>{{ q.sales_rep_name or '—' }}</td><td>{{ q.product_summary or '—' }}</td><td>{{ q.brands or '—' }}</td><td>{{ '%.2f'|format(q.amount or 0) }}</td><td>{{ '%.2f'|format(q.normalized_amount or 0) }}</td><td>{{ q.margin_percent or '—' }}%</td><td><span class="badge">{{ statuses.get(q.quote_status,q.quote_status) }}</span></td><td>{{ q.next_followup or '—' }}</td></tr>
+{% else %}<tr><td colspan="12" class="text-center text-secondary py-5">No hay cotizaciones para estos filtros.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

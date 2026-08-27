@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class ProjectBrandRepository:
@@ -24,7 +24,7 @@ class ProjectBrandRepository:
         VALUES (?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -32,7 +32,6 @@ class ProjectBrandRepository:
                     clean_brand,
                 ),
             )
-            conn.commit()
 
             if cursor.rowcount == 0:
                 return None
@@ -53,7 +52,7 @@ class ProjectBrandRepository:
             }
         )
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             conn.execute(
                 """
                 DELETE FROM ws_project_brands
@@ -79,7 +78,6 @@ class ProjectBrandRepository:
                 ],
             )
 
-            conn.commit()
 
     @staticmethod
     def list_project_brands(
@@ -96,7 +94,7 @@ class ProjectBrandRepository:
         ORDER BY brand
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             rows = conn.execute(
                 sql,
                 (project_id,),

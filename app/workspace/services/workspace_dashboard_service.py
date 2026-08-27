@@ -4,6 +4,7 @@ from typing import Any
 from app.workspace.repositories.workspace_dashboard_repository import (
     WorkspaceDashboardRepository,
 )
+from app.workspace.constants.commercial_office import office_for_sales_rep
 
 
 class WorkspaceDashboardService:
@@ -11,11 +12,23 @@ class WorkspaceDashboardService:
     UPCOMING_DAYS = 7
 
     @staticmethod
-    def get_dashboard() -> dict[str, Any]:
+    def get_dashboard(office: str = "", sales_rep: str = "") -> dict[str, Any]:
         followups = (
             WorkspaceDashboardRepository
             .list_pending_followups()
         )
+        if office:
+            followups = [
+                item for item in followups
+                if office_for_sales_rep(item.get("sales_rep")) == office
+            ]
+        if sales_rep:
+            expected = " ".join(sales_rep.casefold().split())
+            followups = [
+                item for item in followups
+                if " ".join(str(item.get("sales_rep") or "").casefold().split())
+                == expected
+            ]
 
         today = date.today()
         upcoming_limit = today + timedelta(
@@ -25,6 +38,7 @@ class WorkspaceDashboardService:
         overdue_followups = []
         today_followups = []
         upcoming_followups = []
+        confirmation_followups = []
 
         for followup in followups:
             due_date = (
@@ -35,6 +49,7 @@ class WorkspaceDashboardService:
             )
 
             if due_date is None:
+                confirmation_followups.append({**followup, "display_due_date": "Sin fecha"})
                 continue
 
             enriched_followup = {
@@ -72,6 +87,7 @@ class WorkspaceDashboardService:
             "overdue_followups": overdue_followups,
             "today_followups": today_followups,
             "upcoming_followups": upcoming_followups,
+            "confirmation_followups": confirmation_followups,
             "recent_projects": recent_projects,
             "summary": {
                 "overdue_count": len(
@@ -83,6 +99,7 @@ class WorkspaceDashboardService:
                 "upcoming_count": len(
                     upcoming_followups
                 ),
+                "confirmation_count": len(confirmation_followups),
             },
         }
 

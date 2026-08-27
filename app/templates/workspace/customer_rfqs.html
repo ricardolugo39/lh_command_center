@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}RFQs · {{ customer.name }}{% endblock %}
+{% block page_title %}{{ customer.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+<div><div class="text-secondary">Espacio del cliente</div><h2 class="mb-0">RFQs</h2></div>
+<a class="btn btn-primary" href="{{ url_for('rfqs.new',customer_id=customer.id) }}">Nueva RFQ</a>
+</div>
+<div class="card"><div class="table-responsive"><table class="table table-vcenter card-table">
+<thead><tr><th>Precotización</th><th>Descripción</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
+<tbody>{% for rfq in rfqs %}<tr>
+<td>{{ rfq.prequotation_number or rfq.rfq_number }}</td><td>{{ rfq.description }}</td>
+<td>{{ rfq.owner_name }}</td><td>{{ labels.get(rfq.workflow_status,rfq.workflow_status) }}</td>
+<td><a href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">Abrir</a></td>
+</tr>{% else %}<tr><td colspan="5" class="text-secondary">Este cliente todavía no tiene RFQs.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

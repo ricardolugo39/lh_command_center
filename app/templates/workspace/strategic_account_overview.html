@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.account.name }} · Espacio de cuenta{% endblock %}
+{% block page_title %}Espacio de cuenta{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/strategic-account.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="sa-dashboard" data-revenue='{{ page.revenue_comparison.points | tojson }}'>
+    <section class="sa-hero">
+        <div>
+            <div class="sa-eyebrow"><span></span> Cuenta comercial</div>
+            <h1>{{ page.account.name }}</h1>
+            <div class="sa-account-meta">
+                <div><small>Acuerdo</small><strong>{{ page.agreement.name }}</strong></div>
+                <div><small>Estado</small><strong>{{ page.agreement.status_label }}</strong></div>
+                <div><small>Periodo</small><strong>{{ page.agreement.period }}</strong></div>
+                <div><small>Responsable</small><strong>{{ page.account.sales_rep or "Sin asignar" }}</strong></div>
+            </div>
+            {% if page.agreement.is_temporary %}
+            <span class="sa-temp-label">Información temporal</span>
+            {% endif %}
+        </div>
+        <div class="sa-actions">
+            <div class="dropdown">
+                <button class="sa-button sa-button-secondary dropdown-toggle" data-bs-toggle="dropdown">Acciones</button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <a class="dropdown-item" href="{{ url_for('workspace.account_commercial_profile', customer_id=page.account.id) }}">Ver ficha comercial</a>
+                    <a class="dropdown-item" href="{{ url_for('workspace.project_list', customer=page.account.name) }}">Ver oportunidades</a>
+                </div>
+            </div>
+            <button class="sa-button sa-button-primary" disabled title="Disponible en una próxima fase">Generar revisión de negocio</button>
+        </div>
+    </section>
+
+    <section class="sa-executive-summary" aria-label="Resumen ejecutivo provisional">
+        {% for item in page.executive_summary %}
+        <div class="sa-summary-item sa-tone-{{ item.tone }}">
+            <small>{{ item.label }}</small>
+            <strong>{{ item.value }}</strong>
+            <span>{{ item.detail }}</span>
+        </div>
+        {% endfor %}
+    </section>
+
+    <nav class="sa-tabs" aria-label="Secciones de la cuenta">
+        {% for tab in ["Resumen", "Acuerdo", "Productos", "Desempeño", "Actividades", "RFQs", "Personas", "Valor entregado", "Oportunidades", "Revisión de negocio", "Documentos"] %}
+        {% if tab == "Acuerdo" %}<a class="sa-tab" href="{{ url_for('workspace.strategic_account_agreement', customer_id=page.account.id) }}">{{ tab }}</a>{% elif tab == "Productos" %}<a class="sa-tab" href="{{ url_for('workspace.strategic_account_products',customer_id=page.account.id) }}">{{ tab }}</a>{% elif tab == "Actividades" %}<a class="sa-tab" href="{{ url_for('workspace.strategic_account_activities',customer_id=page.account.id) }}">{{ tab }}</a>{% elif tab == "RFQs" %}<a class="sa-tab" href="{{ url_for('workspace.strategic_account_rfqs',customer_id=page.account.id) }}">{{ tab }}</a>{% else %}<span class="sa-tab {{ 'active' if loop.first else '' }}" {% if not loop.first %}title="Disponible próximamente"{% endif %}>{{ tab }}</span>{% endif %}
+        {% endfor %}
+    </nav>
+    {% if page.visit_data is defined %}<div class="alert alert-info py-2 mt-3 mb-3 small">Visitas AppSheet: {{ page.visit_data.total or 0 }} · Última sincronización: {{ page.visit_data.latest_sync or 'Sin sincronizar' }}{% if page.visit_data.warnings %} · {{ page.visit_data.warnings }} registro(s) requieren revisión{% endif %}</div>{% endif %}
+
+    <section class="sa-kpi-grid">
+        {% for kpi in page.kpis %}
+        <article class="sa-card sa-kpi {{ 'sa-kpi-primary' if kpi.primary else '' }} {{ 'sa-kpi-temporary' if kpi.temporary else '' }}">
+            <div class="sa-kpi-top">
+                {% if not kpi.temporary %}<span class="sa-icon" aria-hidden="true">{{ {
+                    "agreement": "◇", "revenue": "↗", "margin": "%",
+                    "utilization": "◔", "pipeline": "◎", "visit": "⌖"
+                }.get(kpi.icon, "•") }}</span>{% endif %}
+                {% if kpi.temporary %}<span class="sa-temp-label">No disponible</span>{% endif %}
+            </div>
+            <p>{{ kpi.label }}</p>
+            <strong>{{ kpi.value }}</strong>
+            {% if kpi.trend %}<div class="sa-trend sa-tone-{{ kpi.tone }}">{{ kpi.trend }}</div>{% endif %}
+            <small>{{ kpi.subtitle }}</small>
+        </article>
+        {% endfor %}
+    </section>
+
+    <section class="sa-grid sa-grid-main">
+        <article class="sa-card sa-chart-card">
+            <header><div><p class="sa-section-label">Desempeño</p><h2>Ingresos de la cuenta</h2></div><span>Últimos 12 meses</span></header>
+            {% if page.revenue_comparison.has_current %}
+            <div class="sa-line-chart"><svg id="revenue-chart" role="img" aria-label="Ingresos mensuales"></svg><div id="revenue-tooltip" class="sa-chart-tooltip" hidden></div></div>
+            <div class="sa-series-legend"><span class="current">Periodo actual</span>{% if page.revenue_comparison.has_previous %}<span class="previous">Mismo periodo año anterior</span>{% endif %}</div>
+            <div class="sa-chart-legend" id="revenue-legend"></div>
+            {% if not page.revenue_comparison.has_previous %}<p class="sa-chart-note">No hay datos comparables del mismo periodo del año anterior.</p>{% endif %}
+            <p class="sa-chart-note">Actual: {{ page.revenue_comparison.display_current_total }} · Anterior: {{ page.revenue_comparison.display_previous_total }}</p>
+            {% else %}
+            <div class="sa-empty"><strong>Sin historial disponible</strong><p>La visualización de ingresos históricos aparecerá cuando se complete la integración con el historial de ventas.</p></div>
+            {% endif %}
+        </article>
+
+        <article class="sa-card sa-utilization">
+            {% if not page.agreement.is_temporary %}
+            <header><div><p class="sa-section-label">Desempeño del acuerdo</p><h2>{{ page.agreement.name }}</h2></div><span class="sa-status">{{ page.agreement.status_label }}</span></header>
+            {% if page.agreement_analytics %}<div class="sa-agreement-signals text-start"><div><strong>{{ page.agreement_analytics.display_agreement_revenue }}</strong><span>Ingresos conciliados</span></div><div><strong>{{ '%.1f%%'|format(page.agreement_analytics.coverage) }}</strong><span>Cobertura</span></div><div><strong>{{ page.agreement_analytics.never_purchased }}</strong><span>Nunca comprados</span></div><div><strong>{{ '%.1f%%'|format(page.agreement_analytics.share_of_account) }}</strong><span>Participación de la cuenta</span></div></div><p class="sa-chart-note text-start">{{ page.agreement_analytics.reference_label }}</p>{% endif %}<a class="sa-button sa-button-secondary mt-3" href="{{ url_for('workspace.strategic_account_agreement', customer_id=page.account.id) }}">Ver acuerdo y analítica</a>
+            {% else %}
+            <header><div><p class="sa-section-label">Acuerdo</p><h2>Uso del acuerdo</h2></div><span class="sa-phase">Fase 2</span></header>
+            <div class="sa-donut" aria-label="Métrica temporal"><div><strong>—</strong><span>Temporal</span></div></div>
+            <p>El avance frente al objetivo del acuerdo estará disponible en una próxima fase.</p>
+            <a class="sa-button sa-button-primary mt-3" href="{{ url_for('workspace.strategic_account_agreement', customer_id=page.account.id) }}">Cargar acuerdo</a>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="sa-grid sa-grid-half">
+        <article class="sa-card">
+            <header><div><p class="sa-section-label">Interacción comercial</p><h2>Actividad de la cuenta</h2></div><span class="sa-status sa-tone-{{ page.engagement.tone }}">{{ page.engagement.status }}</span></header>
+            <div class="sa-engagement-summary">
+                <div><small>Última visita</small><strong>{{ page.engagement.last_visit }}</strong></div>
+                <div><small>Última actividad</small><strong>{{ page.engagement.last_activity }}</strong><span>{{ page.engagement.days_label }}</span></div>
+                <div><small>Seguimiento recomendado</small><strong>{{ page.engagement.follow_up }}</strong></div>
+            </div>
+            <div class="sa-metrics">
+                {% for label, value in page.activity_metrics %}
+                <div><strong>{{ value }}</strong><span>{{ label }}</span></div>
+                {% endfor %}
+            </div>
+        </article>
+        <article class="sa-card">
+            <header><div><p class="sa-section-label">Composición</p><h2>Principales familias de producto</h2></div></header>
+            {% if page.product_families %}
+            <div class="sa-family-list">
+                {% for family in page.product_families %}
+                <div><div><span>{{ family.family_name }}</span><strong>{{ family.display_revenue }}</strong></div><p>{{ "%.1f"|format(family.share) }}% del total{% if family.growth_label %} · <em class="sa-tone-{{ family.growth_tone }}">{{ family.growth_label }} vs. año anterior</em>{% endif %}</p><i><b style="width: {{ family.bar_width }}%"></b></i></div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="sa-empty sa-empty-compact"><strong>Sin categorías disponibles</strong><p>Las familias principales aparecerán cuando el historial tenga clasificación de producto.</p></div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="sa-grid sa-grid-bottom">
+        <article class="sa-card">
+            <header><div><p class="sa-section-label">Seguimiento</p><h2>Actividad reciente</h2></div></header>
+            {% if page.recent_activities %}
+            <div class="sa-activity-list">
+                {% for activity in page.recent_activities %}
+                <a href="{{ url_for('workspace.commercial_visit_detail', visit_id=activity.id) }}">
+                    <span class="sa-activity-icon sa-activity-icon-{{ activity.icon }}" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l3 2"/></svg></span><div><strong>{{ activity.title }}</strong><p>{{ activity.context_label }} · {{ activity.type_label }} · {{ activity.project_name }}</p></div><time>{{ activity.display_date }}</time>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}<div class="sa-empty sa-empty-compact"><p>No hay actividad registrada para esta cuenta.</p></div>{% endif %}
+        </article>
+
+        <article class="sa-card">
+            <header><div><p class="sa-section-label">Crecimiento</p><h2>Pipeline de oportunidades</h2></div><a href="{{ url_for('workspace.project_list', customer=page.account.name) }}">Ver todas</a></header>
+            {% if page.opportunities %}
+            <div class="sa-pipeline-list">
+                {% for opportunity in page.opportunities[:5] %}
+                <a href="{{ url_for('workspace.project_detail', project_id=opportunity.id) }}"><div><strong>{{ opportunity.name }}</strong><span class="badge bg-{{ opportunity.status_color }}-lt">{{ opportunity.status_label }}</span></div><b class="{{ 'sa-zero-value' if not opportunity.has_value else '' }}">{{ opportunity.display_amount }}</b></a>
+                {% endfor %}
+            </div>
+            {% else %}<div class="sa-empty sa-empty-compact"><p>No hay oportunidades abiertas para esta cuenta.</p></div>{% endif %}
+        </article>
+
+        {% if page.visit_analysis is defined %}<article class="sa-card"><header><div><p class="sa-section-label">Inteligencia</p><h2>Análisis de visitas</h2></div>{% if page.visit_analysis.is_stale %}<span class="sa-status sa-tone-warning">Datos nuevos</span>{% endif %}</header>{% if page.visit_analysis.analysis %}{% set insight=page.visit_analysis.analysis.result %}<p>{{ insight.executive_summary }}</p><div class="small text-secondary mb-3">{{ page.visit_analysis.analysis.source_visit_count }} visitas · hasta {{ page.visit_analysis.analysis.source_through_date }} · {{ page.visit_analysis.analysis.status }}</div>{% if insight.needs %}<strong>Necesidades</strong><ul>{% for item in insight.needs[:3] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}{% if insight.risks %}<strong>Riesgos</strong><ul>{% for item in insight.risks[:3] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}{% else %}<p class="text-secondary">Genere un primer análisis con las visitas sincronizadas.</p>{% endif %}{% if page.visit_analysis.has_visits and (page.visit_analysis.is_stale or not page.visit_analysis.analysis) %}<form method="post" action="{{ url_for('workspace.strategic_account_visit_analysis',customer_id=page.account.id) }}"><button class="sa-button sa-button-secondary">{{ 'Actualizar análisis' if page.visit_analysis.analysis else 'Generar análisis' }}</button></form>{% endif %}</article>{% else %}<article class="sa-card sa-placeholder-card"><p class="sa-section-label">Inteligencia</p><h2>Análisis de visitas</h2><p>Sin análisis disponible.</p></article>{% endif %}
+        <article class="sa-card sa-placeholder-card"><span class="sa-phase">No disponible</span><p class="sa-section-label">Impacto</p><h2>Valor entregado</h2><p>Esta sección consolidará visitas técnicas, capacitaciones, soporte de ingeniería, análisis de fallas y acompañamiento del fabricante.</p></article>
+    </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/strategic-account.js') }}"></script>
+{% endblock %}

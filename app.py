@@ -1,17 +1,7 @@
-from flask import Flask
-
-from app.routes import register_blueprints
-from app.routes.api.customers import customers_api
+from app import create_app
 
 
-app = Flask(
-    __name__,
-    template_folder="app/templates",
-    static_folder="app/static",
-)
-
-register_blueprints(app)
-app.register_blueprint(customers_api)
+app = create_app()
 
 
 if __name__ == "__main__":

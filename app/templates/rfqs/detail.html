@@ -1,0 +1,82 @@
+{% extends "base.html" %}{% set rfq=page.rfq %}
+{% block title %}{{ rfq.prequotation_number or rfq.rfq_number }} · Commercial Command Center{% endblock %}
+{% block page_title %}{{ rfq.prequotation_number or rfq.rfq_number }}{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<div class="row row-cards"><div class="col-lg-8">
+<div class="card mb-3"><div class="card-body"><div class="d-flex justify-content-between">
+<div><div class="text-secondary">{{ rfq.customer_name }}</div><h2>{{ rfq.description }}</h2></div>
+<span class="badge">{{ page.status_labels.get(rfq.workflow_status, rfq.workflow_status) }}</span></div>
+{% if current_user and current_user.role == 'administrator' and rfq.workflow_status in ['draft','sent','in_progress','answered'] %}<form class="mt-3" method="post" action="{{ url_for('rfqs.request_vendor_prices',rfq_id=rfq.id) }}"><button class="btn btn-primary">Solicitar precio al proveedor</button></form>{% endif %}
+<dl class="row mt-3"><dt class="col-4">Responsable</dt><dd class="col-8">{{ rfq.owner_name }}</dd>
+<dt class="col-4">Precotización</dt><dd class="col-8">{{ rfq.prequotation_number or rfq.rfq_number }}</dd>
+<dt class="col-4">Fecha</dt><dd class="col-8">{{ rfq.received_at }}</dd></dl>
+</div></div>
+<div class="card mb-3"><div class="card-header d-flex align-items-center">
+<h3 class="card-title">Conversación de correo</h3>
+<div class="ms-auto">{% if page.email_thread %}
+<form method="post" action="{{ url_for('rfqs.sync_email',rfq_id=rfq.id) }}">
+<button class="btn btn-outline-primary btn-sm">Sincronizar correos</button></form>
+{% elif rfq.workflow_status == 'draft' %}
+<form method="post" action="{{ url_for('rfqs.send_email',rfq_id=rfq.id) }}">
+<button class="btn btn-primary btn-sm">Enviar por Gmail</button></form>{% endif %}</div>
+</div><div class="card-body">
+{% if page.email_thread and page.email_thread.last_error %}
+<div class="alert alert-warning">{{ page.email_thread.last_error }}</div>{% endif %}
+{% for message in page.email_messages %}
+<div class="border rounded p-3 mb-2">
+<div class="d-flex justify-content-between"><strong>{{ 'Enviado' if message.direction == 'outgoing' else 'Recibido' }}</strong>
+<span class="text-secondary small">{{ message.message_at or '' }}</span></div>
+<div class="small text-secondary">{{ message.sender_email or '' }}</div>
+<div class="mt-2">{{ message.body_html_sanitized|safe }}</div></div>
+{% else %}<p class="text-secondary mb-0">La conversación aparecerá después de enviar la solicitud.</p>{% endfor %}
+</div></div>
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">Referencias solicitadas</h3></div>
+<div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr>
+<th>Referencia</th><th>Marca</th><th>Cantidad</th><th>Notas</th><th>Respuesta proveedor</th>
+</tr></thead><tbody>{% for item in page['items'] %}<tr>
+<td>{{ item.reference or item.description }}</td><td>{{ item.brand or '—' }}</td>
+<td>{{ item.quantity }}</td><td>{{ item.notes or '—' }}</td><td>
+{% if current_user and current_user.role == 'administrator' %}
+<form method="post" action="{{ url_for('rfqs.vendor_response',rfq_id=rfq.id,item_id=item.id) }}" class="row g-1">
+  <div class="col-6"><input class="form-control form-control-sm" name="fob_unit_usd" type="number" min="0" step="0.01" value="{{ item.fob_unit_usd or '' }}" placeholder="FOB USD"></div>
+  <div class="col-6"><input class="form-control form-control-sm" name="unit_weight_kg" type="number" min="0" step="0.001" value="{{ item.unit_weight_kg or '' }}" placeholder="Peso kg"></div>
+  <div class="col-6"><input class="form-control form-control-sm" name="lead_time" value="{{ item.lead_time or '' }}" placeholder="Entrega"></div>
+  <div class="col-6"><select class="form-select form-select-sm" name="vendor_response_status"><option value="partial">Parcial</option><option value="complete" {{ 'selected' if item.vendor_response_status=='complete' }}>Completa</option><option value="waived">Omitida</option></select></div>
+  <div class="col-12"><input class="form-control form-control-sm" name="availability" value="{{ item.availability or '' }}" placeholder="Disponibilidad"></div>
+  <div class="col-12"><textarea class="form-control form-control-sm" name="vendor_comments" placeholder="Comentarios proveedor">{{ item.vendor_comments or '' }}</textarea></div>
+  <div class="col-12"><button class="btn btn-sm btn-outline-primary">Guardar respuesta</button></div>
+</form>
+{% else %}<span class="badge">{{ item.vendor_response_status }}</span>{% endif %}
+</td>
+</tr>{% else %}<tr><td colspan="5" class="text-secondary">RFQ heredada sin referencias estructuradas.</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="card mb-3"><div class="card-header d-flex align-items-center"><h3 class="card-title">Cotizaciones relacionadas</h3>
+{% if current_user and current_user.role == 'administrator' and rfq.workflow_status != 'cancelled' %}<form class="ms-auto" method="post" action="{{ url_for('rfqs.convert_to_quote',rfq_id=rfq.id) }}"><button class="btn btn-primary btn-sm">Crear cotización desde RFQ</button></form>{% endif %}</div>
+<div class="list-group list-group-flush">{% for quote in page.related_quotes %}<a class="list-group-item list-group-item-action" href="{{ url_for('quotes.workspace',quote_id=quote.id) }}"><strong>{{ quote.prefix }}-{{ quote.quote_number }}</strong> · Revisión {{ quote.revision }} <span class="badge ms-2">{{ quote.quote_status }}</span></a>{% else %}<div class="list-group-item text-secondary">Esta RFQ todavía no tiene cotizaciones.</div>{% endfor %}</div></div>
+<div class="card"><div class="card-header"><h3 class="card-title">Historial</h3></div>
+<div class="list-group list-group-flush">{% for item in page.history %}<div class="list-group-item">
+<strong>{{ page.status_labels.get(item.to_status, item.to_status) }}</strong><div class="text-secondary small">
+{{ item.changed_at }} · {{ item.changed_by }}{% if item.comment %} · {{ item.comment }}{% endif %}</div>
+</div>{% endfor %}</div></div></div>
+<div class="col-lg-4">{% if rfq.workflow_status in page.open_statuses %}
+<form method="post" action="{{ url_for('rfqs.advance',rfq_id=rfq.id) }}" class="card mb-3">
+<div class="card-header"><h3 class="card-title">Actualizar RFQ</h3></div><div class="card-body">
+<label class="form-label">Estado</label><select class="form-select mb-2" name="status">
+{% for value in page.open_statuses %}<option value="{{ value }}">{{ page.status_labels[value] }}</option>{% endfor %}</select>
+<label class="form-label">Comentario</label><textarea class="form-control" name="comment"></textarea>
+</div><div class="card-footer"><button class="btn btn-primary">Guardar avance</button></div></form>
+<form method="post" action="{{ url_for('rfqs.conclude',rfq_id=rfq.id) }}" class="card">
+<div class="card-header"><h3 class="card-title">Concluir RFQ</h3></div><div class="card-body">
+<select class="form-select mb-2" name="outcome">
+<option value="closed">Cerrado</option>
+<option value="cancelled">Cancelado</option>
+<option value="opportunity">Continuar como oportunidad</option>
+</select>
+<label class="form-label">Motivo</label><textarea class="form-control" name="reason"></textarea>
+</div><div class="card-footer"><button class="btn btn-outline-primary">Registrar conclusión</button></div>
+</form>{% else %}<div class="card"><div class="card-body"><h3>Conclusión</h3>
+{% if page.conclusion %}<p>{{ page.conclusion_labels.get(page.conclusion.outcome, page.conclusion.outcome) }}</p><p>{{ page.conclusion.reason or '' }}</p>{% endif %}
+{% if rfq.opportunity_id %}<a href="{{ url_for('workspace.project_detail',project_id=rfq.opportunity_id) }}">Ver oportunidad</a>{% endif %}
+</div></div>{% endif %}</div></div>
+{% endblock %}

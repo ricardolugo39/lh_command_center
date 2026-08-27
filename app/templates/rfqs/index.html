@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}RFQs · Commercial Command Center{% endblock %}
+{% block page_title %}Solicitudes de cotización{% endblock %}
+{% block page_actions %}<div class="col-auto ms-auto"><a class="btn btn-primary"
+href="{{ url_for('rfqs.new') }}">Nueva RFQ</a></div>{% endblock %}
+{% block content %}
+<form class="mb-3" method="get"><div class="input-group">
+<input class="form-control" name="q" value="{{ search }}" placeholder="Buscar precotización o cliente">
+<select class="form-select" name="office"><option value="">Todas las sedes</option>{% for value in offices %}<option value="{{ value }}" {{ 'selected' if office == value }}>{{ value }}</option>{% endfor %}</select>
+{% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+<button class="btn">Buscar</button></div></form>
+<div class="btn-list mb-3"><a class="btn {{ 'btn-primary' if not status else 'btn-outline-secondary' }}"
+href="{{ url_for('rfqs.index',q=search,office=office) }}">Todas</a>{% for value,label in labels.items() %}
+<a class="btn {{ 'btn-primary' if status == value else 'btn-outline-secondary' }}"
+href="{{ url_for('rfqs.index',status=value,q=search,office=office) }}">{{ label }}</a>{% endfor %}</div>
+<div class="card"><div class="table-responsive"><table class="table table-vcenter card-table">
+<thead><tr><th>RFQ</th><th>Cliente</th><th>Estado</th><th>Responsable</th>
+<th>Próxima acción</th><th>Fecha</th></tr></thead><tbody>
+{% for rfq in rfqs %}<tr><td><a href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">
+{{ rfq.prequotation_number or rfq.rfq_number }}</a></td><td>{{ rfq.customer_name }}</td>
+<td><span class="badge">{{ labels[rfq.workflow_status] }}</span></td><td>{{ rfq.owner_name }}</td>
+<td>{{ rfq.description }}</td><td>{{ rfq.updated_at }}</td></tr>
+{% else %}<tr><td colspan="6" class="text-center text-secondary py-5">No hay RFQs.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

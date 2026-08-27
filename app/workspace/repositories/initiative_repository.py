@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 VALID_INITIATIVE_STATUSES = {
@@ -41,7 +41,7 @@ class InitiativeRepository:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -63,7 +63,6 @@ class InitiativeRepository:
                 ),
             )
 
-            conn.commit()
 
             return int(cursor.lastrowid)
 
@@ -90,7 +89,7 @@ class InitiativeRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (initiative_id,),
@@ -178,7 +177,7 @@ class InitiativeRepository:
             i.updated_at DESC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(sql)
             rows = cursor.fetchall()
 
@@ -212,7 +211,7 @@ class InitiativeRepository:
         VALUES (?, ?, ?, ?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -226,7 +225,6 @@ class InitiativeRepository:
                 ),
             )
 
-            conn.commit()
 
             return int(cursor.lastrowid)
 
@@ -253,7 +251,7 @@ class InitiativeRepository:
         LIMIT ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -315,7 +313,7 @@ class InitiativeRepository:
             p.updated_at DESC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (initiative_id,),
@@ -337,7 +335,7 @@ class InitiativeRepository:
     def delete_initiative(
         initiative_id: int,
     ) -> None:
-        with get_connection() as conn:
+        with connection_scope() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
 
             initiative = conn.execute(
@@ -400,7 +398,6 @@ class InitiativeRepository:
                 (initiative_id,),
             )
 
-            conn.commit()
 
     @staticmethod
     def update_initiative(
@@ -440,7 +437,7 @@ class InitiativeRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -468,5 +465,3 @@ class InitiativeRepository:
                 raise ValueError(
                     "La iniciativa no existe."
                 )
-
-            conn.commit()

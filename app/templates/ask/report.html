@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ analysis.title }} · Ask</title>
+<style>
+:root{--ink:#162033;--muted:#667085;--line:#e7eaf0;--blue:#3157d5;--soft:#f5f7fb}
+*{box-sizing:border-box}body{margin:0;background:#eef1f6;color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,sans-serif}.workspace{max-width:1180px;margin:32px auto;background:#fff;box-shadow:0 20px 60px #17213b18}.toolbar{display:flex;gap:10px;align-items:center;padding:18px 48px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fffc;backdrop-filter:blur(14px);z-index:5}.toolbar a,.toolbar button{border:1px solid var(--line);background:#fff;padding:9px 14px;border-radius:8px;color:var(--ink);text-decoration:none;cursor:pointer}.toolbar .primary{background:var(--blue);color:#fff;border-color:var(--blue)}.toolbar form{margin:0}.cover{padding:64px;background:linear-gradient(135deg,#15233f,#273d72);color:#fff}.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:11px;opacity:.72}.cover h1{font-size:42px;line-height:1.1;max-width:850px;margin:16px 0}.cover p{max-width:850px;font-size:17px;opacity:.82}.meta{display:flex;gap:28px;flex-wrap:wrap;margin-top:32px;font-size:13px}.meta span{display:block;opacity:.65}.content{padding:48px 64px 80px}.artifact{padding:36px 0;border-bottom:1px solid var(--line)}.artifact:first-child{padding-top:0}.artifact-head{margin-bottom:26px}.artifact-head h2{font-size:27px;margin:5px 0}.artifact-head p{color:var(--muted);margin:0}.block{margin:28px 0}.block h3{font-size:20px;margin:0 0 12px}.block-text{font-size:16px;white-space:pre-line}.clean{padding:0;margin:0;list-style:none}.clean li{padding:11px 0 11px 20px;border-bottom:1px solid var(--line);position:relative}.clean li:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--blue);position:absolute;left:0;top:20px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;font-size:12px}th{text-align:left;color:var(--muted);background:var(--soft);white-space:nowrap}th,td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}.records{display:grid;gap:12px}.record{border:1px solid var(--line);border-radius:10px;padding:16px;background:#fff}.record dl{display:grid;grid-template-columns:180px 1fr;gap:5px 12px;margin:0}.record dt{color:var(--muted);font-weight:500}.record dd{margin:0;white-space:pre-wrap}.empty{padding:30px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center}@media(max-width:760px){.workspace{margin:0}.cover,.content{padding:32px 22px}.cover h1{font-size:32px}.toolbar{padding:12px;overflow:auto}.record dl{grid-template-columns:1fr}}@media print{body{background:#fff}.workspace{margin:0;box-shadow:none;max-width:none}.toolbar{display:none}.cover{print-color-adjust:exact;-webkit-print-color-adjust:exact}.artifact{break-inside:avoid}.table-wrap{break-inside:auto}}
+</style></head><body><main class="workspace">
+<nav class="toolbar">
+<a href="{{ url_for('ask.prepare',analysis_id=analysis.id) }}">Volver a la conversación</a>
+{% if analysis.lifecycle_status == 'ready_review' %}<form method="post" action="{{ url_for('ask.review',analysis_id=analysis.id) }}"><button class="primary">Marcar como revisado</button></form>{% endif %}
+<button onclick="window.print()">Imprimir</button>
+<a href="{{ url_for('ask.download_report',analysis_id=analysis.id) }}">Descargar HTML</a>
+</nav>
+<header class="cover"><div class="eyebrow">Ask · Analysis Workspace</div>
+<h1>{{ analysis.title }}</h1><p>{{ analysis.objective }}</p>
+<div class="meta"><div><span>Preparado por</span>{{ analysis.created_by_name }}</div><div><span>Fecha</span>{{ analysis.executed_at }}</div></div>
+</header>
+<div class="content">
+{% for artifact in artifacts %}
+<article class="artifact" id="artifact-{{ artifact.key }}">
+<header class="artifact-head"><span class="eyebrow">{{ artifact.type }}</span><h2>{{ artifact.title }}</h2>{% if artifact.description %}<p>{{ artifact.description }}</p>{% endif %}{% set table_blocks=artifact.blocks|selectattr('type','equalto','table')|list %}{% if table_blocks %}<p><a href="{{ url_for('ask.download_artifact',analysis_id=analysis.id,artifact_key=artifact.key,format='xlsx') }}">Descargar Excel</a> · <a href="{{ url_for('ask.download_artifact',analysis_id=analysis.id,artifact_key=artifact.key,format='csv') }}">Descargar CSV</a></p>{% endif %}</header>
+{% for block in artifact.blocks %}
+<section class="block"><h3>{{ block.title }}</h3>
+{% if block.type == 'text' %}<div class="block-text">{{ block.content }}</div>
+{% elif block.type == 'list' %}<ul class="clean">{% for item in block.content %}<li>{{ item }}</li>{% endfor %}</ul>
+{% elif block.type == 'table' %}<div class="table-wrap"><table><thead><tr>{% for column in block.schema %}<th>{{ column.label or column.name }}</th>{% endfor %}</tr></thead><tbody>{% for row in block.rows %}<tr>{% for column in block.schema %}<td>{{ row.get(column.name) if row.get(column.name) is not none else '—' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+{% elif block.type == 'records' %}<div class="records">{% for record in block.records %}<div class="record"><dl>{% for key,value in record.items() %}<dt>{{ key|replace('_',' ')|title }}</dt><dd>{% if value is mapping or (value is sequence and value is not string) %}{{ value|tojson }}{% else %}{{ value }}{% endif %}</dd>{% endfor %}</dl></div>{% endfor %}</div>
+{% else %}<div class="record">{{ (block.content or block)|tojson }}</div>{% endif %}
+</section>{% endfor %}
+</article>
+{% else %}<div class="empty">Este análisis no produjo artefactos.</div>{% endfor %}
+</div></main></body></html>

@@ -6,6 +6,7 @@ from app.workspace.repositories.quote_repository import (
 from app.workspace.services.project_access_policy import (
     ProjectAccessPolicy,
 )
+from app.database.transaction import transactional
 
 
 VALID_CURRENCIES = {
@@ -200,6 +201,7 @@ class QuoteService:
         return quote
 
     @staticmethod
+    @transactional
     def update_exchange_rate(
         *,
         quote_id: int,
@@ -249,6 +251,7 @@ class QuoteService:
         )
 
     @staticmethod
+    @transactional
     def update_quote(
         *,
         quote_id: int,

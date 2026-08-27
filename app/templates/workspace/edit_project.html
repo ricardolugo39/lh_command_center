@@ -6,11 +6,11 @@
 {% set selected_brands = workspace.brands | map(attribute="brand") | list %}
 
 {% block title %}
-    Editar proyecto · Commercial Command Center
+    Editar oportunidad · Commercial Command Center
 {% endblock %}
 
 {% block page_title %}
-    Editar proyecto
+    Editar oportunidad
 {% endblock %}
 
 {% block content %}
@@ -31,7 +31,7 @@
 
                 <div class="card-header">
                     <h3 class="card-title">
-                        Información del proyecto
+                        Información de la oportunidad
                     </h3>
                 </div>
 
@@ -62,7 +62,7 @@
                             for="project_name"
                             class="form-label required"
                         >
-                            Nombre del proyecto
+                            Nombre de la oportunidad
                         </label>
 
                         <input
@@ -161,7 +161,7 @@
 
         <div class="col-12 col-xl-4">
 
-            <div class="card mb-3">
+            <div class="card mb-3" id="quote-section">
 
                 <div class="card-header">
                     <h3 class="card-title">

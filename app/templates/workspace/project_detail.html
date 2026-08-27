@@ -6,6 +6,7 @@
 {% set customer_site = workspace.customer_site %}
 {% set quotes = workspace.quotes %}
 {% set brands = workspace.brands %}
+{% set dashboard = workspace.dashboard %}
 
 {% set current_stage = workspace.stages
     | selectattr("value", "equalto", project.status)
@@ -33,9 +34,11 @@
 
     <strong>Oportunidad cerrada.</strong>
 
-    Esta oportunidad es de solo lectura.
-    El historial comercial permanece disponible,
-    pero ya no es posible modificar información.
+    El historial comercial permanece disponible. Puede reabrirla para agregar
+    comentarios, cambiar el valor u otros datos.
+    <form method="post" action="{{ url_for('workspace.reopen_project', project_id=project.id) }}" class="mt-2">
+        <button class="btn btn-sm btn-primary">Reabrir oportunidad</button>
+    </form>
 
 </div>
 
@@ -51,7 +54,7 @@
 
         <div>
             <div class="text-secondary small mb-1">
-                Proyectos / {{ project.name }}
+                Oportunidades{% if project.origin == 'crm' and project.external_id %} / CRM #{{ project.external_id }}{% endif %}
             </div>
 
             <h1 class="project-title">
@@ -63,6 +66,14 @@
             </div>
 
             <div class="d-flex flex-wrap gap-3 mt-2 small text-secondary">
+
+                <span>
+                    Fecha: {{ dashboard.derived_dates.opened_at or 'Sin fecha' }}
+                </span>
+
+                <span class="fw-semibold text-body">
+                    {{ dashboard.derived_dates.open_age_label }}
+                </span>
 
                 {% if customer_site %}
                 <span>
@@ -89,7 +100,7 @@
         <div class="mb-3">
     
             <span class="badge bg-blue-lt">
-                {{ project.status }}
+                {{ current_stage.label if current_stage else project.status }}
             </span>
     
         </div>
@@ -150,6 +161,173 @@
     </div>
 
 </div>
+
+<section class="opportunity-value-hero mb-4" aria-label="Valor e identificación de la oportunidad">
+    <div>
+        <div class="opportunity-value-eyebrow">Valor comercial</div>
+        <div class="opportunity-value-amount">{{ dashboard.commercial_value.display }}</div>
+        <div class="opportunity-value-detail">{{ dashboard.commercial_value.detail }}</div>
+    </div>
+    <div class="opportunity-key-facts">
+        <div>
+            <span>Identificador</span>
+            <strong>{% if project.origin == 'crm' and project.external_id %}CRM #{{ project.external_id }}{% else %}OP-{{ project.id }}{% endif %}</strong>
+        </div>
+        <div>
+            <span>Fecha de apertura</span>
+            <strong>{{ dashboard.derived_dates.opened_at or 'Sin fecha' }}</strong>
+        </div>
+        <div>
+            <span>Antigüedad</span>
+            <strong>{{ dashboard.derived_dates.open_age_label }}</strong>
+        </div>
+    </div>
+</section>
+
+<section class="opportunity-dashboard mb-4" aria-labelledby="opportunity-dashboard-title">
+    {% if project.crm_source %}
+    <div class="opportunity-source-note mb-3">
+        <strong>Origen CRM:</strong>
+        estado {{ project.crm_source.status or '—' }} · etapa {{ project.crm_source.stage or '—' }}
+        {% if project.crm_source.city %}· {{ project.crm_source.city }}{% endif %}
+        <span>Estos datos son de referencia; el estado activo es el del pipeline.</span>
+    </div>
+    {% endif %}
+    <h2 class="h4 mb-3" id="opportunity-dashboard-title">Situación actual</h2>
+
+    <div class="opportunity-dashboard-grid">
+        {% for metric in dashboard.summary_metrics %}
+            <div class="card opportunity-metric-card opportunity-metric-{{ metric.tone }}">
+                <div class="card-body">
+                    <div class="opportunity-metric-label">{{ metric.label }}</div>
+                    <div class="opportunity-metric-value">{{ metric.value }}</div>
+                    <div class="opportunity-metric-detail">{{ metric.detail }}</div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if not project_is_closed %}
+    <div class="mt-2 text-end">
+        <button
+            type="button"
+            class="btn btn-sm btn-ghost-primary"
+            id="show-blocker-form"
+        >
+            Actualizar bloqueo
+        </button>
+    </div>
+    <form
+        method="post"
+        action="{{ url_for(
+            'workspace.change_project_blocker',
+            project_id=project.id
+        ) }}"
+        id="blocker-form"
+        class="mt-2 d-none"
+    >
+        <textarea
+            name="current_blocker"
+            class="form-control"
+            rows="2"
+            placeholder="¿Qué está impidiendo avanzar?"
+        >{{ project.current_blocker or "" }}</textarea>
+        <div class="d-flex justify-content-end gap-2 mt-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="cancel-blocker-edit">
+                Cancelar
+            </button>
+            <button type="submit" class="btn btn-sm btn-primary">Guardar</button>
+        </div>
+    </form>
+    {% endif %}
+</section>
+
+<section class="commercial-value-workflow mb-4" aria-labelledby="commercial-value-workflow-title">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h2 class="h4 mb-1" id="commercial-value-workflow-title">
+                Gestión del valor comercial
+            </h2>
+            <div class="text-secondary small">
+                {% if workspace.commercial_approval and workspace.commercial_approval.approved_total_amount %}
+                    Última aprobación:
+                    {{ workspace.commercial_approval.decision_currency or workspace.commercial_approval.currency }}
+                    {{ workspace.commercial_approval.approved_total_amount }}
+                {% else %}
+                    Cotizaciones, solicitudes de descuento y aprobaciones.
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if quotes %}
+            <button type="button" class="btn btn-outline-secondary" data-quotes-toggle>
+                Ver cotizaciones
+            </button>
+            {% endif %}
+            <a
+                class="btn btn-outline-primary"
+                href="{{ url_for('workspace.commercial_approval_list', project_id=project.id) }}"
+            >
+                Ver solicitudes
+            </a>
+            {% if not project_is_closed %}
+            <a
+                class="btn btn-primary"
+                href="{{ url_for('workspace.commercial_approval_new', project_id=project.id) }}"
+            >
+                Solicitar descuento
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% if workspace.commercial_interest.lines %}
+<section class="card mb-4" aria-labelledby="crm-commercial-interest-title">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h3 class="card-title" id="crm-commercial-interest-title">Interés comercial CRM</h3>
+            <div class="text-secondary small">
+                Evidencia importada de solo lectura · Potencial CRM:
+                COP {{ "{:,.2f}".format(workspace.commercial_interest.potential_total or 0) }}
+            </div>
+        </div>
+        {% if not project_is_closed %}
+        <form method="post" action="{{ url_for('workspace.generate_quote_from_crm', project_id=project.id) }}">
+            <button type="submit" class="btn btn-primary">
+                {% if workspace.commercial_interest.latest_generated_quote %}
+                    Generar nueva versión
+                {% else %}
+                    Generar cotización
+                {% endif %}
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% if workspace.commercial_interest.changed_since_quote %}
+    <div class="alert alert-warning m-3 mb-0" role="status">
+        <strong>Oportunidad CRM actualizada.</strong>
+        Las líneas comerciales importadas cambiaron desde la última cotización.
+        Puede generar una nueva versión o conservar la cotización actual.
+    </div>
+    {% endif %}
+    <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+            <thead><tr><th>Marca</th><th>Parte</th><th>Descripción</th><th class="text-end">Potencial</th></tr></thead>
+            <tbody>
+            {% for line in workspace.commercial_interest.lines %}
+                <tr>
+                    <td>{{ line.brand or "—" }}</td>
+                    <td>{{ line.part_number or "—" }}</td>
+                    <td>{{ line.description or "—" }}</td>
+                    <td class="text-end">COP {{ "{:,.2f}".format(line.potential_value or 0) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
 
 
 <div class="card stage-card mb-4">
@@ -218,7 +396,7 @@
 
 <div class="row row-cards mb-4">
 
-    <div class="col-12 col-xl-5">
+    <div class="col-12">
 
         <div class="card summary-card">
 
@@ -252,182 +430,11 @@
 
     </div>
 
-
-    <div class="col-12 col-md-6 col-xl-3">
-
-        <div class="card summary-card">
-    
-            <div class="card-body">
-    
-                <div class="d-flex align-items-center gap-3 mb-4">
-    
-                    <div class="summary-icon">
-
-                    </div>
-    
-                    <h3 class="card-title mb-0">
-                        Estado actual
-                    </h3>
-    
-                </div>
-    
-                <div class="summary-label mb-1">
-                    Estado
-                </div>
-    
-                <div class="mb-4">
-                    <span class="badge bg-blue-lt">
-                        {{ project.status }}
-                    </span>
-                </div>
-    
-    
-                <!-- NUEVO -->
-    
-                <div class="summary-label mb-1">
-                    Salud del proyecto
-                </div>
-    
-                <div class="mb-4">
-    
-                    <span
-                        class="badge bg-{{ workspace.health.badge }}-lt"
-                    >
-                        {{ workspace.health.label }}
-                    </span>
-    
-                </div>
-    
-    
-                <!-- EXISTENTE -->
-    
-                <div class="summary-label mb-1">
-                    Bloqueo actual
-                </div>
-                
-                <div class="d-flex align-items-start justify-content-between gap-2">
-                
-                    <div class="fw-semibold">
-                        {{ project.current_blocker
-                           or "Sin bloqueo actual." }}
-                    </div>
-                
-                    {% if not project_is_closed %}
-
-                    <button
-                        type="button"
-                        class="btn btn-sm btn-ghost-primary"
-                        id="show-blocker-form"
-                    >
-                        Editar
-                    </button>
-
-                    {% endif %}
-                
-                </div>
-                
-                <form
-                    method="post"
-                    action="{{ url_for(
-                        'workspace.change_project_blocker',
-                        project_id=project.id
-                    ) }}"
-                    id="blocker-form"
-                    class="mt-3 d-none"
-                >
-                
-                    <textarea
-                        name="current_blocker"
-                        class="form-control"
-                        rows="3"
-                        placeholder="¿Qué está impidiendo avanzar?"
-                    >{{ project.current_blocker or "" }}</textarea>
-                
-                    <div class="d-flex justify-content-end gap-2 mt-2">
-                
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-outline-secondary"
-                            id="cancel-blocker-edit"
-                        >
-                            Cancelar
-                        </button>
-                
-                        <button
-                            type="submit"
-                            class="btn btn-sm btn-primary"
-                        >
-                            Guardar
-                        </button>
-                
-                    </div>
-                
-                </form>
-    
-            </div>
-    
-        </div>
-    
-    </div>
-
-
-    <div class="col-12 col-md-6 col-xl-4">
-
-        <div class="card summary-card">
-
-            <div class="card-body">
-
-                <div class="d-flex align-items-center gap-3 mb-4">
-
-                    <div class="summary-icon">
-                        ◫
-                    </div>
-
-                    <h3 class="card-title mb-0">
-                        Próximo seguimiento
-                    </h3>
-
-                </div>
-
-                {% if pending_followups %}
-
-                    {% set next_followup = pending_followups[0] %}
-
-                    <div class="summary-label mb-1">
-                        Fecha
-                    </div>
-
-                    <div class="fw-bold mb-4">
-                        {{ next_followup.due_date }}
-                    </div>
-
-                    <div class="summary-label mb-1">
-                        Acción
-                    </div>
-
-                    <div class="fw-semibold">
-                        {{ next_followup.description }}
-                    </div>
-
-                {% else %}
-
-                    <div class="text-secondary">
-                        No hay un follow-up pendiente.
-                    </div>
-
-                {% endif %}
-
-            </div>
-
-        </div>
-
-    </div>
-
 </div>
 
 {% if quotes %}
 
-<div class="card mt-4">
+<div class="card mt-4 d-none" aria-hidden="true" data-quotes-workspace>
 
     <div class="card-header">
 
@@ -574,7 +581,9 @@
 
 {% endif %}
 
-<div id="files" class="mt-5">
+<div id="files" class="card mt-4 d-none" data-files-workspace>
+
+    <div class="card-body">
 
     <h3 class="card-title mb-4">
         Archivos
@@ -746,221 +755,103 @@
 
     </div>
 
+    </div>
 </div>
 
-<div class="row row-cards">
+<ul class="nav nav-tabs mb-3" role="tablist" aria-label="Workspace de oportunidad">
+    <li class="nav-item" role="presentation">
+        <button
+            type="button"
+            class="nav-link active"
+            role="tab"
+            aria-selected="true"
+            data-workspace-tab="timeline"
+        >
+            Timeline
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button
+            type="button"
+            class="nav-link"
+            role="tab"
+            aria-selected="false"
+            data-workspace-tab="files"
+        >
+            Archivos
+        </button>
+    </li>
+</ul>
+
+<div class="row row-cards" data-workspace-panel="timeline">
 
     <div class="col-12 col-xl-7">
 
         <div class="card">
 
-            <div class="card-header">
-        
-                <ul class="nav nav-tabs card-header-tabs">
-        
-                    <li class="nav-item">
-                        <a class="nav-link active" href="#overview">
-                            Resumen
-                        </a>
-                    </li>
-        
-                    <li class="nav-item">
-                        <a
-                            class="nav-link"
-                            href="#files"
-                        >
-                            Archivos
-                        </a>
-                    </li>
-        
-                    <li class="nav-item">
-                        <span class="nav-link disabled">
-                            Historial de compras
-                        </span>
-                    </li>
-        
-                    <li class="nav-item">
-                        <span class="nav-link disabled">
-                            Notas
-                        </span>
-                    </li>
-        
-                </ul>
-        
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <div class="text-secondary small text-uppercase fw-bold">Historia comercial</div>
+                    <h3 class="card-title mb-0">Timeline</h3>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Filtrar timeline">
+                    <button type="button" class="btn btn-primary" data-timeline-filter="commercial">Comercial</button>
+                    <button type="button" class="btn btn-outline-secondary" data-timeline-filter="system">Sistema</button>
+                    <button type="button" class="btn btn-outline-secondary" data-timeline-filter="all">Todo</button>
+                </div>
             </div>
         
-            <div class="card-body" id="overview">
-        
-                <div class="mb-5">
-        
-                    <div class="d-flex gap-3">
-        
-                        <div class="summary-icon">
-                            ◇
+            <div class="card-body">
+                <div id="timeline">
+
+                    <svg class="d-none" aria-hidden="true">
+                        <symbol id="timeline-icon-calendar-check" viewBox="0 0 24 24"><path d="M7 3v4M17 3v4M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1M8 14l2 2 4-4"/></symbol>
+                        <symbol id="timeline-icon-map-pin" viewBox="0 0 24 24"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></symbol>
+                        <symbol id="timeline-icon-file-text" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 13h6M9 17h6"/></symbol>
+                        <symbol id="timeline-icon-check-circle" viewBox="0 0 24 24"><path d="M21 11a9 9 0 1 1-4-7M9 11l3 3 8-8"/></symbol>
+                        <symbol id="timeline-icon-paperclip" viewBox="0 0 24 24"><path d="M8 12.5l5.2-5.2a3 3 0 0 1 4.2 4.2l-7.1 7.1a5 5 0 0 1-7.1-7.1l7.1-7.1"/></symbol>
+                    </svg>
+
+                    {% for entry in workspace.timeline %}
+                        <article
+                            class="timeline-item{% if entry.category.value == 'system' %} timeline-item-system d-none{% endif %}"
+                            id="timeline-entry-{{ entry.id }}"
+                            data-timeline-category="{{ entry.category.value }}"
+                        >
+                            <span
+                                class="timeline-entry-icon"
+                                data-icon="{{ entry.icon }}"
+                                aria-hidden="true"
+                            >
+                                <svg viewBox="0 0 24 24"><use href="#timeline-icon-{{ entry.icon }}"/></svg>
+                            </span>
+
+                            <a class="timeline-entry-link" href="{{ url_for(entry.endpoint, **entry.endpoint_values) }}">
+                                <div class="d-flex align-items-start justify-content-between gap-3">
+                                    <div class="fw-bold">{{ entry.title }}</div>
+                                    <span class="badge bg-secondary-lt">{{ entry.source }}</span>
+                                </div>
+
+                                {% if entry.description %}
+                                    <div class="text-secondary mt-1 timeline-entry-description">
+                                        {{ entry.description }}
+                                    </div>
+                                {% endif %}
+
+                                <div class="small text-secondary mt-2">
+                                    {{ entry.date or "Sin fecha" }}
+                                    · {{ entry.user }}
+                                </div>
+                            </a>
+                        </article>
+                    {% else %}
+                        <div class="text-secondary" data-timeline-empty>
+                            No hay eventos registrados en el timeline.
                         </div>
-        
-                        <div>
-        
-                            <h3 class="card-title">
-                                Nuestra solución
-                            </h3>
-        
-                            <div class="text-secondary">
-                                {{ project.proposed_solution
-                                   or "Sin solución registrada." }}
-                            </div>
-        
-                        </div>
-        
-                    </div>
-        
-                </div>
-        
-                <hr>
-        
-                <div id="timeline" class="pt-3">
-        
-                    <div
-                        class="btn-group btn-group-sm mb-4"
-                        role="group"
-                        aria-label="Filtro de actividad"
-                    >
-        
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            data-timeline-filter="all"
-                        >
-                            Todo
-                        </button>
-        
-                        <button
-                            type="button"
-                            class="btn btn-outline-primary"
-                            data-timeline-filter="commercial"
-                        >
-                            Comercial
-                        </button>
-        
-                        <button
-                            type="button"
-                            class="btn btn-outline-primary"
-                            data-timeline-filter="system"
-                        >
-                            Sistema
-                        </button>
-        
-                    </div>
-        
-                    <div id="timeline-all">
-        
-                        {% for activity in workspace.activities[:5] %}
-        
-                            <div class="timeline-item">
-                                <span class="timeline-dot"></span>
-        
-                                <div class="fw-bold">
-                                    {{ activity.title }}
-                                </div>
-        
-                                {% if activity.details %}
-                                <div
-                                    class="text-secondary mt-1"
-                                    style="white-space: pre-line;"
-                                >
-                                    {{ activity.details }}
-                                </div>
-                                {% endif %}
-        
-                                <div class="small text-secondary mt-2">
-                                    {{ activity.occurred_at }}
-                                </div>
-                            </div>
-        
-                        {% else %}
-        
-                            <div class="text-secondary">
-                                No hay actividad registrada.
-                            </div>
-        
-                        {% endfor %}
-        
-                    </div>
-        
-                    <div
-                        id="timeline-commercial"
-                        class="d-none"
-                    >
-        
-                        {% for activity in workspace.commercial_activities[:5] %}
-        
-                            <div class="timeline-item">
-                                <span class="timeline-dot"></span>
-        
-                                <div class="fw-bold">
-                                    {{ activity.title }}
-                                </div>
-        
-                                {% if activity.details %}
-                                <div
-                                    class="text-secondary mt-1"
-                                    style="white-space: pre-line;"
-                                >
-                                    {{ activity.details }}
-                                </div>
-                                {% endif %}
-        
-                                <div class="small text-secondary mt-2">
-                                    {{ activity.occurred_at }}
-                                </div>
-                            </div>
-        
-                        {% else %}
-        
-                            <div class="text-secondary">
-                                No hay actividad comercial registrada.
-                            </div>
-        
-                        {% endfor %}
-        
-                    </div>
-        
-                    <div
-                        id="timeline-system"
-                        class="d-none"
-                    >
-        
-                        {% for activity in workspace.system_activities[:5] %}
-        
-                            <div class="timeline-item">
-                                <span class="timeline-dot"></span>
-        
-                                <div class="fw-bold">
-                                    {{ activity.title }}
-                                </div>
-        
-                                {% if activity.details %}
-                                <div
-                                    class="text-secondary mt-1"
-                                    style="white-space: pre-line;"
-                                >
-                                    {{ activity.details }}
-                                </div>
-                                {% endif %}
-        
-                                <div class="small text-secondary mt-2">
-                                    {{ activity.occurred_at }}
-                                </div>
-                            </div>
-        
-                        {% else %}
-        
-                            <div class="text-secondary">
-                                No hay actividad del sistema.
-                            </div>
-        
-                        {% endfor %}
-        
+                    {% endfor %}
+
+                    <div class="text-secondary d-none" data-timeline-filter-empty>
+                        No hay eventos en esta vista.
                     </div>
         
                 </div>
@@ -982,7 +873,7 @@
                 </h3>
             </div>
 
-            <div class="card-body border-bottom">
+            <div class="card-body border-bottom" id="register-activity">
 
                 {% if not project_is_closed %}
                 <form
@@ -1146,7 +1037,7 @@
             <div class="card-body">
 
                 <div class="execution-section-title mb-2">
-                    Próximas acciones
+                    Seguimientos programados
                 </div>
 
                 {% set upcoming_found = false %}
@@ -1247,7 +1138,7 @@
                 {% if not pending_followups %}
 
                     <div class="text-secondary py-3">
-                        No hay próximas acciones.
+                        No hay seguimientos programados.
                     </div>
 
                 {% endif %}
@@ -1256,9 +1147,46 @@
 
         </div>
 
+        <div class="card mt-3 next-actions-card">
+            <div class="card-header">
+                <h3 class="card-title">Próximas acciones</h3>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for action in workspace.next_actions %}
+                <a
+                    class="list-group-item list-group-item-action"
+                    href="{{ url_for(
+                        action.navigation.endpoint,
+                        **action.navigation['values']
+                    ) }}"
+                >
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div>
+                            <div class="fw-bold">{{ action.title }}</div>
+                            <div class="text-secondary small mt-1">
+                                {{ action.description }}
+                            </div>
+                        </div>
+                        <span class="badge bg-{{ action.priority_tone }}-lt">
+                            {{ action.priority_label }}
+                        </span>
+                    </div>
+                </a>
+                {% else %}
+                <div class="card-body text-secondary">
+                    Esta oportunidad no tiene acciones pendientes.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
     </div>
 
 </div>
+
+<section class="d-none" data-workspace-panel="files" aria-label="Archivos de la oportunidad">
+    <div data-files-workspace-target></div>
+</section>
 
 {% include "workspace/modals/project_closure_modal.html" %}
 
@@ -1266,6 +1194,103 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+    const quotesToggle = document.querySelector("[data-quotes-toggle]");
+    const quotesWorkspace = document.querySelector("[data-quotes-workspace]");
+
+    quotesToggle?.addEventListener("click", () => {
+        if (!quotesWorkspace) {
+            return;
+        }
+        const opening = quotesWorkspace.classList.contains("d-none");
+        quotesWorkspace.classList.toggle("d-none", !opening);
+        quotesWorkspace.setAttribute("aria-hidden", String(!opening));
+        quotesToggle.textContent = opening
+            ? "Ocultar cotizaciones"
+            : "Ver cotizaciones";
+        if (opening) {
+            quotesWorkspace.scrollIntoView({ behavior: "smooth" });
+        }
+    });
+
+    const timelineButtons = document.querySelectorAll(
+        "[data-timeline-filter]"
+    );
+    const timelineEntries = document.querySelectorAll(
+        "[data-timeline-category]"
+    );
+    const timelineFilterEmpty = document.querySelector(
+        "[data-timeline-filter-empty]"
+    );
+
+    const filterTimeline = (filter) => {
+        let visibleCount = 0;
+
+        timelineEntries.forEach((entry) => {
+            const visible = filter === "all"
+                || entry.dataset.timelineCategory === filter;
+            entry.classList.toggle("d-none", !visible);
+            visibleCount += visible ? 1 : 0;
+        });
+
+        timelineButtons.forEach((button) => {
+            const active = button.dataset.timelineFilter === filter;
+            button.classList.toggle("btn-primary", active);
+            button.classList.toggle("btn-outline-secondary", !active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+
+        timelineFilterEmpty?.classList.toggle(
+            "d-none",
+            visibleCount > 0
+        );
+    };
+
+    timelineButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            filterTimeline(button.dataset.timelineFilter);
+        });
+    });
+
+    filterTimeline("commercial");
+
+    const filesWorkspace = document.querySelector(
+        "[data-files-workspace]"
+    );
+    const filesTarget = document.querySelector(
+        "[data-files-workspace-target]"
+    );
+    const workspaceTabs = document.querySelectorAll(
+        "[data-workspace-tab]"
+    );
+    const workspacePanels = document.querySelectorAll(
+        "[data-workspace-panel]"
+    );
+
+    if (filesWorkspace && filesTarget) {
+        filesTarget.appendChild(filesWorkspace);
+        filesWorkspace.classList.remove("d-none");
+    }
+
+    const selectWorkspaceTab = (selected) => {
+        workspaceTabs.forEach((tab) => {
+            const active = tab.dataset.workspaceTab === selected;
+            tab.classList.toggle("active", active);
+            tab.setAttribute("aria-selected", String(active));
+        });
+        workspacePanels.forEach((panel) => {
+            panel.classList.toggle(
+                "d-none",
+                panel.dataset.workspacePanel !== selected
+            );
+        });
+    };
+
+    workspaceTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            selectWorkspaceTab(tab.dataset.workspaceTab);
+        });
+    });
+
     const typeInput = document.getElementById(
         "activity_type"
     );
@@ -1383,65 +1408,18 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
-    const timelineButtons =
-        document.querySelectorAll(
-            "[data-timeline-filter]"
-        );
+    if (window.location.hash === "#schedule-followup" && followupCheckbox) {
+        if (!followupCheckbox.checked) {
+            followupCheckbox.click();
+        }
+        followupCheckbox.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
 
-    const timelineSections = {
-        all: document.getElementById(
-            "timeline-all"
-        ),
-        commercial: document.getElementById(
-            "timeline-commercial"
-        ),
-        system: document.getElementById(
-            "timeline-system"
-        ),
-    };
+    if (window.location.hash === "#blocker-form" && showButton) {
+        showButton.click();
+        blockerForm?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
 
-    timelineButtons.forEach((button) => {
-        button.addEventListener(
-            "click",
-            () => {
-                const selected =
-                    button.dataset.timelineFilter;
-
-                Object.entries(
-                    timelineSections
-                ).forEach(([key, section]) => {
-                    if (!section) {
-                        return;
-                    }
-
-                    section.classList.toggle(
-                        "d-none",
-                        key !== selected
-                    );
-                });
-
-                timelineButtons.forEach(
-                    (item) => {
-                        item.classList.remove(
-                            "btn-primary"
-                        );
-
-                        item.classList.add(
-                            "btn-outline-primary"
-                        );
-                    }
-                );
-
-                button.classList.remove(
-                    "btn-outline-primary"
-                );
-
-                button.classList.add(
-                    "btn-primary"
-                );
-            }
-        );
-    });
 });
 </script>
 

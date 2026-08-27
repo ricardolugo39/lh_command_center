@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Registrar actividad · Commercial Command Center{% endblock %}
+{% block page_title %}Registrar actividad comercial{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<form method="post" enctype="multipart/form-data" class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">{{ context.customer.name }}</h3>
+      <div class="text-secondary">La actividad quedará en la historia del cliente.</div></div>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label required">Fecha y hora</label>
+        <input class="form-control" type="datetime-local" name="occurred_at"
+               value="{{ form.get('occurred_at','') }}" required></div>
+      <div class="col-md-4"><label class="form-label required">Tipo</label>
+        <select class="form-select" name="activity_type" required>
+          <option value="">Seleccionar</option>
+          {% for value,label in context.activity_types %}
+          <option value="{{ value }}" {{ 'selected' if form.get('activity_type') == value }}>{{ label }}</option>
+          {% endfor %}
+        </select></div>
+      <div class="col-md-4"><label class="form-label">Asesor</label>
+        <select class="form-select" name="advisor_user_id"><option value="">Sin asignar</option>
+          {% for user in context.users %}<option value="{{ user.id }}">{{ user.display_name }}</option>{% endfor %}
+        </select></div>
+      <div class="col-md-6"><label class="form-label">Contacto</label>
+        <select class="form-select" name="contact_id"><option value="">Sin contacto</option>
+          {% for contact in context.contacts %}<option value="{{ contact.id }}">
+            {{ contact.full_name }}{% if contact.job_title %} · {{ contact.job_title }}{% endif %}
+          </option>{% endfor %}
+        </select></div>
+      <div class="col-md-6"><label class="form-label">Oportunidad relacionada</label>
+        <select class="form-select" name="project_id"><option value="">Ninguna</option>
+          {% for project in context.projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
+        </select></div>
+      <div class="col-md-6"><label class="form-label required">Motivo</label>
+        <input class="form-control" name="purpose" value="{{ form.get('purpose','') }}" required></div>
+      <div class="col-md-6"><label class="form-label">Acuerdo relacionado</label>
+        <select class="form-select" name="agreement_id"><option value="">Ninguno</option>
+          {% for agreement in context.agreements %}<option value="{{ agreement.id }}">{{ agreement.name }}</option>{% endfor %}
+        </select></div>
+      <div class="col-12"><label class="form-label required">Resumen</label>
+        <textarea class="form-control" name="summary" rows="3" required>{{ form.get('summary','') }}</textarea></div>
+      <div class="col-md-6"><label class="form-label">Necesidad detectada</label>
+        <textarea class="form-control" name="identified_need">{{ form.get('identified_need','') }}</textarea></div>
+      <div class="col-md-6"><label class="form-label">Riesgo detectado</label>
+        <textarea class="form-control" name="identified_risk">{{ form.get('identified_risk','') }}</textarea></div>
+      <div class="col-md-4"><label class="form-label">Ciudad</label>
+        <input class="form-control" name="city" value="{{ form.get('city','') }}"></div>
+      <div class="col-md-4"><label class="form-label">Planta / Sede</label>
+        <input class="form-control" name="site_name" value="{{ form.get('site_name','') }}"></div>
+      <div class="col-md-4"><label class="form-label">Área visitada</label>
+        <input class="form-control" name="visited_area" value="{{ form.get('visited_area','') }}"></div>
+      <div class="col-md-4"><label class="form-label">Valor potencial</label>
+        <input class="form-control" type="number" step="0.01" name="potential_value"></div>
+      <div class="col-md-2"><label class="form-label">Moneda</label>
+        <input class="form-control" name="currency_code" value="COP"></div>
+      <div class="col-md-6"><label class="form-label">Evidencia</label>
+        <input class="form-control" type="file" name="evidence_files" multiple
+               accept="image/*,.pdf"></div>
+      <div class="col-12"><label class="form-check">
+        <input class="form-check-input" type="checkbox" name="supplier_participated">
+        <span class="form-check-label">Participó un proveedor</span></label></div>
+      <div class="col-md-6"><label class="form-label">Proveedor</label>
+        <input class="form-control" name="supplier_name"></div>
+      <div class="col-md-6"><label class="form-label">Persona del proveedor</label>
+        <input class="form-control" name="supplier_person_name"></div>
+      <div class="col-12"><label class="form-label">Resultados</label>
+        <div class="row">
+        {% for value,label in [
+          ('opportunity_identified','Oportunidad identificada'),
+          ('rfq_received','RFQ recibida'),('quote_requested','Cotización solicitada'),
+          ('training_completed','Capacitación realizada'),
+          ('support_completed','Soporte realizado'),
+          ('followup_required','Seguimiento requerido'),
+          ('no_customer_need','Cliente sin necesidad'),
+          ('pending_information','Pendiente información'),('other','Otro')
+        ] %}
+          <div class="col-md-4"><label class="form-check"><input class="form-check-input"
+            type="checkbox" name="results" value="{{ value }}"><span class="form-check-label">{{ label }}</span></label></div>
+        {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer d-flex gap-2">
+    <button class="btn btn-primary">Registrar actividad</button>
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('workspace.customer_detail', customer_id=context.customer.id) }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

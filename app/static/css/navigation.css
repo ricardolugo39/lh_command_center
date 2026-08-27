@@ -1,0 +1,25 @@
+@media (min-width:992px){
+  .ccc-sidebar{--ccc-sidebar-width:68px;width:var(--ccc-sidebar-width)!important;min-width:var(--ccc-sidebar-width);transition:width .18s ease,box-shadow .18s ease;overflow:visible;z-index:1040}
+  .ccc-sidebar>.container-fluid{align-items:stretch;padding:.65rem .55rem}
+  .ccc-sidebar .navbar-brand{width:100%;margin:0 0 .65rem;padding:.4rem .15rem;overflow:hidden}
+  .ccc-sidebar .navbar-brand a{display:flex;align-items:center;gap:.65rem;text-decoration:none;white-space:nowrap}
+  .ccc-brand-mark{display:grid;place-items:center;width:34px;height:34px;min-width:34px;border-radius:9px;background:#17213a;color:#fff;font-size:.67rem;font-weight:800}
+  .ccc-sidebar .navbar-collapse{display:block!important;width:100%}
+  .ccc-sidebar .navbar-nav{gap:.18rem}
+  .ccc-sidebar .nav-link{display:flex;align-items:center;gap:.7rem;min-height:40px;padding:.45rem .6rem;border-radius:8px;white-space:nowrap;overflow:hidden}
+  .ccc-nav-icon{display:grid;place-items:center;width:28px;min-width:28px;color:#69758a;font-size:.9rem;font-weight:700}
+  .ccc-sidebar .nav-link-title,.ccc-nav-label{opacity:0;transition:opacity .12s ease;pointer-events:none}
+  .ccc-tools summary{cursor:pointer;list-style:none}
+  .ccc-tools summary::-webkit-details-marker{display:none}
+  .ccc-tools-menu{display:none;margin:.15rem 0 .35rem 2.35rem;padding-left:.65rem;border-left:1px solid #e2e7ef}
+  .ccc-tools[open] .ccc-tools-menu{display:grid;gap:.15rem}
+  .ccc-tools-menu a{padding:.3rem .4rem;border-radius:6px;color:#69758a;font-size:.78rem;text-decoration:none;white-space:nowrap}
+  .ccc-tools-menu a:hover{background:#f1f4f8;color:#17213a}
+  .ccc-sidebar:hover,.ccc-sidebar.is-expanded{width:230px!important;box-shadow:10px 0 28px rgba(23,33,58,.12)}
+  .ccc-sidebar:hover .nav-link-title,.ccc-sidebar:hover .ccc-nav-label,.ccc-sidebar.is-expanded .nav-link-title,.ccc-sidebar.is-expanded .ccc-nav-label{opacity:1;pointer-events:auto}
+  .ccc-sidebar:not(:hover):not(.is-expanded) .ccc-tools-menu{display:none}
+  .ccc-sidebar-toggle{position:absolute;top:18px;right:-11px;display:grid;place-items:center;width:22px;height:22px;border:1px solid #e2e7ef;border-radius:50%;background:#fff;color:#657083;font-size:1rem;line-height:1;box-shadow:0 3px 10px rgba(23,33,58,.1)}
+  .ccc-sidebar.is-expanded .ccc-sidebar-toggle{transform:rotate(180deg)}
+  .page-wrapper{margin-left:68px!important}
+}
+@media (max-width:991.98px){.ccc-sidebar-toggle,.ccc-brand-mark{display:none}.ccc-nav-icon{margin-right:.45rem}.ccc-tools summary{cursor:pointer}.ccc-tools-menu{display:none;padding:.4rem 0 .4rem 2.5rem}.ccc-tools[open] .ccc-tools-menu{display:grid;gap:.35rem}.ccc-tools-menu a{text-decoration:none}}

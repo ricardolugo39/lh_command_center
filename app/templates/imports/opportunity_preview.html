@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Vista previa de oportunidades · Commercial Command Center{% endblock %}
+{% block page_title %}Vista previa de oportunidades CRM{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<div class="card mb-4">
+  <div class="card-body">
+    <div><strong>Archivo:</strong> {{ preview.original_filename }}</div>
+    <div><strong>Perfil:</strong> {{ preview.profile_name }}
+      · versión {{ preview.profile_version }}</div>
+    <div><strong>Filas leídas:</strong> {{ preview.rows_read }}</div>
+  </div>
+</div>
+<div class="row row-cards mb-4">
+  {% for key, label in [
+    ('groups_identified','Oportunidades CRM'),
+    ('groups_eligible','Listas para importar'),
+    ('groups_needs_review','Requieren revisión'),
+    ('groups_blocked','Bloqueadas'),
+    ('groups_unchanged','Sin cambios')
+  ] %}
+  <div class="col-6 col-md-2"><div class="card"><div class="card-body">
+    <div class="h2">{{ preview.metrics[key] }}</div>
+    <div class="text-secondary">{{ label }}</div>
+  </div></div></div>
+  {% endfor %}
+</div>
+<div class="card mb-3"><div class="card-body">
+  <label class="form-label" for="preview-action-filter">Filtrar por acción</label>
+  <select class="form-select" id="preview-action-filter" style="max-width: 18rem">
+    <option value="">Todas</option>
+    <option value="ready">Listas</option>
+    <option value="create">Crear</option><option value="update">Actualizar</option>
+    <option value="unchanged">Sin cambios</option>
+    <option value="needs_review">Requiere revisión</option>
+    <option value="blocked">Bloqueada</option>
+  </select>
+</div></div>
+<div class="card mb-4">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead><tr><th>Oportunidad CRM</th><th>Oportunidad</th>
+        <th>Cliente y resolución</th><th>Vendedor</th>
+        <th>Datos CRM</th><th>Productos</th><th>Acción</th></tr></thead>
+      <tbody>
+      {% for group in preview.groups %}
+      <tr data-preview-action="{{ group.action }}"
+          data-preview-state="{% if group.customer_resolution_status in ['matched','resolved_by_user'] and group.action != 'blocked' %}ready{% else %}{{ group.action }}{% endif %}">
+        <td><strong>{{ group.external_opportunity_id }}</strong>
+          <div class="text-secondary">{{ group.origin_reference }}</div>
+          <div class="small">{{ group.source_rows }} filas fuente</div>
+        </td>
+        <td>{{ group.canonical.opportunity_name }}
+          {% if group.field_changes %}
+          <div class="small text-secondary">
+            {{ group.field_changes|length }} cambios de campos
+          </div>
+          {% endif %}
+        </td>
+        <td><div>{{ group.customer_identity or 'Sin empresa' }}</div>
+          <div class="small text-secondary">
+            {{ group.matched_customer_name or group.customer_match_reason }}
+          </div>
+          <span class="badge">{{ group.customer_resolution_status }}</span>
+        </td>
+        <td><div>{{ group.source_seller or 'Sin vendedor' }}</div>
+          {% if group.seller_resolution_status == 'needs_review' %}
+          <form method="post" class="d-flex gap-2 mt-2"
+                action="{{ url_for('imports.opportunity_resolve_seller',
+                                   execution_id=preview.execution_id) }}">
+            <input type="hidden" name="external_opportunity_id"
+                   value="{{ group.external_opportunity_id }}">
+            <select class="form-select" name="sales_rep" required>
+              <option value="">Seleccione vendedor</option>
+              {% for seller in sellers %}
+              <option value="{{ seller }}">{{ seller }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-outline-primary">Resolver</button>
+          </form>
+          {% else %}
+          <div class="small text-secondary">{{ group.resolved_sales_rep }}</div>
+          <span class="badge">{{ group.seller_resolution_status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <div>{{ group.canonical.crm_status or '—' }} ·
+            {{ group.canonical.crm_stage or '—' }}</div>
+          <div class="small">Prob. {{ group.canonical.probability or 0 }}%
+            · Prioridad {{ group.canonical.priority or '—' }}</div>
+          <div class="small">Cierre: {{ group.canonical.close_date or '—' }}</div>
+          <div class="small">Potencial:
+            {{ "{:,.0f}".format(group.total_potential_value or 0) }} COP</div>
+        </td>
+        <td>{{ group.product_line_count }} líneas
+          <div class="small text-secondary">
+            {{ group.brands|join(' / ') if group.brands else 'Sin marca' }}
+          </div>
+        </td>
+        <td><span class="badge">{{ group.action }}</span>
+          {% if group.blocked_reason %}
+          <div class="text-danger small">{{ group.blocked_reason }}</div>
+          {% endif %}
+          {% for warning in group.warnings %}
+          <div class="text-warning small">{{ warning }}</div>
+          {% endfor %}
+          {% for conflict in group.conflicts %}
+          <div class="text-danger small">{{ conflict }}</div>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<form method="post"
+      action="{{ url_for('imports.opportunity_confirm',
+                         execution_id=preview.execution_id) }}">
+  <input type="hidden" name="confirmed" value="1">
+  <button class="btn btn-primary" {% if not preview.can_confirm %}disabled{% endif %}>
+    Importar {{ preview.metrics.groups_eligible }} oportunidades listas
+  </button>
+  <a class="btn btn-outline-secondary"
+     href="{{ url_for('imports.opportunity_pending') }}">
+    Revisar coincidencias pendientes
+  </a>
+  <a class="btn btn-link" href="{{ url_for('imports.index') }}">Cancelar</a>
+</form>
+<script>
+document.getElementById('preview-action-filter').addEventListener('change', function () {
+  document.querySelectorAll('[data-preview-action]').forEach(function (row) {
+    row.hidden = Boolean(this.value)
+      && row.dataset.previewAction !== this.value
+      && row.dataset.previewState !== this.value;
+  }, this);
+});
+</script>
+{% endblock %}

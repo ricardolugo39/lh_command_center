@@ -60,5 +60,6 @@ def test_credit_is_boolean():
 def test_customer_dimension_preserves_rows():
 
     df = read_table("dim_customer")
+    source = read_table("raw_customers")
 
-    assert len(df) == 36429
+    assert len(df) == len(source)

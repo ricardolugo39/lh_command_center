@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Importaciones ERP · Commercial Command Center{% endblock %}
+{% block page_title %}Centro de importaciones ERP{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<div class="row row-cards mb-4">
+  {% for import_type, title, description in [
+    ('sales','Actualizar ventas','Agrega nuevas transacciones sin duplicar ventas ya importadas.'),
+    ('customers','Sincronizar clientes','Actualiza el maestro ERP preservando los identificadores internos.'),
+    ('inventory','Actualizar inventario','Guarda el corte por producto y bodega, actualizando sin duplicar el mismo snapshot.')
+  ] %}
+  <div class="col-md-4">
+    <form class="card h-100" method="post" action="{{ url_for('imports.preview') }}"
+          enctype="multipart/form-data">
+      <div class="card-body">
+        <h3 class="card-title">{{ title }}</h3>
+        <p class="text-secondary">{{ description }}</p>
+        <input type="hidden" name="import_type" value="{{ import_type }}">
+        <label class="form-label">Archivo ERP</label>
+        <input class="form-control" type="file" name="file"
+               accept=".xlsx,.xls,.csv" required>
+        <div class="form-hint">Formatos admitidos: .xlsx, .xls y .csv.</div>
+        {% if import_type == 'inventory' %}
+        <label class="form-label mt-3">Fecha del snapshot</label>
+        <input class="form-control" type="date" name="snapshot_date" required>
+        <div class="form-hint">Fecha del corte representado por el archivo.</div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent">
+        <button class="btn btn-primary">Validar y revisar</button>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+<div class="row row-cards mb-4">
+  <div class="col-md-6">
+    <form class="card h-100" method="post"
+          action="{{ url_for('imports.opportunity_preview') }}"
+          enctype="multipart/form-data">
+      <div class="card-body">
+        <h3 class="card-title">Importar oportunidades CRM</h3>
+        <p class="text-secondary">
+          Valida, agrupa y concilia clientes antes de crear o actualizar
+          oportunidades en el Pipeline.
+        </p>
+        {% if opportunity_profile %}
+        <div class="text-secondary mb-3">
+          Perfil: {{ opportunity_profile.profile_name }}
+          · versión {{ opportunity_profile.version }}
+        </div>
+        <label class="form-label">Archivo CRM</label>
+        <input class="form-control" type="file" name="file"
+               accept=".xlsx,.xls,.csv" required>
+        {% else %}
+        <div class="alert alert-warning mb-0">
+          Se requiere configurar y activar un perfil de mapeo antes de importar.
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent">
+        <button class="btn btn-primary"
+                {% if not opportunity_profile %}disabled{% endif %}>
+          Validar y revisar
+        </button>
+        <a class="btn btn-link"
+           href="{{ url_for('imports.opportunity_pending') }}">
+          Oportunidades CRM pendientes
+          {% if pending_opportunity_count %}
+          <span class="badge">{{ pending_opportunity_count }}</span>
+          {% endif %}
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Historial de ejecuciones</h3></div>
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Archivo</th><th>Estado</th>
+        <th>Leídas</th><th>Insertadas</th><th>Actualizadas</th><th></th></tr></thead>
+      <tbody>
+      {% for item in executions %}
+        <tr>
+          <td>{{ item.started_at }}</td>
+          <td>{{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','crm_opportunities':'Oportunidades CRM'}.get(item.import_type, item.import_type) }}</td>
+          <td>{{ item.original_filename }}</td>
+          <td><span class="badge">{{ item.status }}</span></td>
+          <td>{{ item.rows_read }}</td><td>{{ item.rows_inserted }}</td>
+          <td>{{ item.rows_updated }}</td>
+          <td><a href="{{ url_for('imports.detail', execution_id=item.id) }}">Ver</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-center text-secondary py-4">
+          Aún no hay importaciones registradas.
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

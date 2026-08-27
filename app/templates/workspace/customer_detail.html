@@ -16,6 +16,22 @@
 
 {% block content %}
 
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <div class="text-secondary small">Espacio de cuenta</div>
+        <strong>Ficha comercial</strong>
+    </div>
+    <a
+        class="btn"
+        href="{{ url_for(
+            'workspace.strategic_account_overview',
+            customer_id=customer.id
+        ) }}"
+    >
+        ← Volver al resumen
+    </a>
+</div>
+
 <div class="mb-4">
 
     <div class="d-flex justify-content-between align-items-start">

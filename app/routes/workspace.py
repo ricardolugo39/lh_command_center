@@ -5,6 +5,7 @@ from app.workspace.services.initiative_service import (
 from flask import (
     Blueprint,
     abort,
+    current_app,
     redirect,
     render_template,
     request,
@@ -25,9 +26,13 @@ from app.workspace.services.project_workspace_service import (
 from app.workspace.repositories.followup_repository import (
     FollowupRepository,
 )
+from app.workspace.repositories.activity_repository import ActivityRepository
 
 from app.workspace.services.quote_service import (
     QuoteService,
+)
+from app.workspace.services.commercial_interest_quote_service import (
+    CommercialInterestQuoteService,
 )
 
 from app.workspace.services.workspace_dashboard_service import (
@@ -59,6 +64,34 @@ from app.workspace.services.agreement_service import (
 from app.workspace.services.project_closure_service import (
     ProjectClosureService,
 )
+from app.workspace.services.opportunity_list_service import (
+    OpportunityListService,
+)
+from app.workspace.services.opportunity_bulk_service import (
+    OpportunityBulkUpdateService,
+)
+from app.workspace.services.opportunity_export_service import (
+    OpportunityExportService,
+)
+from app.workspace.services.strategic_account_service import (
+    StrategicAccountService,
+)
+from app.workspace.services.company_sales_dashboard_service import CompanySalesDashboardService
+from app.workspace.services.agreement_import_service import (
+    AgreementImportError,
+    AgreementImportService,
+)
+from app.workspace.services.customer_portfolio_service import (
+    CustomerPortfolioService,
+)
+from app.workspace.services.commercial_approval_service import (
+    CommercialApprovalService,
+)
+from app.workspace.services.commercial_visit_service import CommercialVisitService
+from app.workspace.repositories.contact_repository import ActivityFormRepository
+from app.workspace.repositories.rfq_repository import RFQRepository
+from app.workspace.services.rfq_service import RFQService
+from app.auth import roles_required
 
 workspace_bp = Blueprint(
     "workspace",
@@ -68,41 +101,71 @@ workspace_bp = Blueprint(
 
 @workspace_bp.route("/workspace/projects")
 def project_list():
-    projects = ProjectRepository.list_projects()
-
-    project_rows = []
-
-    for project in projects:
-        customer = CustomerRepository.get_customer(
-            project["customer_id"]
-        )
-
-        quotes = QuoteService.list_project_quotes(
-            project["id"]
-        )
-
-        primary_quote = (
-            quotes[0]
-            if quotes
-            else None
-        )
-
-        project_rows.append(
-            {
-                **project,
-                "customer_name": (
-                    customer["name"]
-                    if customer
-                    else "Cliente no encontrado"
-                ),
-                "quote": primary_quote,
-            }
-        )
+    query = request.args.to_dict()
+    query.setdefault("office", _default_office())
+    page = OpportunityListService.get_page(query)
 
     return render_template(
         "workspace/project_list.html",
-        projects=project_rows,
+        page=page,
     )
+
+
+@workspace_bp.get("/workspace/projects/export.xlsx")
+@roles_required("administrator", "commercial_management", "advisor")
+def project_list_export():
+    query = request.args.to_dict()
+    query.setdefault("office", _default_office())
+    stream, filename = OpportunityExportService.build(query)
+    return send_file(
+        stream,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@workspace_bp.post("/workspace/projects/bulk-update")
+@roles_required("administrator", "commercial_management", "advisor")
+def project_bulk_update():
+    try:
+        result = OpportunityBulkUpdateService.apply(
+            project_ids=[
+                int(value) for value in request.form.getlist("project_ids")
+            ],
+            new_status=request.form.get("new_status", ""),
+            followup_date=request.form.get("followup_date", ""),
+            followup_description=request.form.get("followup_description", ""),
+            actor=current_app.config.get("CURRENT_USER", "system"),
+        )
+    except (TypeError, ValueError) as exc:
+        return str(exc), 400
+    filters = {
+        key: request.form.get(key, "")
+        for key in (
+            "status", "include_closed", "origin", "sales_rep",
+            "office", "health", "customer_name", "attention",
+        )
+        if request.form.get(key, "")
+    }
+    return redirect(url_for(
+        "workspace.project_list",
+        **filters,
+        bulk_updated=result["selected"],
+        statuses_updated=result["changed_statuses"],
+        followups_created=result["created_followups"],
+    ))
+
+
+@workspace_bp.get("/analytics/sales")
+def company_sales_dashboard():
+    page = CompanySalesDashboardService.get_page(
+        _requested_office()
+    )
+    return render_template("workspace/company_sales_dashboard.html", page=page)
 
 
 @workspace_bp.route("/workspace/projects/<int:project_id>")
@@ -120,14 +183,145 @@ def project_detail(project_id: int):
     )
 
 
+@workspace_bp.get("/workspace/projects/<int:project_id>/approvals")
+def commercial_approval_list(project_id: int):
+    try:
+        page = CommercialApprovalService.get_page(
+            project_id,status=request.args.get("status","").strip(),
+            page=max(request.args.get("page",1,type=int),1))
+    except ValueError:
+        abort(404)
+    return render_template("workspace/commercial_approval_list.html",page=page)
+
+
+@workspace_bp.route("/workspace/projects/<int:project_id>/approvals/new",methods=["GET","POST"])
+def commercial_approval_new(project_id: int):
+    try:
+        workspace = ProjectWorkspaceService.get_workspace(project_id)
+    except ValueError:
+        abort(404)
+    error = None
+    if request.method == "POST":
+        try:
+            approval_id = CommercialApprovalService.create(
+                project_id,request.form.to_dict(),actor=current_app.config.get("CURRENT_USER","system"))
+            return redirect(url_for("workspace.commercial_approval_detail",approval_id=approval_id))
+        except (ValueError,TypeError) as exc:error=str(exc)
+    defaults = request.form if request.method == "POST" else CommercialApprovalService.get_form_defaults(project_id)
+    return render_template("workspace/commercial_approval_form.html",workspace=workspace,
+                           approval=None,reasons=CommercialApprovalService.REASONS,
+                           form_data=defaults,error=error)
+
+
+@workspace_bp.route("/workspace/approvals/<int:approval_id>/edit",methods=["GET","POST"])
+def commercial_approval_edit(approval_id: int):
+    try:
+        page=CommercialApprovalService.get_detail(approval_id)
+        workspace=ProjectWorkspaceService.get_workspace(page["approval"]["project_id"])
+        if request.method == "POST":
+            CommercialApprovalService.update(approval_id,request.form.to_dict(),actor=current_app.config.get("CURRENT_USER","system"))
+            return redirect(url_for("workspace.commercial_approval_detail",approval_id=approval_id))
+    except ValueError as exc:
+        if request.method == "POST":
+            return render_template("workspace/commercial_approval_form.html",workspace=workspace,
+                approval=page["approval"],reasons=CommercialApprovalService.REASONS,
+                form_data=request.form,error=str(exc)),400
+        abort(404)
+    return render_template("workspace/commercial_approval_form.html",workspace=workspace,
+        approval=page["approval"],reasons=CommercialApprovalService.REASONS,
+        form_data=page["approval"],error=None)
+
+
+@workspace_bp.get("/workspace/approvals/<int:approval_id>")
+def commercial_approval_detail(approval_id: int):
+    try:page=CommercialApprovalService.get_detail(approval_id)
+    except ValueError:abort(404)
+    return render_template("workspace/commercial_approval_detail.html",page=page,
+        approval_updated=request.args.get("updated")=="1",
+        updated_amount=request.args.get("amount"),
+        updated_currency=request.args.get("currency"))
+
+
+@workspace_bp.post("/workspace/approvals/<int:approval_id>/submit")
+def commercial_approval_submit(approval_id: int):
+    try:CommercialApprovalService.submit(approval_id,actor=current_app.config.get("CURRENT_USER","system"))
+    except ValueError as exc:return str(exc),400
+    return redirect(url_for("workspace.commercial_approval_detail",approval_id=approval_id))
+
+
+@workspace_bp.post("/workspace/approvals/<int:approval_id>/decision")
+def commercial_approval_decision(approval_id: int):
+    try:
+        discount=request.form.get("approved_discount","").strip()
+        result=CommercialApprovalService.decide(approval_id,decision=request.form.get("decision",""),
+            approver=CommercialApprovalService.APPROVER_NAME,comments=request.form.get("comments",""),
+            approved_discount=discount or None,
+            expiration_date=request.form.get("expiration_date") or None,
+            role="approver")
+    except (ValueError,PermissionError) as exc:return str(exc),403 if isinstance(exc,PermissionError) else 400
+    return redirect(url_for("workspace.commercial_approval_detail",approval_id=approval_id,
+                            updated=1 if result else 0,
+                            amount=result.get("approved_total_amount") if result else None,
+                            currency=result.get("currency") if result else None))
+
+
+@workspace_bp.post("/workspace/approvals/<int:approval_id>/cancel")
+def commercial_approval_cancel(approval_id: int):
+    try:CommercialApprovalService.cancel(approval_id,actor=current_app.config.get("CURRENT_USER","system"),comments=request.form.get("comments",""))
+    except ValueError as exc:return str(exc),400
+    return redirect(url_for("workspace.commercial_approval_detail",approval_id=approval_id))
+
+
+@workspace_bp.post("/workspace/approvals/<int:approval_id>/expire")
+def commercial_approval_expire(approval_id: int):
+    try:
+        CommercialApprovalService.expire(
+            approval_id, actor=CommercialApprovalService.APPROVER_NAME,
+            role="approver")
+    except (ValueError,PermissionError) as exc:
+        return str(exc),403 if isinstance(exc,PermissionError) else 400
+    return redirect(url_for("workspace.commercial_approval_detail",approval_id=approval_id))
+
+
 @workspace_bp.route("/workspace/customers")
 def customer_list():
-    customers = CustomerRepository.list_customers()
+    page = CustomerPortfolioService.get_dashboard(
+        search=request.args.get("q", "").strip(),
+        quick_filter=request.args.get("filter", "").strip(),
+        office=_requested_office(),
+        advisor=request.args.get("advisor", "").strip(),
+        current_advisor=current_app.config.get("CURRENT_SALES_REP"),
+        sort=request.args.get("sort", "sales").strip(),
+        direction=request.args.get("direction", "desc").strip(),
+        page=max(request.args.get("page", 1, type=int), 1),
+    )
 
     return render_template(
         "workspace/customer_list.html",
-        customers=customers,
+        page=page,
     )
+
+
+def _default_office() -> str:
+    return str(
+        current_app.config.get("DEFAULT_COMMERCIAL_OFFICE", "Cali") or ""
+    ).strip()
+
+
+def _requested_office() -> str:
+    if "office" in request.args:
+        return request.args.get("office", "").strip()
+    return _default_office()
+
+
+@workspace_bp.get("/workspace/customers/erp/<erp_customer_id>")
+def open_erp_customer(erp_customer_id: str):
+    try:
+        customer_id = CustomerPortfolioService.resolve_workspace(erp_customer_id)
+    except ValueError:
+        abort(404)
+    return redirect(url_for("workspace.strategic_account_overview",
+                            customer_id=customer_id))
 
 @workspace_bp.route(
     "/workspace/projects/new",
@@ -135,7 +329,7 @@ def customer_list():
 )
 def new_project():
     error = None
-    form_data = request.form.to_dict()
+    form_data = request.form.to_dict() if request.method == "POST" else request.args.to_dict()
 
     if request.method == "POST":
         try:
@@ -208,6 +402,7 @@ def new_project():
                         "",
                     ),
                     quote_amount=quote_amount,
+                    source_visit_id=request.form.get("source_visit_id",type=int),
                 )
             )
 
@@ -549,8 +744,61 @@ def edit_quote(
     return render_template(
         "workspace/edit_quote.html",
         quote=quote,
+        quote_lines=CommercialInterestQuoteService.quote_lines(quote_id),
         error=error,
     )
+
+
+@workspace_bp.post(
+    "/workspace/projects/<int:project_id>/generate-quote-from-crm"
+)
+def generate_quote_from_crm(project_id: int):
+    try:
+        quote_id = CommercialInterestQuoteService.generate_quote(project_id)
+    except ValueError as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.edit_quote", quote_id=quote_id))
+
+
+@workspace_bp.post("/workspace/quotes/<int:quote_id>/lines")
+def add_quote_line(quote_id: int):
+    try:
+        CommercialInterestQuoteService.add_quote_line(
+            quote_id,
+            brand=request.form.get("brand"),
+            part_number=request.form.get("part_number"),
+            description=request.form.get("description", ""),
+            quantity=request.form.get("quantity", 0),
+            unit_price=request.form.get("unit_price", 0),
+        )
+    except (TypeError, ValueError) as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.edit_quote", quote_id=quote_id))
+
+
+@workspace_bp.post("/workspace/quote-lines/<int:line_id>/edit")
+def edit_quote_line(line_id: int):
+    try:
+        quote_id = CommercialInterestQuoteService.update_quote_line(
+            line_id,
+            brand=request.form.get("brand"),
+            part_number=request.form.get("part_number"),
+            description=request.form.get("description", ""),
+            quantity=request.form.get("quantity", 0),
+            unit_price=request.form.get("unit_price", 0),
+        )
+    except (TypeError, ValueError) as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.edit_quote", quote_id=quote_id))
+
+
+@workspace_bp.post("/workspace/quote-lines/<int:line_id>/delete")
+def delete_quote_line(line_id: int):
+    try:
+        quote_id = CommercialInterestQuoteService.delete_quote_line(line_id)
+    except ValueError as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.edit_quote", quote_id=quote_id))
 
 @workspace_bp.route("/workspace")
 def workspace_home():
@@ -590,6 +838,18 @@ def change_project_blocker(project_id: int):
     "/workspace/customers/<int:customer_id>"
 )
 def customer_detail(customer_id: int):
+    if CustomerRepository.get_customer(customer_id) is None:
+        abort(404)
+    return redirect(url_for(
+        "workspace.strategic_account_overview",
+        customer_id=customer_id,
+    ))
+
+
+@workspace_bp.get(
+    "/workspace/strategic-accounts/<int:customer_id>/commercial-profile"
+)
+def account_commercial_profile(customer_id: int):
     try:
         customer_page = (
             CustomerDetailService
@@ -605,6 +865,195 @@ def customer_detail(customer_id: int):
         "workspace/customer_detail.html",
         customer_page=customer_page,
     )
+
+
+@workspace_bp.get(
+    "/workspace/strategic-accounts/<int:customer_id>"
+)
+def strategic_account_overview(customer_id: int):
+    try:
+        page = StrategicAccountService.get_overview(customer_id)
+    except ValueError:
+        abort(404)
+
+    return render_template(
+        "workspace/strategic_account_overview.html",
+        page=page,
+    )
+
+
+@workspace_bp.get("/workspace/strategic-accounts/<int:customer_id>/activities")
+def strategic_account_activities(customer_id: int):
+    try:
+        page=CommercialVisitService.get_customer_page(
+            customer_id,request.args.get("filter","all").strip())
+    except ValueError:abort(404)
+    return render_template("workspace/customer_activities.html",page=page)
+
+
+@workspace_bp.get("/workspace/strategic-accounts/<int:customer_id>/products")
+def strategic_account_products(customer_id: int):
+    try:
+        page = StrategicAccountService.get_products(customer_id)
+    except ValueError:
+        abort(404)
+    return render_template("workspace/strategic_account_products.html", page=page)
+
+
+@workspace_bp.post("/workspace/strategic-accounts/<int:customer_id>/visit-analysis")
+def strategic_account_visit_analysis(customer_id: int):
+    from app.workspace.services.account_visit_analysis_service import AccountVisitAnalysisService
+    try:
+        AccountVisitAnalysisService.generate(customer_id, actor="user")
+    except ValueError as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.strategic_account_overview", customer_id=customer_id))
+
+
+@workspace_bp.get("/workspace/strategic-accounts/<int:customer_id>/rfqs")
+def strategic_account_rfqs(customer_id: int):
+    customer = ActivityFormRepository.get_customer(customer_id)
+    if not customer:
+        abort(404)
+    return render_template(
+        "workspace/customer_rfqs.html", customer=customer,
+        rfqs=RFQRepository.list_customer(customer_id),
+        labels=RFQService.STATUS_LABELS,
+    )
+
+
+@workspace_bp.get("/workspace/visits/<int:visit_id>")
+def commercial_visit_detail(visit_id:int):
+    try:visit=CommercialVisitService.get_visit(visit_id)
+    except ValueError:abort(404)
+    return render_template("workspace/commercial_visit_detail.html",visit=visit)
+
+
+@workspace_bp.get("/workspace/integrations/google/visits")
+@roles_required("administrator")
+def visit_integration():
+    return render_template("workspace/visit_integration.html",
+                           page=CommercialVisitService.get_integration_status(),
+                           result=None,error=None)
+
+
+@workspace_bp.post("/workspace/integrations/google/visits/sync")
+@roles_required("administrator")
+def sync_visits():
+    try:
+        result=CommercialVisitService.sync_configured_source(); error=None
+    except (ValueError,RuntimeError) as exc:
+        result=None; error=str(exc)
+    return render_template("workspace/visit_integration.html",
+                           page=CommercialVisitService.get_integration_status(),
+                           result=result,error=error),400 if error else 200
+
+
+@workspace_bp.get("/workspace/integrations/google/visits/quality")
+@roles_required("administrator")
+def visit_data_quality():
+    return render_template("workspace/visit_data_quality.html",
+                           page=CommercialVisitService.get_quality_page())
+
+
+@workspace_bp.get("/workspace/strategic-accounts/<int:customer_id>/agreement")
+def strategic_account_agreement(customer_id: int):
+    try:
+        page = AgreementService.get_customer_page(
+            customer_id,
+            search=request.args.get("q", "").strip(),
+            status=request.args.get("status", "").strip(),
+            page=max(request.args.get("page", 1, type=int), 1),
+        )
+    except ValueError:
+        abort(404)
+    return render_template("workspace/strategic_account_agreement.html",
+                           customer=page["customer"], agreement=page["agreement"],
+                           items=page["items"], document=page["document"],
+                           analytics=page.get("analytics"))
+
+
+@workspace_bp.route("/workspace/strategic-accounts/<int:customer_id>/agreement/upload", methods=["GET", "POST"])
+def strategic_account_agreement_upload(customer_id: int):
+    customer = CustomerRepository.get_customer(customer_id)
+    if customer is None: abort(404)
+    error = None
+    if request.method == "POST":
+        try:
+            token = AgreementImportService.stage(customer_id, request.files.get("file"), {
+                "name": request.form.get("name", "").strip(),
+                "supplier": request.form.get("supplier", "").strip(),
+                "currency": request.form.get("currency", "").strip().upper(),
+                "agreement_type": request.form.get("agreement_type", "").strip(),
+                "start_date": request.form.get("start_date", ""),
+                "end_date": request.form.get("end_date", ""),
+                "notes": request.form.get("notes", "").strip(),
+            })
+            return redirect(url_for("workspace.strategic_account_agreement_import",
+                                    customer_id=customer_id, import_token=token))
+        except (AgreementImportError, ValueError, AttributeError) as exc:
+            error = str(exc)
+    return render_template("workspace/agreement_upload.html", customer=customer, error=error)
+
+
+@workspace_bp.route("/workspace/strategic-accounts/<int:customer_id>/agreement/import/<import_token>", methods=["GET", "POST"])
+def strategic_account_agreement_import(customer_id: int, import_token: str):
+    try:
+        mapping = None
+        worksheet = None
+        if request.method == "POST":
+            worksheet = request.form.get("worksheet")
+            mapping = {field: request.form.get(f"mapping_{field}") for field in
+                       AgreementImportService.preview(customer_id, import_token)["destinations"]
+                       if request.form.get(f"mapping_{field}")}
+            metadata = {
+                "name": request.form.get("metadata_name", "").strip(),
+                "supplier": request.form.get("metadata_supplier", "").strip(),
+                "currency": request.form.get("metadata_currency", "").strip().upper(),
+                "agreement_type": request.form.get("metadata_agreement_type", "").strip(),
+                "start_date": request.form.get("metadata_start_date", ""),
+                "end_date": request.form.get("metadata_end_date", ""),
+                "notes": request.form.get("metadata_notes", "").strip(),
+            }
+        else:
+            metadata = None
+        page = AgreementImportService.preview(customer_id, import_token,
+                                              worksheet=worksheet, mapping=mapping,
+                                              metadata=metadata)
+    except (AgreementImportError, ValueError) as exc:
+        return str(exc), 404
+    return render_template("workspace/agreement_import_preview.html", page=page)
+
+
+@workspace_bp.post("/workspace/strategic-accounts/<int:customer_id>/agreement/import/<import_token>/confirm")
+def strategic_account_agreement_confirm(customer_id: int, import_token: str):
+    try:
+        agreement_id = AgreementImportService.confirm(
+            customer_id, import_token, replace_active=request.form.get("replace_active") == "1"
+        )
+    except AgreementImportError as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.strategic_account_agreement",
+                            customer_id=customer_id, agreement_id=agreement_id))
+
+
+@workspace_bp.post("/workspace/strategic-accounts/<int:customer_id>/agreement/import/<import_token>/cancel")
+def strategic_account_agreement_cancel(customer_id: int, import_token: str):
+    try:
+        AgreementImportService.cancel(customer_id, import_token)
+    except AgreementImportError:
+        pass
+    return redirect(url_for("workspace.strategic_account_agreement",
+                            customer_id=customer_id))
+
+
+@workspace_bp.get("/workspace/strategic-accounts/<int:customer_id>/agreement/document")
+def strategic_account_agreement_document(customer_id: int):
+    try:
+        document, path = AgreementImportService.get_document(customer_id)
+    except AgreementImportError:
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=document["original_name"])
 
 @workspace_bp.route("/workspace/initiatives")
 def initiative_list():
@@ -1002,6 +1451,15 @@ def close_project_as_lost(project_id: int):
             project_id=project_id,
         )
     )
+
+
+@workspace_bp.post("/workspace/projects/<int:project_id>/reopen")
+def reopen_project(project_id: int):
+    try:
+        ProjectClosureService.reopen(project_id=project_id)
+    except ValueError as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.project_detail", project_id=project_id))
 
 
 @workspace_bp.post(

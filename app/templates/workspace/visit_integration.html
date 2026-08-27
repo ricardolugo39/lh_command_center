@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Visitas comerciales · Integraciones{% endblock %}
+{% block page_title %}Google AppSheet / Google Sheets{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <div class="text-secondary">Integración de visitas comerciales</div>
+    <h2 class="mt-1">Sincronización unidireccional</h2>
+  </div>
+  <a class="btn" href="{{ url_for('integrations.index') }}">
+    Volver a Integraciones
+  </a>
+</div>
+<div class="card">
+  <div class="card-header">
+    <div class="d-flex justify-content-between align-items-center w-100">
+      <div>
+        <h3 class="card-title">Estado operativo</h3>
+        <div class="text-secondary">
+          AppSheet continúa funcionando durante la transición.
+        </div>
+      </div>
+      {% if page.ready %}
+      <span class="badge bg-green-lt">Configurada</span>
+      {% elif page.configured %}
+      <span class="badge bg-yellow-lt">Requiere credenciales</span>
+      {% else %}
+      <span class="badge bg-yellow-lt">Pendiente de configuración</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body">
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+    {% if result %}
+    <div class="alert alert-success">
+      Sincronización terminada: {{ result.inserted }} nuevas,
+      {{ result.updated }} actualizadas, {{ result.unchanged }} sin cambios
+      y {{ result.errors }} errores.
+    </div>
+    {% endif %}
+    <dl class="row">
+      <dt class="col-sm-4">Disponibilidad</dt>
+      <dd class="col-sm-8">Integración habilitada</dd>
+      <dt class="col-sm-4">Hoja</dt>
+      <dd class="col-sm-8">{{ page.worksheet }}</dd>
+      <dt class="col-sm-4">Última sincronización</dt>
+      <dd class="col-sm-8">
+        {{ page.latest_sync.completed_at if page.latest_sync else 'Sin sincronizaciones' }}
+      </dd>
+      <dt class="col-sm-4">Visitas importadas</dt>
+      <dd class="col-sm-8">{{ page.metrics.imported_visits or 0 }}</dd>
+    </dl>
+    {% if not page.configured %}
+    <div class="alert alert-info">
+      Para sincronizar configure:
+      <strong>{{ page.missing_settings|join(', ') }}</strong>.
+      Los datos ya importados y la integración permanecen disponibles.
+    </div>
+    {% elif page.configuration_error %}
+    <div class="alert alert-warning">{{ page.configuration_error }}</div>
+    {% endif %}
+    <div class="btn-list">
+      <form method="post" action="{{ url_for('workspace.sync_visits') }}">
+        <button class="btn btn-primary">Sincronizar ahora</button>
+      </form>
+      <a class="btn" href="{{ url_for('workspace.visit_data_quality') }}">
+        Calidad de datos
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

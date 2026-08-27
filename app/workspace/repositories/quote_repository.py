@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 VALID_CURRENCIES = {
@@ -10,6 +10,15 @@ VALID_CURRENCIES = {
 
 
 class QuoteRepository:
+    @staticmethod
+    def get_primary_for_project(project_id: int):
+        with connection_scope() as conn:
+            row = conn.execute("""
+                SELECT * FROM ws_project_quotes WHERE project_id=?
+                ORDER BY revision ASC,id ASC LIMIT 1
+            """, (project_id,)).fetchone()
+            return dict(row) if row else None
+
 
     @staticmethod
     def create_quote(
@@ -65,7 +74,7 @@ class QuoteRepository:
         )
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             cursor = conn.execute(
                 sql,
@@ -92,9 +101,44 @@ class QuoteRepository:
                 ),
             )
 
-            conn.commit()
 
             return int(cursor.lastrowid)
+
+    @staticmethod
+    def next_crm_revision(project_id: int) -> int:
+        with connection_scope() as conn:
+            row = conn.execute(
+                """SELECT COALESCE(MAX(revision),0)+1
+                FROM ws_project_quotes
+                WHERE project_id=? AND generated_from_crm_lines=1""",
+                (project_id,),
+            ).fetchone()
+        return int(row[0])
+
+    @staticmethod
+    def mark_generated_from_crm(
+        quote_id: int, *, signature: str
+    ) -> None:
+        with connection_scope() as conn:
+            conn.execute(
+                """UPDATE ws_project_quotes SET
+                    generated_from_crm_lines=1,
+                    source_lines_signature=?,
+                    generated_at=CURRENT_TIMESTAMP
+                WHERE id=?""",
+                (signature, quote_id),
+            )
+
+    @staticmethod
+    def latest_crm_generated(project_id: int) -> dict[str, Any] | None:
+        with connection_scope() as conn:
+            row = conn.execute(
+                """SELECT * FROM ws_project_quotes
+                WHERE project_id=? AND generated_from_crm_lines=1
+                ORDER BY revision DESC,id DESC LIMIT 1""",
+                (project_id,),
+            ).fetchone()
+        return dict(row) if row else None
 
     @staticmethod
     def get_quote(
@@ -107,7 +151,7 @@ class QuoteRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             cursor = conn.execute(
                 sql,
@@ -143,7 +187,7 @@ class QuoteRepository:
         ORDER BY revision ASC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             cursor = conn.execute(
                 sql,
@@ -178,7 +222,7 @@ class QuoteRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             conn.execute(
                 sql,
@@ -189,7 +233,6 @@ class QuoteRepository:
                 ),
             )
 
-            conn.commit()
 
     @staticmethod
     def update_exchange_rate(
@@ -209,7 +252,7 @@ class QuoteRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             conn.execute(
                 sql,
@@ -221,7 +264,6 @@ class QuoteRepository:
                 ),
             )
 
-            conn.commit()
 
     @staticmethod
     def update_status(
@@ -237,7 +279,7 @@ class QuoteRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             conn.execute(
                 sql,
@@ -247,7 +289,6 @@ class QuoteRepository:
                 ),
             )
 
-            conn.commit()
 
     @staticmethod
     def create_revision(
@@ -263,7 +304,7 @@ class QuoteRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
 
             conn.execute(
                 sql,
@@ -273,7 +314,6 @@ class QuoteRepository:
                 ),
             )
 
-            conn.commit()
 
     @staticmethod
     def update_quote_details(
@@ -304,7 +344,7 @@ class QuoteRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -327,5 +367,3 @@ class QuoteRepository:
                 raise ValueError(
                     f"Quote does not exist: {quote_id}"
                 )
-
-            conn.commit()

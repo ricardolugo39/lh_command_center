@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Estado de autenticación · Commercial Command Center</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+</head><body class="bg-light"><main class="container container-tight py-5">
+<div class="mb-4"><a href="{{ url_for('auth.login') }}">← Volver</a>
+<h1 class="mt-3">Estado de autenticación</h1>
+<p class="text-secondary">Diagnóstico de Google Workspace OAuth/OpenID Connect.</p></div>
+<div class="alert {{ 'alert-success' if report.enabled else 'alert-warning' }}">
+<strong>OAuth {{ 'habilitado' if report.enabled else 'incompleto' }}</strong>
+{% if not report.enabled %}<div>Configure los valores marcados como faltantes en el archivo
+<code>.env</code> de la raíz del proyecto o como variables del sistema operativo.</div>{% endif %}
+</div>
+<div class="card mb-4"><div class="table-responsive"><table class="table card-table table-vcenter">
+<thead><tr><th>Valor</th><th>Estado</th><th>Valor efectivo</th><th>Origen</th></tr></thead>
+<tbody>{% for item in report["items"] %}<tr>
+<td><strong>{{ item.label }}</strong><div class="small text-secondary"><code>{{ item.name }}</code></div></td>
+<td><span class="badge {{ 'bg-success-lt' if item.configured else 'bg-danger-lt' }}">{{ 'Configurado' if item.configured else 'Faltante' }}</span></td>
+<td><code>{{ item.display_value }}</code>{% if item.validation_error %}<div class="text-danger small mt-1">{{ item.validation_error }}</div>{% endif %}<div class="small text-secondary mt-1">{{ item.expected_format }}</div></td>
+<td>{{ item.source }}</td>
+</tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><div class="card-body">
+<h2 class="card-title">Configuración en Google Cloud</h2>
+<ol>
+<li>Cree o seleccione un cliente OAuth 2.0 de tipo <strong>Aplicación web</strong>.</li>
+<li>Agregue exactamente esta URI de redirección autorizada:</li>
+</ol>
+<pre class="bg-light p-3 rounded"><code>{{ report.expected_redirect_uri }}</code></pre>
+<p class="mb-0">Reinicie la aplicación después de actualizar <code>.env</code>. Los secretos nunca se muestran en esta página.</p>
+</div></div>
+</main></body></html>

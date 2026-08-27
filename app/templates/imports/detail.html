@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Resultado ERP · Commercial Command Center{% endblock %}
+{% block page_title %}Resultado de importación{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<div class="card">
+  <div class="card-body">
+    <div class="d-flex justify-content-between mb-4">
+      <div><h3 class="mb-1">{{ execution.original_filename }}</h3>
+        <div class="text-secondary">
+          {{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','crm_opportunities':'Oportunidades CRM'}.get(execution.import_type, execution.import_type) }}
+          {% if execution.snapshot_date %} · Snapshot {{ execution.snapshot_date }}{% endif %}
+        </div></div>
+      <span class="badge">{{ execution.status }}</span>
+    </div>
+    {% if execution.import_type == 'crm_opportunities' %}
+    <div class="row row-cards mb-4">
+      {% for label, value in [
+        ('Creadas',execution.rows_inserted),
+        ('Actualizadas',execution.rows_updated),
+        ('Sin cambios',execution.rows_skipped),
+        ('Pendientes de revisión',execution.groups_needs_review),
+        ('Bloqueadas',execution.groups_blocked)
+      ] %}
+      <div class="col"><div class="text-secondary">{{ label }}</div>
+        <div class="h2">{{ value }}</div></div>
+      {% endfor %}
+    </div>
+    {% if execution.groups_deferred %}
+    <div class="alert alert-info">
+      La importación terminó correctamente. Las oportunidades diferidas no
+      se perdieron y permanecen disponibles para resolución.
+    </div>
+    <a class="btn btn-outline-primary mb-3"
+       href="{{ url_for('imports.opportunity_pending') }}">
+      Revisar oportunidades CRM pendientes
+    </a>
+    {% endif %}
+    {% elif execution.import_type == 'customers' %}
+    <div class="row row-cards mb-4">
+      {% for title,prefix in [('Clientes','customers'),('Ubicaciones','customer_sites')] %}
+      <div class="col-md-6"><div class="card h-100"><div class="card-header"><h3 class="card-title">{{ title }}</h3></div>
+      <div class="card-body"><div class="row text-center">
+        <div class="col"><strong class="h2">{{ execution[prefix + '_inserted'] }}</strong><div class="text-secondary">Nuevos</div></div>
+        <div class="col"><strong class="h2">{{ execution[prefix + '_updated'] }}</strong><div class="text-secondary">Actualizados</div></div>
+        <div class="col"><strong class="h2">{{ execution[prefix + '_unchanged'] }}</strong><div class="text-secondary">Sin cambios</div></div>
+      </div></div></div></div>{% endfor %}
+    </div>
+    {% else %}
+    <div class="row row-cards">
+      {% for label, value in [
+        ('Filas leídas',execution.rows_read),('Insertadas',execution.rows_inserted),
+        ('Actualizadas',execution.rows_updated),('Omitidas',execution.rows_skipped),
+        ('Duplicadas',execution.duplicates_count)
+      ] %}
+      <div class="col"><div class="text-secondary">{{ label }}</div>
+        <div class="h2">{{ value }}</div></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% for warning in execution.warnings %}
+      <div class="alert alert-warning mt-3">{{ warning }}</div>
+    {% endfor %}
+    {% for message in execution.errors %}
+      <div class="alert alert-danger mt-3">{{ message }}</div>
+    {% endfor %}
+    {% if execution.issues %}
+    <div class="table-responsive mt-3"><table class="table table-sm">
+      <thead><tr><th>Fila</th><th>Nivel</th><th>Código</th><th>Detalle</th></tr></thead>
+      <tbody>{% for issue in execution.issues %}
+        <tr><td>{{ issue.row_number or '—' }}</td><td>{{ issue.severity }}</td>
+          <td>{{ issue.code }}</td><td>{{ issue.message }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    <div class="text-secondary small mt-3">SHA-256: {{ execution.file_hash }}</div>
+  </div>
+</div>
+<a class="btn btn-outline-secondary mt-3" href="{{ url_for('imports.index') }}">
+  Volver al centro de importaciones
+</a>
+{% endblock %}

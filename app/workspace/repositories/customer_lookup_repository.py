@@ -1,7 +1,38 @@
 from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class CustomerLookupRepository:
+
+    @staticmethod
+    def search_workspace_customers(
+        text: str, limit: int = 10,
+    ) -> list[dict]:
+        clean_text = text.strip()
+        if not clean_text:
+            return []
+        search = f"%{clean_text}%"
+        with connection_scope() as conn:
+            rows = conn.execute(
+                """SELECT id AS workspace_customer_id,
+                    name AS customer_name, erp_customer_id AS nit,
+                    erp_customer_id AS erp_id
+                FROM ws_customers
+                WHERE name LIKE ? COLLATE NOCASE
+                   OR erp_customer_id LIKE ? COLLATE NOCASE
+                ORDER BY
+                    CASE
+                        WHEN name LIKE ? COLLATE NOCASE THEN 0
+                        ELSE 1
+                    END,
+                    name, id
+                LIMIT ?""",
+                (
+                    search, search, f"{clean_text}%",
+                    min(max(limit, 1), 20),
+                ),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     @staticmethod
     def search(

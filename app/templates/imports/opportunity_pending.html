@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Oportunidades CRM pendientes · Commercial Command Center{% endblock %}
+{% block page_title %}Oportunidades CRM pendientes{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <p class="text-secondary mb-0">
+    Estas candidatas aún no son Oportunidades del Pipeline. Conservan su
+    archivo, perfil y evidencia de origen hasta que exista un cliente seguro.
+  </p>
+  <form id="pending-import-form" method="post"
+        action="{{ url_for('imports.opportunity_pending_import') }}">
+    <button class="btn btn-primary">
+      Importar oportunidades resueltas
+    </button>
+  </form>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead><tr><th></th><th>CRM</th><th>Empresa CRM</th><th>Evidencia</th>
+        <th>Comercial</th><th>Estado</th><th>Resolver cliente</th></tr></thead>
+      <tbody>
+      {% for item in pending %}
+      {% set group = item.group %}
+      <tr>
+        <td>{% if item.resolution_status == 'ready' %}
+          <input class="form-check-input" type="checkbox" name="pending_id"
+                 value="{{ item.id }}" form="pending-import-form">
+          {% endif %}
+        </td>
+        <td><strong>{{ item.external_opportunity_id }}</strong>
+          <div class="text-secondary">{{ item.origin_reference or '—' }}</div>
+          <div class="small">Importación #{{ item.latest_import_execution_id }}</div>
+        </td>
+        <td>{{ item.source_company_name or 'Sin empresa' }}
+          <div class="small text-secondary">{{ group.canonical.customer_city or '—' }}</div>
+          <div class="small">{{ group.canonical.customer_phone or '—' }}
+            · {{ group.canonical.customer_mobile or '—' }}</div>
+          {% for candidate in group.customer_match_candidates %}
+          <div class="small text-secondary">Sugerencia: {{ candidate.name }}</div>
+          {% endfor %}
+        </td>
+        <td>{{ group.product_line_count }} líneas ·
+          {{ group.brands|join(' / ') if group.brands else 'Sin marca' }}
+          <div class="small">{{ "{:,.0f}".format(group.total_potential_value or 0) }} COP</div>
+          <div class="small text-secondary">
+            Filas {{ group.source_row_numbers|join(', ') }}
+          </div>
+        </td>
+        <td>{{ group.source_seller or 'Sin vendedor' }}
+          <div class="small">{{ group.canonical.crm_status or '—' }} ·
+            {{ group.canonical.crm_stage or '—' }}</div>
+        </td>
+        <td><span class="badge">{{ item.resolution_status }}</span>
+          <div class="small text-secondary">{{ item.match_reason }}</div>
+          {% if item.resolved_customer_name %}
+          <div class="small">{{ item.resolved_customer_name }}</div>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.resolution_status != 'ready' %}
+          <form method="post"
+                action="{{ url_for('imports.opportunity_pending_resolve',
+                                   pending_id=item.id) }}">
+            <input class="form-control mb-2 pending-customer-search"
+                   type="search" placeholder="Buscar cliente"
+                   data-target="pending-customer-{{ item.id }}">
+            <select class="form-select mb-2" name="customer_id"
+                    id="pending-customer-{{ item.id }}" required>
+              <option value="">Buscar o seleccionar cliente</option>
+              {% for customer in customers %}
+              <option value="{{ customer.id }}">{{ customer.name }}
+                ({{ customer.erp_customer_id or 'sin ID ERP' }})</option>
+              {% endfor %}
+            </select>
+            <select class="form-select mb-2" name="apply_scope">
+              <option value="one">Solo esta oportunidad</option>
+              <option value="company">Todas las pendientes de esta empresa</option>
+            </select>
+            <button class="btn btn-outline-primary">Guardar resolución</button>
+          </form>
+          {% else %}
+          <span class="text-success">Lista para importar</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-secondary py-4">
+        No hay oportunidades CRM pendientes.
+      </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.pending-customer-search').forEach(function (input) {
+  input.addEventListener('input', function () {
+    const search = this.value.toLocaleLowerCase();
+    const select = document.getElementById(this.dataset.target);
+    Array.from(select.options).forEach(function (option, index) {
+      option.hidden = index > 0
+        && !option.text.toLocaleLowerCase().includes(search);
+    });
+  });
+});
+</script>
+<a class="btn btn-link mt-3" href="{{ url_for('imports.index') }}">
+  Volver al centro de importaciones
+</a>
+{% endblock %}

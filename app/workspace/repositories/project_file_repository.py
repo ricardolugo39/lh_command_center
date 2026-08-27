@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class ProjectFileRepository:
@@ -29,7 +29,7 @@ class ProjectFileRepository:
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -42,7 +42,6 @@ class ProjectFileRepository:
                     uploaded_by,
                 ),
             )
-            conn.commit()
 
             return int(cursor.lastrowid)
 
@@ -65,7 +64,7 @@ class ProjectFileRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (file_id,),
@@ -104,7 +103,7 @@ class ProjectFileRepository:
             id DESC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (project_id,),
@@ -130,7 +129,7 @@ class ProjectFileRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (file_id,),
@@ -140,5 +139,3 @@ class ProjectFileRepository:
                 raise ValueError(
                     "El archivo no existe."
                 )
-
-            conn.commit()

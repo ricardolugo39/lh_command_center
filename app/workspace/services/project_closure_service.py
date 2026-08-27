@@ -5,10 +5,12 @@ from app.workspace.repositories.activity_repository import (
     ActivityRepository,
 )
 from app.workspace.repositories.project_repository import ProjectRepository
+from app.workspace.repositories.followup_repository import FollowupRepository
 from app.workspace.services.project_access_policy import ProjectAccessPolicy
 from app.workspace.services.project_workspace_service import (
     ProjectWorkspaceService,
 )
+from app.database.transaction import transactional
 
 
 class ProjectClosureService:
@@ -35,6 +37,7 @@ class ProjectClosureService:
     }
 
     @staticmethod
+    @transactional
     def close_as_won(
         *,
         project_id: int,
@@ -85,6 +88,7 @@ class ProjectClosureService:
             order_number=clean_order_number,
             comments=clean_comments,
         )
+        completed_followups = FollowupRepository.complete_pending_for_project(project_id)
 
         details = [
             "Resultado: Ganada",
@@ -105,6 +109,8 @@ class ProjectClosureService:
             details.append(
                 f"Comentarios: {clean_comments}"
             )
+        if completed_followups:
+            details.append(f"Seguimientos cerrados automáticamente: {completed_followups}")
 
         ActivityRepository.create_activity(
             project_id=project_id,
@@ -119,6 +125,7 @@ class ProjectClosureService:
         )
 
     @staticmethod
+    @transactional
     def close_as_lost(
         *,
         project_id: int,
@@ -191,6 +198,7 @@ class ProjectClosureService:
             competitor_brand=clean_brand,
             comments=clean_comments,
         )
+        completed_followups = FollowupRepository.complete_pending_for_project(project_id)
 
         details = [
             "Resultado: Perdida",
@@ -225,6 +233,8 @@ class ProjectClosureService:
             details.append(
                 f"Comentarios: {clean_comments}"
             )
+        if completed_followups:
+            details.append(f"Seguimientos cerrados automáticamente: {completed_followups}")
 
         ActivityRepository.create_activity(
             project_id=project_id,
@@ -239,6 +249,7 @@ class ProjectClosureService:
         )
 
     @staticmethod
+    @transactional
     def cancel(
         *,
         project_id: int,
@@ -268,6 +279,7 @@ class ProjectClosureService:
             reason=clean_reason,
             comments=clean_comments,
         )
+        completed_followups = FollowupRepository.complete_pending_for_project(project_id)
 
         details = [
             "Resultado: Cancelada",
@@ -278,6 +290,8 @@ class ProjectClosureService:
             details.append(
                 f"Comentarios: {clean_comments}"
             )
+        if completed_followups:
+            details.append(f"Seguimientos cerrados automáticamente: {completed_followups}")
 
         ActivityRepository.create_activity(
             project_id=project_id,
@@ -290,3 +304,22 @@ class ProjectClosureService:
         return ProjectWorkspaceService.get_workspace(
             project_id
         )
+
+    @staticmethod
+    @transactional
+    def reopen(*, project_id: int, created_by: str = "system") -> dict[str, Any]:
+        project = ProjectRepository.get_project(project_id)
+        if project is None:
+            raise ValueError("La oportunidad no existe.")
+        if project.get("status") not in {"won", "lost", "cancelled"}:
+            raise ValueError("La oportunidad ya está abierta.")
+        previous_status = project["status"]
+        ProjectRepository.reopen_project(project_id)
+        ActivityRepository.create_activity(
+            project_id=project_id,
+            activity_type=ActivityType.STATUS_CHANGED,
+            title="Oportunidad reabierta",
+            details=f"Estado anterior: {previous_status}. Nuevo estado: Negociación.",
+            created_by=created_by,
+        )
+        return ProjectWorkspaceService.get_workspace(project_id)

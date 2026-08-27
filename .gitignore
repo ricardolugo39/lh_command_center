@@ -7,4 +7,12 @@ data/uploads/
 data/raw/
 data/processed/
 database/*.db
+database/*.db-shm
+database/*.db-wal
+data/*.db
+*.xlsx
+uploads/
+outputs/
+output/
+*.bak
 .DS_Store

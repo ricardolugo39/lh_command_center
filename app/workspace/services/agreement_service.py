@@ -1,11 +1,43 @@
 from app.workspace.repositories.agreement_repository import (
     AgreementRepository,
 )
+from app.database.transaction import transactional
+from app.workspace.repositories.agreement_document_repository import AgreementDocumentRepository
+from app.workspace.repositories.customer_repository import CustomerRepository
+from app.workspace.constants.agreement_status import get_status_label
+from app.workspace.services.agreement_analytics_service import AgreementAnalyticsService
 
 
 class AgreementService:
 
     @staticmethod
+    def get_customer_page(
+        customer_id: int, *, search: str = "", status: str = "", page: int = 1
+    ):
+        customer = CustomerRepository.get_customer(customer_id)
+        if customer is None:
+            raise ValueError("La cuenta no existe.")
+        agreements = AgreementRepository.list_customer_agreements(customer_id)
+        agreement = agreements[0] if agreements else None
+        document = None
+        if agreement:
+            agreement = {
+                **agreement,
+                "status": get_status_label(agreement.get("status")),
+            }
+            document = AgreementDocumentRepository.get_for_agreement(
+                agreement["id"]
+            )
+        analytics = AgreementAnalyticsService.get_analytics(
+            customer_id, agreements[0] if agreements else None,
+            search=search, status=status, page=page,
+        )
+        items = analytics["products"] if analytics else []
+        return {"customer": customer, "agreement": agreement,
+                "items": items, "document": document, "analytics": analytics}
+
+    @staticmethod
+    @transactional
     def create(
         *,
         customer_id: int,
@@ -61,6 +93,7 @@ class AgreementService:
         )
 
     @staticmethod
+    @transactional
     def update(
         **kwargs,
     ):
@@ -69,6 +102,7 @@ class AgreementService:
         )
 
     @staticmethod
+    @transactional
     def delete(
         agreement_id: int,
     ):

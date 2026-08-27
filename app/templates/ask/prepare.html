@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% set analysis=page.analysis %}
+{% block title %}Ask · {{ analysis.title }}{% endblock %}
+{% block page_title %}Ask{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static',filename='css/ask.css') }}">{% endblock %}
+{% block content %}
+<main class="ask-conversation-workspace">
+<header class="ask-conversation-head"><a href="{{ url_for('ask.index') }}">← Conversaciones</a><div><span>Ask · Analista comercial</span><h1>{{ analysis.title }}</h1></div></header>
+
+<section class="ask-chat" id="ask-chat" aria-live="polite">
+{% for message in page.messages %}
+<article class="ask-chat-turn ask-chat-turn-{{ message.role }}">
+<div class="ask-chat-avatar">{{ 'A' if message.role == 'analyst' else ('T' if message.role == 'system' else (g.current_user.display_name[0] if g.current_user and g.current_user.display_name else 'U')) }}</div>
+<div><span>{{ 'Ask' if message.role == 'analyst' else ('Sistema' if message.role == 'system' else 'Usted') }}</span><p>{{ message.content }}</p><small>{{ message.created_at }}</small></div>
+</article>
+{% endfor %}
+{% if page.files %}<article class="ask-chat-turn ask-chat-turn-evidence"><div class="ask-chat-avatar">↥</div><div><span>Evidencia compartida</span><div class="ask-chat-files">{% for file in page.files %}<a href="{{ url_for('ask.download_file',analysis_id=analysis.id,file_id=file.id) }}"><strong>{{ file.original_filename }}</strong><small>{{ file.file_extension|upper|replace('.','') }} · {{ {'processed':'Leído','failed':'Requiere revisión','pending':'Procesando'}.get(file.processing_status,file.processing_status) }}</small></a>{% endfor %}</div><details><summary>Ver cómo se interpretaron los archivos</summary>{% for file in page.files %}<div class="ask-chat-evidence-detail"><strong>{{ file.original_filename }}</strong><p>{{ file.inspection.evidence.summary or file.error_message or 'Sin resumen disponible.' }}</p>{% for warning in file.inspection.warnings or [] %}<small>⚠ {{ warning }}</small>{% endfor %}</div>{% endfor %}</details></div></article>{% endif %}
+</section>
+
+<form method="post" enctype="multipart/form-data" action="{{ url_for('ask.continue_conversation',analysis_id=analysis.id) }}" class="ask-composer" id="ask-conversation-form">
+<div class="ask-customer-combobox ask-composer-customer"><input type="hidden" name="customer_id" id="ask-customer-id" value="{{ analysis.customer_id or '' }}"><input id="ask-customer-search" autocomplete="off" value="{{ analysis.customer_name or '' }}" placeholder="Cliente (opcional) · escriba nombre o NIT" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ask-customer-results"><div id="ask-customer-results" class="list-group ask-search-results d-none" role="listbox"></div></div>
+<textarea name="message" rows="2" autofocus placeholder="Escriba como le hablaría a un analista: investigue, ajuste, compare o prepare un entregable."></textarea>
+<div class="ask-composer-actions"><label class="ask-attach"><input type="file" name="files" multiple accept=".xlsx,.xls,.csv,.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff"><span>＋ Adjuntar</span></label><span id="ask-selected-files"></span><button class="btn btn-primary" type="submit">Enviar</button></div>
+</form>
+
+<div class="ask-conversational-progress" id="ask-conversational-progress" hidden>
+<div class="ask-progress-dot"></div><div><strong>Ask está trabajando…</strong><span id="ask-live-progress">Leyendo su mensaje y la evidencia disponible.</span></div>
+</div>
+
+{% if page.artifacts %}
+<section class="ask-conversation-artifacts"><header><span>Entregables</span><h2>Preparados durante la conversación</h2></header>
+<div class="ask-artifact-list">{% for artifact in page.artifacts %}<a href="{{ url_for('ask.report',analysis_id=analysis.id) }}#artifact-{{ artifact.key }}"><span>{{ artifact.type }}</span><strong>{{ artifact.title }}</strong><small>{{ artifact.description or 'Abrir entregable' }}</small></a>{% endfor %}</div>
+<a class="btn btn-outline-primary mt-3" href="{{ url_for('ask.report',analysis_id=analysis.id) }}">Abrir entregables</a>
+</section>
+{% endif %}
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/ask.js') }}"></script>{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Ask · Commercial Command Center{% endblock %}
+{% block page_title %}Ask · Analista Comercial{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static',filename='css/ask.css') }}">{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<section class="ask-hero ask-conversation-hero">
+  <div><span class="ask-eyebrow">Ask · Analista comercial</span>
+  <h1>¿En qué decisión está trabajando?</h1>
+  <p>Explique el problema como se lo contaría a un colega. Puede adjuntar documentos ahora o durante la conversación.</p></div>
+</section>
+<form method="post" action="{{ url_for('ask.new') }}" enctype="multipart/form-data" class="ask-composer ask-composer-new" id="ask-conversation-form">
+  <div class="ask-customer-combobox ask-composer-customer"><input type="hidden" name="customer_id" id="ask-customer-id"><input id="ask-customer-search" autocomplete="off" placeholder="Cliente (opcional) · escriba nombre o NIT" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ask-customer-results"><div id="ask-customer-results" class="list-group ask-search-results d-none" role="listbox"></div></div>
+  <textarea name="objective" rows="3" required autofocus placeholder="Ej. Revise esta propuesta y ayúdeme a decidir qué aprobar y qué discutir con el equipo."></textarea>
+  <div class="ask-composer-actions"><label class="ask-attach"><input type="file" name="files" multiple accept=".xlsx,.xls,.csv,.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff"><span>＋ Adjuntar</span></label><span id="ask-selected-files"></span><button class="btn btn-primary btn-lg">Enviar</button></div>
+</form>
+<div class="ask-conversational-progress" id="ask-conversational-progress" hidden><div class="ask-progress-dot"></div><div><strong>Ask está comenzando la investigación…</strong><span id="ask-live-progress">Leyendo su objetivo y la evidencia disponible.</span></div></div>
+<section class="mt-5"><div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="h3 mb-0">Historial de análisis</h2><span class="text-secondary">{{ analyses|length }} versiones recientes</span>
+</div>
+<div class="ask-history">{% for analysis in analyses %}
+<a href="{{ url_for('ask.prepare',analysis_id=analysis.id) }}" class="ask-history-row">
+  <div><strong>{{ analysis.title }}</strong><span>{{ analysis.customer_name or 'Conversación comercial' }}</span></div>
+  <div><small>Última conversación<br>{{ analysis.updated_at }}</small></div>
+</a>{% else %}<div class="ask-empty">Todavía no hay análisis. El primero comienza con una decisión comercial concreta.</div>{% endfor %}</div>
+</section>
+{% endblock %}

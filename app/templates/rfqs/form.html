@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Nueva RFQ · Commercial Command Center{% endblock %}
+{% block page_title %}Nueva solicitud de precotización{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<form method="post" class="card" id="rfq-form">
+  <div class="card-body"><div class="row g-3">
+    <div class="col-md-7 position-relative">
+      <label class="form-label required">Cliente</label>
+      <input class="form-control" id="rfq-customer-search"
+             value="{{ customer.name if customer else '' }}"
+             placeholder="Buscar por nombre, NIT o ERP ID" autocomplete="off" required>
+      <input type="hidden" name="customer_id" id="rfq-customer-id"
+             value="{{ customer.id if customer else '' }}">
+      <div id="rfq-customer-results"
+           class="list-group position-absolute w-100 shadow d-none"
+           style="z-index:1050"></div>
+      <div class="form-hint">Seleccione un cliente de los resultados.</div>
+    </div>
+    <div class="col-md-5"><label class="form-label">Contacto</label>
+      <select class="form-select" name="contact_id"><option value="">Sin contacto</option>
+      {% for contact in contacts %}<option value="{{ contact.id }}">{{ contact.full_name }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-4"><label class="form-label required">Número de precotización</label>
+      <input class="form-control" name="prequotation_number"
+             value="{{ form.get('prequotation_number','') }}" placeholder="PC-2026-0001" required></div>
+    <div class="col-md-4"><label class="form-label required">Fecha recibida</label>
+      <input class="form-control" type="date" name="received_at"
+             value="{{ form.get('received_at','') }}" required></div>
+    <div class="col-md-4"><label class="form-label required">Vendedor / asesor comercial</label>
+      <select class="form-select" name="sales_rep_name" required>
+      <option value="">Seleccione</option>
+      {% for sales_rep in sales_representatives %}<option value="{{ sales_rep }}"
+        {{ 'selected' if form.get('sales_rep_name') == sales_rep }}>{{ sales_rep }}</option>{% endfor %}
+      </select>
+      <input type="hidden" name="owner_user_id" value=""></div>
+    <div class="col-md-4"><label class="form-label">Responsable interno</label>
+      <select class="form-select" name="responsible_user_id">
+      {% for user in users %}<option value="{{ user.id }}"
+        {{ 'selected' if user.email_normalized == default_responsible_email else '' }}>
+        {{ user.display_name }} · {{ user.email }}</option>{% endfor %}
+      </select></div>
+    <div class="col-12"><div class="form-hint">La lista contiene los usuarios comerciales activos. El correo del vendedor se incorpora automáticamente al RFQ y a la cotización.</div></div>
+    <div class="col-12"><label class="form-label required">Descripción</label>
+      <textarea class="form-control" name="description" required>{{ form.get('description','') }}</textarea></div>
+  </div>
+  <hr class="my-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div><h3 class="mb-0">Referencias</h3>
+      <div class="text-secondary small">Incluya al menos una referencia.</div></div>
+    <button class="btn btn-outline-primary" type="button" id="add-rfq-item">
+      + Agregar referencia
+    </button>
+  </div>
+  <div id="rfq-items"></div>
+  <template id="rfq-item-template">
+    <div class="row g-2 align-items-end rfq-item mb-3">
+      <div class="col-md-3"><label class="form-label required">Referencia</label>
+        <input class="form-control" name="item_reference" required></div>
+      <div class="col-md-3"><label class="form-label required">Marca</label>
+        <select class="form-select" name="item_brand" required>
+          <option value="">Seleccione</option>
+          {% for brand in brand_options %}<option value="{{ brand }}">{{ brand }}</option>{% endfor %}
+        </select></div>
+      <div class="col-md-2"><label class="form-label required">Cantidad</label>
+        <input class="form-control" type="number" min="0.000001" step="any"
+               name="item_quantity" required></div>
+      <div class="col-md-3"><label class="form-label">Notas</label>
+        <input class="form-control" name="item_notes"></div>
+      <div class="col-md-1"><button class="btn btn-outline-danger remove-rfq-item"
+        type="button" aria-label="Eliminar referencia">×</button></div>
+    </div>
+  </template>
+  </div>
+  <div class="card-footer"><button class="btn btn-primary">Guardar borrador</button></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static',filename='js/rfq-form.js') }}"></script>
+{% endblock %}

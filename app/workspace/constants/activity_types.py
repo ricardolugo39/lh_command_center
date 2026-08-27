@@ -8,6 +8,12 @@ class ActivityType:
     PROJECT_UPDATED = "project_updated"
     OPPORTUNITY_CLOSED = "opportunity_closed"
     CANCELLED = "cancelled"
+    APPROVAL_CREATED = "commercial_approval_created"
+    APPROVAL_SUBMITTED = "commercial_approval_submitted"
+    APPROVAL_APPROVED = "commercial_approval_approved"
+    APPROVAL_RETURNED = "commercial_approval_returned"
+    APPROVAL_REJECTED = "commercial_approval_rejected"
+    APPROVAL_CANCELLED = "commercial_approval_cancelled"
 
     CALL = "call"
     VISIT = "visit"
@@ -24,6 +30,12 @@ class ActivityType:
         FOLLOWUP_RESCHEDULED: "Follow-up reprogramado",
         OPPORTUNITY_CLOSED: "Oportunidad cerrada",
         CANCELLED: "Cancelada",
+        APPROVAL_CREATED: "Solicitud comercial creada",
+        APPROVAL_SUBMITTED: "Aprobación comercial enviada",
+        APPROVAL_APPROVED: "Descuento comercial aprobado",
+        APPROVAL_RETURNED: "Aprobación comercial devuelta",
+        APPROVAL_REJECTED: "Aprobación comercial rechazada",
+        APPROVAL_CANCELLED: "Solicitud de aprobación cancelada",
         CALL: "Llamada",
         VISIT: "Visita",
         MEETING: "Reunión",
@@ -37,6 +49,11 @@ class ActivityType:
         MEETING,
         EMAIL,
         NOTE,
+    }
+
+    COMMERCIAL_APPROVAL_TYPES = {
+        APPROVAL_CREATED, APPROVAL_SUBMITTED, APPROVAL_APPROVED,
+        APPROVAL_RETURNED, APPROVAL_REJECTED, APPROVAL_CANCELLED,
     }
 
     @classmethod

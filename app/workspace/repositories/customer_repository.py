@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class CustomerRepository:
@@ -18,7 +18,7 @@ class CustomerRepository:
         VALUES (?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -26,7 +26,6 @@ class CustomerRepository:
                     erp_customer_id.strip() if erp_customer_id else None,
                 ),
             )
-            conn.commit()
 
             return int(cursor.lastrowid)
 
@@ -43,7 +42,7 @@ class CustomerRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(sql, (customer_id,))
             row = cursor.fetchone()
 
@@ -66,7 +65,7 @@ class CustomerRepository:
         ORDER BY name
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(sql)
             rows = cursor.fetchall()
             columns = [column[0] for column in cursor.description]
@@ -91,7 +90,7 @@ class CustomerRepository:
         WHERE erp_customer_id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (erp_customer_id.strip(),),

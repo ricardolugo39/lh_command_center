@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Integraciones · Commercial Command Center{% endblock %}
+{% block page_title %}Integraciones{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <p class="text-secondary mb-0">
+    Estado operativo de las fuentes que conectan el trabajo comercial.
+  </p>
+</div>
+<div class="row row-cards">
+  <div class="col-xl-6">
+    <section class="card h-100">
+      <div class="card-header">
+        <div class="d-flex align-items-center justify-content-between w-100 gap-3">
+          <div><div class="text-secondary small">ERP</div>
+            <h2 class="card-title mb-0">Clientes y ventas</h2></div>
+          <span class="badge bg-green-lt">Disponible</span>
+        </div>
+      </div>
+      <div class="card-body">
+        {% set latest = page.erp.latest %}
+        <dl class="row mb-3">
+          <dt class="col-5">Última ejecución</dt>
+          <dd class="col-7">{{ latest.started_at if latest else 'Sin ejecuciones' }}</dd>
+          <dt class="col-5">Resultado</dt>
+          <dd class="col-7">{{ latest.status if latest else 'Pendiente' }}</dd>
+          <dt class="col-5">Registros procesados</dt>
+          <dd class="col-7">{{ latest.rows_read if latest else 0 }}</dd>
+        </dl>
+        {% if latest and latest.warnings %}
+        <div class="alert alert-warning py-2">
+          {{ latest.warnings|length }} advertencia(s) en la última ejecución.
+        </div>
+        {% endif %}
+        {% if latest and latest.errors %}
+        <div class="alert alert-danger py-2">
+          {{ latest.errors|length }} error(es) en la última ejecución.
+        </div>
+        {% endif %}
+        <div class="text-secondary small">
+          Actualice ventas, sincronice clientes y consulte el historial auditable.
+        </div>
+      </div>
+      <div class="card-footer bg-transparent">
+        <a class="btn btn-primary" href="{{ url_for('imports.index') }}">
+          Abrir importaciones ERP
+        </a>
+        {% if latest %}
+        <a class="btn" href="{{ url_for('imports.detail', execution_id=latest.id) }}">
+          Ver último resultado
+        </a>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+  <div class="col-xl-6">
+    {% set google = page.google_visits %}
+    <section class="card h-100">
+      <div class="card-header">
+        <div class="d-flex align-items-center justify-content-between w-100 gap-3">
+          <div><div class="text-secondary small">Google AppSheet / Google Sheets</div>
+            <h2 class="card-title mb-0">Visitas comerciales</h2></div>
+          {% if google.ready %}
+          <span class="badge bg-green-lt">Configurada</span>
+          {% elif google.configured %}
+          <span class="badge bg-yellow-lt">Requiere credenciales</span>
+          {% else %}
+          <span class="badge bg-yellow-lt">Pendiente de configuración</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-3">
+          <dt class="col-5">Última sincronización</dt>
+          <dd class="col-7">{{ google.latest_sync.completed_at if google.latest_sync else 'Sin sincronizaciones' }}</dd>
+          <dt class="col-5">Último resultado</dt>
+          <dd class="col-7">{{ google.latest_sync.status if google.latest_sync else 'Pendiente' }}</dd>
+          <dt class="col-5">Visitas importadas</dt>
+          <dd class="col-7">{{ google.metrics.imported_visits or 0 }}</dd>
+          <dt class="col-5">Alertas de calidad</dt>
+          <dd class="col-7">{{ (google.metrics.unmatched or 0) + (google.metrics.possible_duplicates or 0) + (google.metrics.warning_records or 0) }}</dd>
+        </dl>
+        {% if not google.configured %}
+        <div class="alert alert-info py-2 mb-0">
+          La integración está disponible. Configure las variables de Google para
+          habilitar la sincronización manual.
+        </div>
+        {% elif google.configuration_error %}
+        <div class="alert alert-warning py-2 mb-0">{{ google.configuration_error }}</div>
+        {% elif google.latest_sync and google.latest_sync.error_count %}
+        <div class="alert alert-warning py-2 mb-0">
+          La última sincronización registró {{ google.latest_sync.error_count }} error(es).
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent">
+        <a class="btn btn-primary" href="{{ url_for('workspace.visit_integration') }}">
+          Abrir integración de visitas
+        </a>
+        <a class="btn" href="{{ url_for('workspace.visit_data_quality') }}">
+          Calidad de datos
+        </a>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

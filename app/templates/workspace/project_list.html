@@ -1,29 +1,260 @@
 {% extends "base.html" %}
 
+{% macro pipeline_url(status='', attention='') -%}
+{{ url_for('workspace.project_list', status=status,
+    include_closed=page.filters.include_closed, origin=page.filters.origin,
+    sales_rep=page.filters.sales_rep, office=page.filters.office,
+    health=page.filters.health, customer_name=page.filters.customer_name,
+    attention=attention) }}
+{%- endmacro %}
+
 {% block title %}
-    Proyectos · Commercial Command Center
+    Pipeline · Commercial Command Center
 {% endblock %}
 
 {% block page_title %}
-    Proyectos
+    Pipeline de oportunidades
+{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/opportunity-pipeline.css') }}">
 {% endblock %}
 
 {% block page_actions %}
 
-<div class="col-auto ms-auto">
+<div class="col-auto ms-auto d-flex gap-2">
+    <a href="{{ url_for('workspace.project_list_export',
+        status=page.filters.status, include_closed=page.filters.include_closed,
+        origin=page.filters.origin, sales_rep=page.filters.sales_rep,
+        office=page.filters.office, health=page.filters.health,
+        customer_name=page.filters.customer_name,
+        attention=page.filters.attention) }}"
+       class="btn btn-outline-primary">
+        Exportar Excel
+    </a>
     <a
         href="{{ url_for('workspace.new_project') }}"
         class="btn btn-primary"
     >
-        Nuevo proyecto
+        Nueva oportunidad
     </a>
 </div>
 
 {% endblock %}
 
 {% block content %}
+{% set attention = page.attention|default({'without_next_action': 0, 'overdue': 0, 'at_risk': 0}) %}
 
-<div class="card">
+<section class="opportunity-funnel mb-3" aria-label="Embudo de oportunidades">
+    <div class="opportunity-funnel-heading">
+        <div>
+            <h3>Embudo comercial</h3>
+            <p>Oportunidades activas del alcance seleccionado.</p>
+        </div>
+        {% if page.filters.status %}
+        <a href="{{ pipeline_url() }}">Ver embudo completo</a>
+        {% endif %}
+    </div>
+    <div class="opportunity-funnel-stages">
+        {% for stage in page.pipeline %}
+        <a class="opportunity-funnel-stage opportunity-funnel-stage-{{ loop.index }} {% if page.filters.status == stage.status %}is-active{% endif %}"
+           href="{{ pipeline_url(stage.status) }}">
+            <span>{{ stage.label }}</span>
+            <strong>{{ stage.count }}</strong>
+            <small>{{ stage.value_display }}</small>
+        </a>
+        {% endfor %}
+    </div>
+    <div class="opportunity-attention" aria-label="Revisión del equipo">
+        <a href="{{ pipeline_url(attention='without_next_action') }}#opportunity-list" {% if page.filters.attention == 'without_next_action' %}class="is-active"{% endif %}>
+            <strong>{{ attention.without_next_action }}</strong>
+            <span>sin próxima acción</span>
+        </a>
+        <a href="{{ pipeline_url(attention='overdue') }}#opportunity-list" {% if page.filters.attention == 'overdue' %}class="is-active"{% endif %}>
+            <strong>{{ attention.overdue }}</strong>
+            <span>acciones vencidas</span>
+        </a>
+        <a href="{{ pipeline_url(attention='at_risk') }}#opportunity-list" {% if page.filters.attention == 'at_risk' %}class="is-active"{% endif %}>
+            <strong>{{ attention.at_risk }}</strong>
+            <span>en riesgo</span>
+        </a>
+    </div>
+</section>
+
+{% if request.args.get('bulk_updated') %}
+<div class="alert alert-success">
+    {{ request.args.get('bulk_updated') }} oportunidades procesadas ·
+    {{ request.args.get('statuses_updated', 0) }} etapas actualizadas ·
+    {{ request.args.get('followups_created', 0) }} próximas acciones creadas.
+</div>
+{% endif %}
+
+<form
+    method="get"
+    id="opportunity-filters"
+    class="card card-body mb-3"
+>
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-3">
+            <label for="filter-status" class="form-label">
+                Estado
+            </label>
+            <select
+                id="filter-status"
+                name="status"
+                class="form-select"
+                data-auto-submit
+            >
+                <option value="">Todos los estados</option>
+                {% for option in page.filter_options.statuses %}
+                <option
+                    value="{{ option.value }}"
+                    {% if page.filters.status == option.value %}selected{% endif %}
+                >
+                    {{ option.label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="include_closed"
+                       value="1" data-auto-submit
+                       {% if page.filters.include_closed %}checked{% endif %}>
+                <span class="form-check-label">Mostrar ganadas, perdidas y canceladas</span>
+            </label>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="filter-origin" class="form-label">
+                Creada desde
+            </label>
+            <select
+                id="filter-origin"
+                name="origin"
+                class="form-select"
+                data-auto-submit
+            >
+                <option value="">Todas</option>
+                {% for option in page.filter_options.origins %}
+                <option
+                    value="{{ option.value }}"
+                    {% if page.filters.origin == option.value %}selected{% endif %}
+                >
+                    {{ option.label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="filter-sales-rep" class="form-label">
+                Vendedor
+            </label>
+            <select
+                id="filter-sales-rep"
+                name="sales_rep"
+                class="form-select"
+                data-auto-submit
+            >
+                <option value="">Todos los vendedores</option>
+                {% for sales_rep in page.filter_options.sales_representatives %}
+                <option
+                    value="{{ sales_rep }}"
+                    {% if page.filters.sales_rep == sales_rep %}selected{% endif %}
+                >
+                    {{ sales_rep }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="filter-office" class="form-label">Sede</label>
+            <select id="filter-office" name="office" class="form-select" data-auto-submit>
+                <option value="">Todas las sedes</option>
+                {% for office in page.filter_options.offices %}
+                <option value="{{ office }}" {% if page.filters.office == office %}selected{% endif %}>{{ office }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="filter-health" class="form-label">
+                Salud
+            </label>
+            <select
+                id="filter-health"
+                name="health"
+                class="form-select"
+                data-auto-submit
+            >
+                <option value="">Todas las condiciones</option>
+                {% for option in page.filter_options.health %}
+                <option
+                    value="{{ option.value }}"
+                    {% if page.filters.health == option.value %}selected{% endif %}
+                >
+                    {{ option.label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="filter-customer" class="form-label">
+                Cliente
+            </label>
+            <input
+                id="filter-customer"
+                name="customer_name"
+                type="search"
+                class="form-control"
+                value="{{ page.filters.customer_name }}"
+                placeholder="Buscar cliente..."
+                autocomplete="off"
+            >
+        </div>
+
+        {% if page.has_active_filters %}
+        <div class="col-12 d-flex justify-content-end">
+            <a
+                href="{{ url_for('workspace.project_list') }}"
+                class="btn btn-outline-secondary"
+            >
+                Limpiar filtros
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</form>
+
+<form method="post" action="{{ url_for('workspace.project_bulk_update') }}" id="bulk-opportunity-form">
+{% for key in ['status','include_closed','origin','sales_rep','office','health','customer_name','attention'] %}
+<input type="hidden" name="{{ key }}" value="{{ page.filters[key] }}">
+{% endfor %}
+<div class="opportunity-bulk-bar" aria-label="Actualización masiva">
+    <div class="opportunity-selection"><strong id="checked-opportunity-count">0</strong> seleccionadas</div>
+    <label>Etapa
+        <select name="new_status" class="form-select form-select-sm">
+            <option value="">No cambiar</option>
+            {% for option in page.filter_options.statuses[:4] %}
+            <option value="{{ option.value }}">{{ option.label }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Próxima acción
+        <input type="date" name="followup_date" class="form-control form-control-sm">
+    </label>
+    <label>Solicitud al asesor
+        <input type="text" name="followup_description" class="form-control form-control-sm"
+               value="Actualizar avance de la oportunidad">
+    </label>
+    <button class="btn btn-primary btn-sm" id="bulk-update-button" disabled>Aplicar</button>
+</div>
+
+<div class="card" id="opportunity-list">
 
     <div class="table-responsive">
 
@@ -31,25 +262,24 @@
 
             <thead>
                 <tr>
+                    <th class="opportunity-check"><input type="checkbox" id="select-all-opportunities" aria-label="Seleccionar todas las oportunidades visibles"></th>
+                    <th>Oportunidad</th>
                     <th>Cliente</th>
-                    <th>Proyecto</th>
+                    <th>Vendedor</th>
+                    <th>Fecha CRM</th>
                     <th>Valor comercial</th>
-                    <th>Valor en COP</th>
                     <th>Estado</th>
+                    <th>Salud</th>
                     <th>Bloqueo actual</th>
-                    <th>Actualizado</th>
                 </tr>
             </thead>
 
             <tbody>
 
-                {% for project in projects %}
+                {% for project in page.opportunities %}
                 <tr>
-
-                    <td>
-                        <div class="fw-bold">
-                            {{ project.customer_name }}
-                        </div>
+                    <td class="opportunity-check">
+                        <input type="checkbox" name="project_ids" value="{{ project.id }}" class="opportunity-row-check" aria-label="Seleccionar {{ project.name }}">
                     </td>
 
                     <td>
@@ -62,60 +292,46 @@
                         >
                             {{ project.name }}
                         </a>
+                        <div class="text-secondary small">
+                            {{ project.origin_label }}{% if project.origin_reference %} · {{ project.origin_reference }}{% endif %}
+                        </div>
                     </td>
 
                     <td>
-                        {% if project.quote %}
+                        <div class="fw-bold">{{ project.customer_name }}</div>
+                    </td>
 
-                            <div class="fw-bold">
-                                {{ project.quote.display_amount }}
-                            </div>
+                    <td>
+                        <div class="fw-medium">{{ project.sales_rep or "Sin asignar" }}</div>
+                        <div class="text-secondary small">{{ project.office or "Sede sin resolver" }}</div>
+                    </td>
 
-                            <div class="text-secondary small">
-                                {{ project.quote.display_quote_number }}
-                            </div>
-
-                        {% else %}
-
-                            <span class="text-secondary">
-                                Sin cotización
-                            </span>
-
+                    <td>
+                        <div>{{ project.source_date_label }}</div>
+                        {% if project.crm_close_date %}
+                        <div class="text-secondary small">Cierre previsto {{ project.crm_close_date }}</div>
+                        {% elif project.origin != 'crm' %}
+                        <div class="text-secondary small">Fecha de creación</div>
                         {% endif %}
                     </td>
 
                     <td>
-                        {% if project.quote %}
-
-                            <div class="fw-bold">
-                                {{
-                                    project.quote
-                                    .display_normalized_amount
-                                }}
-                            </div>
-
-                            {% if (
-                                project.quote.currency_code
-                                == "USD"
-                            ) %}
-                            <div class="text-secondary small">
-                                Tasa
-                                {{
-                                    project.quote
-                                    .exchange_rate_type_label
-                                    | lower
-                                }}
-                            </div>
-                            {% endif %}
-
-                        {% else %}
-                            —
-                        {% endif %}
+                        <div class="fw-bold">{{ project.commercial_value.display }}</div>
+                        <div class="text-secondary small">{{ project.commercial_value.detail }}</div>
                     </td>
 
                     <td>
                         <span class="badge bg-blue-lt">
-                            {{ project.status }}
+                            {{ project.status_label }}
+                        </span>
+                        {% if project.origin == 'crm' and project.crm_stage %}
+                        <div class="text-secondary small mt-1">CRM: {{ project.crm_stage }}</div>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <span class="badge bg-{{ project.health.badge }}-lt">
+                            {{ project.health.label }}
                         </span>
                     </td>
 
@@ -126,20 +342,20 @@
                         }}
                     </td>
 
-                    <td class="text-secondary">
-                        {{ project.updated_at }}
-                    </td>
-
                 </tr>
 
                 {% else %}
 
                 <tr>
                     <td
-                        colspan="7"
+                        colspan="9"
                         class="text-center text-secondary py-5"
                     >
-                        No hay proyectos.
+                        {% if page.has_active_filters %}
+                            No hay oportunidades que coincidan con los filtros seleccionados.
+                        {% else %}
+                            No hay oportunidades.
+                        {% endif %}
                     </td>
                 </tr>
 
@@ -152,5 +368,44 @@
     </div>
 
 </div>
+</form>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("opportunity-filters");
+    const customerInput = document.getElementById("filter-customer");
+    let searchTimer;
+
+    form.querySelectorAll("[data-auto-submit]").forEach((field) => {
+        field.addEventListener("change", () => form.requestSubmit());
+    });
+
+    customerInput.addEventListener("input", () => {
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(() => form.requestSubmit(), 350);
+    });
+
+    const selectAll = document.getElementById("select-all-opportunities");
+    const rowChecks = Array.from(document.querySelectorAll(".opportunity-row-check"));
+    const checkedCount = document.getElementById("checked-opportunity-count");
+    const bulkButton = document.getElementById("bulk-update-button");
+    const bulkStatus = document.querySelector('[name="new_status"]');
+    const bulkDate = document.querySelector('[name="followup_date"]');
+    const updateSelection = () => {
+        const count = rowChecks.filter((item) => item.checked).length;
+        checkedCount.textContent = count;
+        bulkButton.disabled = count === 0 || (!bulkStatus.value && !bulkDate.value);
+        selectAll.checked = count > 0 && count === rowChecks.length;
+        selectAll.indeterminate = count > 0 && count < rowChecks.length;
+    };
+    selectAll.addEventListener("change", () => {
+        rowChecks.forEach((item) => { item.checked = selectAll.checked; });
+        updateSelection();
+    });
+    rowChecks.forEach((item) => item.addEventListener("change", updateSelection));
+    bulkStatus.addEventListener("change", updateSelection);
+    bulkDate.addEventListener("change", updateSelection);
+});
+</script>
 
 {% endblock %}

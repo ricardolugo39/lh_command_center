@@ -1,9 +1,27 @@
 from typing import Any
 
-from app.database.connection import get_connection
+from app.database.transaction import connection_scope
 
 
 class AgreementRepository:
+    @staticmethod
+    def get_active_for_customer(customer_id: int) -> dict[str, Any] | None:
+        with connection_scope() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM ws_agreements
+                WHERE customer_id = ? AND status = 'active'
+                ORDER BY updated_at DESC LIMIT 1
+            """, (customer_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    @staticmethod
+    def expire(agreement_id: int) -> None:
+        with connection_scope() as conn:
+            conn.execute("""
+                UPDATE ws_agreements SET status = 'expired',
+                    updated_at = CURRENT_TIMESTAMP WHERE id = ?
+            """, (agreement_id,))
 
     @staticmethod
     def create_agreement(
@@ -41,7 +59,7 @@ class AgreementRepository:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -68,8 +86,6 @@ class AgreementRepository:
                     else None,
                 ),
             )
-
-            conn.commit()
             return int(cursor.lastrowid)
 
     @staticmethod
@@ -98,7 +114,7 @@ class AgreementRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (agreement_id,),
@@ -151,7 +167,7 @@ class AgreementRepository:
             updated_at DESC
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (customer_id,),
@@ -204,7 +220,7 @@ class AgreementRepository:
         WHERE id = ?
         """
 
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 sql,
                 (
@@ -237,13 +253,11 @@ class AgreementRepository:
                     "El convenio no existe."
                 )
 
-            conn.commit()
-
     @staticmethod
     def delete_agreement(
         agreement_id: int,
     ) -> None:
-        with get_connection() as conn:
+        with connection_scope() as conn:
             cursor = conn.execute(
                 """
                 DELETE FROM ws_agreements
@@ -256,5 +270,3 @@ class AgreementRepository:
                 raise ValueError(
                     "El convenio no existe."
                 )
-
-            conn.commit()
