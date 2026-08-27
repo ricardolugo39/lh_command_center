@@ -11,6 +11,8 @@ database/*.db-shm
 database/*.db-wal
 data/*.db
 *.xlsx
+.railway-transfer-key
+.railway-transfer-key.pub
 uploads/
 outputs/
 output/
