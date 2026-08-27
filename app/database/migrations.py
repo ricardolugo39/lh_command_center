@@ -3230,6 +3230,33 @@ def _migration_0047_executive_viewer_users(connection: Connection) -> None:
         )
 
 
+def _migration_0048_rocio_rocha_management_access(connection: Connection) -> None:
+    """Authorize Rocío Rocha as active management with global scope."""
+    email = "rocio.rocha@lugohermanos.com"
+    existing = connection.execute(
+        """SELECT id FROM ws_users
+        WHERE email_normalized=LOWER(TRIM(?))
+           OR LOWER(TRIM(email))=LOWER(TRIM(?))""",
+        (email, email),
+    ).fetchone()
+    if existing:
+        connection.execute(
+            """UPDATE ws_users
+            SET display_name=?, email=?, email_normalized=LOWER(TRIM(?)),
+                role='commercial_management', is_active=1,
+                portfolio_scope='all', updated_at=CURRENT_TIMESTAMP
+            WHERE id=?""",
+            ("Rocío Rocha", email, email, existing["id"]),
+        )
+        return
+    connection.execute(
+        """INSERT INTO ws_users (
+            display_name,email,email_normalized,role,is_active,portfolio_scope
+        ) VALUES (?, ?, LOWER(TRIM(?)), 'commercial_management', 1, 'all')""",
+        ("Rocío Rocha", email, email),
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3339,6 +3366,10 @@ MIGRATION_MANIFEST = (
     Migration(
         47, "executive_viewer_users",
         _migration_0047_executive_viewer_users,
+    ),
+    Migration(
+        48, "rocio_rocha_management_access",
+        _migration_0048_rocio_rocha_management_access,
     ),
 )
 

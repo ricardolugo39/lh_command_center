@@ -129,7 +129,8 @@ def test_fresh_installation_creates_complete_schema(migration_database):
             FROM ws_users
             WHERE email_normalized IN (
                 'gerencia@lugohermanos.com',
-                'nicolas.lugo@lugohermanos.com'
+                'nicolas.lugo@lugohermanos.com',
+                'rocio.rocha@lugohermanos.com'
             ) ORDER BY email_normalized"""
         ).fetchall()
 
@@ -138,6 +139,7 @@ def test_fresh_installation_creates_complete_schema(migration_database):
     assert [tuple(row) for row in executive_users] == [
         ("gerencia@lugohermanos.com", "commercial_management", "all"),
         ("nicolas.lugo@lugohermanos.com", "read_only", "all"),
+        ("rocio.rocha@lugohermanos.com", "commercial_management", "all"),
     ]
     assert "ws_customer_portfolio_metadata" in tables
     assert {
