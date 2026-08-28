@@ -262,8 +262,12 @@ def save_purchase_decision(snapshot_id: int):
         return redirect(url_for(
             "stock_planning.product_analysis", snapshot_id=snapshot_id,
             sku=sku, branch=branch, message=message,
+            _anchor="purchase-decision",
         ))
-    return redirect(url_for("stock_planning.snapshot", snapshot_id=snapshot_id, message=message))
+    return redirect(url_for(
+        "stock_planning.snapshot", snapshot_id=snapshot_id, message=message,
+        _anchor="purchase-decisions",
+    ))
 
 
 @stock_planning_bp.post("/snapshots/<int:snapshot_id>/transfer-decisions")
@@ -279,7 +283,10 @@ def save_transfer_decision(snapshot_id: int):
         message = "Decisión de traslado guardada."
     except (TypeError, ValueError) as exception:
         message = str(exception)
-    return redirect(url_for("stock_planning.snapshot", snapshot_id=snapshot_id, message=message))
+    return redirect(url_for(
+        "stock_planning.snapshot", snapshot_id=snapshot_id, message=message,
+        _anchor="transfer-decisions",
+    ))
 
 
 @stock_planning_bp.post("/snapshots/<int:snapshot_id>/transfer-decisions/approve-all")
@@ -291,6 +298,7 @@ def approve_all_transfers(snapshot_id: int):
     return redirect(url_for(
         "stock_planning.snapshot", snapshot_id=snapshot_id,
         message=f"{count} traslado(s) aprobados.",
+        _anchor="transfer-decisions",
     ))
 
 

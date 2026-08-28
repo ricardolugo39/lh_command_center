@@ -389,6 +389,44 @@ def test_purchase_and_transfer_decisions_preserve_suggestion(stock_database, mon
     assert history == 2
 
 
+def test_decision_redirects_return_to_the_edited_section(stock_database, monkeypatch):
+    profile_id = _configure()
+    snapshot = StockPlanningFoundationService.create_snapshot(
+        profile_id=profile_id, as_of_date="2025-07-15", created_by="tester",
+        assumptions={"manufacturing_days": 30, "international_shipping_days": 30,
+                     "receiving_days": 5, "cali_transfer_days": 3,
+                     "coverage_months": 6},
+    )
+    forecast = {
+        "rows": [{**_forecast_row("BLOCK-25", "1", 10),
+                  "requires_review": True}],
+        "transfers": [{"sku": "BLOCK-30", "from_branch": "50",
+                       "to_branch": "1", "quantity": 4, "avoided_purchase": 4}],
+    }
+    monkeypatch.setattr(StockForecastEngine, "analyze", lambda _: forecast)
+    application = create_app({"TESTING": True, "TEST_AUTH_BYPASS": True})
+    client = application.test_client()
+
+    purchase = client.post(
+        f"/stock-planning/snapshots/{snapshot.snapshot_id}/purchase-decisions",
+        data={"sku": "BLOCK-25", "branch": "1", "quantity": "8"},
+    )
+    product = client.post(
+        f"/stock-planning/snapshots/{snapshot.snapshot_id}/purchase-decisions",
+        data={"sku": "BLOCK-25", "branch": "1", "quantity": "8",
+              "return_to": "product"},
+    )
+    transfer = client.post(
+        f"/stock-planning/snapshots/{snapshot.snapshot_id}/transfer-decisions",
+        data={"sku": "BLOCK-30", "from_branch": "50", "to_branch": "1",
+              "quantity": "3"},
+    )
+
+    assert purchase.location.endswith("#purchase-decisions")
+    assert product.location.endswith("#purchase-decision")
+    assert transfer.location.endswith("#transfer-decisions")
+
+
 def test_excel_exports_include_branch_and_approved_quantities(monkeypatch):
     from openpyxl import load_workbook
 
