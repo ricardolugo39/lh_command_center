@@ -274,6 +274,7 @@ def test_transfer_uses_only_donor_surplus_before_buying():
     assert transfers == [{
         "sku": "BLOCK-25", "from_branch": "1", "to_branch": "50",
         "quantity": 10, "avoided_purchase": 10,
+        "bogota_inventory": 20.0, "cali_inventory": 0.0,
     }]
     assert cali["recommended_order"] == 0
     assert bogota["transfer_out"] == 10

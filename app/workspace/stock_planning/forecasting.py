@@ -14,7 +14,7 @@ from app.database.transaction import transaction
 class StockForecastEngine:
     """Auditable per-SKU/branch demand and review engine."""
 
-    VERSION = "stock-demand-v3-vendor-length-policies"
+    VERSION = "stock-demand-v4-transfer-inventory"
 
     @classmethod
     def analyze(cls, snapshot_id: int) -> dict[str, Any]:
@@ -227,6 +227,8 @@ class StockForecastEngine:
                     "sku": sku, "from_branch": source_code,
                     "to_branch": destination_code, "quantity": quantity,
                     "avoided_purchase": quantity,
+                    "bogota_inventory": float(branches["1"]["usable"]),
+                    "cali_inventory": float(branches["50"]["usable"]),
                 })
         return transfers
 
