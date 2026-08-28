@@ -57,6 +57,16 @@ def _configure():
     return profile_id
 
 
+def test_thomson_profile_is_enabled_with_erp_aliases(stock_database):
+    with sqlite3.connect(stock_database) as connection:
+        profile = connection.execute(
+            """SELECT vendor_name,inventory_brand_codes_json,sales_suffixes_json
+            FROM stock_planning_vendor_profiles WHERE profile_code='Thomson'"""
+        ).fetchone()
+
+    assert profile == ("Thomson", '["THO"]', '["THO"]')
+
+
 def test_snapshot_unites_catalog_sales_inventory_and_branches(stock_database):
     profile_id = _configure()
     snapshot = StockPlanningFoundationService.create_snapshot(
@@ -218,7 +228,7 @@ def test_administration_ui_configures_and_reviews_snapshot(stock_database):
 
     with sqlite3.connect(stock_database) as connection:
         profile_id = connection.execute(
-            "SELECT id FROM stock_planning_vendor_profiles"
+            "SELECT id FROM stock_planning_vendor_profiles WHERE profile_code='VENDOR_X'"
         ).fetchone()[0]
     client.post("/stock-planning/branches", data={
         "profile_id": profile_id, "branch_code": "1",
@@ -292,6 +302,51 @@ def test_rails_and_ball_screws_consolidate_into_three_meter_bars():
     assert len(evidence) == 2
     assert by_sku_branch[("HSR 25-1000LTHK", "1")]["recommended_order"] == 0
     assert by_sku_branch[("TS 2510+2000LTHK", "50")]["recommended_order"] == 0
+
+
+def test_thomson_standard_lengths_remain_independent():
+    rows = [
+        _forecast_row("W 20 H6/1000THO", "1", 3),
+        _forecast_row("W 20 H6/2000THO", "1", 2),
+        _forecast_row("W 20 H6/3000THO", "1", 1),
+    ]
+
+    transformed, evidence = StockForecastEngine._apply_length_transformations(
+        rows, "Thomson"
+    )
+
+    assert [row["recommended_order"] for row in transformed] == [3, 2, 1]
+    assert evidence == []
+
+
+def test_thomson_special_lengths_use_best_available_standard_bar_mix():
+    rows = [
+        _forecast_row("W 40 H6/1000THO", "50", 0),
+        _forecast_row("W 40 H6/2000THO", "50", 0),
+        _forecast_row("W 40 H6/3000THO", "50", 0),
+        _forecast_row("W 40 H6/1255THO", "50", 2),
+    ]
+
+    transformed, evidence = StockForecastEngine._apply_length_transformations(
+        rows, "thomson"
+    )
+    by_sku = {row["sku"]: row for row in transformed}
+
+    assert by_sku["W 40 H6/1255THO"]["recommended_order"] == 0
+    assert by_sku["W 40 H6/3000THO"]["recommended_order"] == 1
+    assert by_sku["W 40 H6/3000THO"]["special_cut_bars"] == 1
+    assert evidence[0]["required_mm"] == 2510
+    assert evidence[0]["waste_mm"] == 490
+
+
+def test_thomson_four_meter_shaft_requires_review():
+    row = _forecast_row("W 20 H6/4000THO", "1", 1)
+
+    StockForecastEngine._apply_length_transformations([row], "thomson")
+
+    assert row["recommended_order"] == 1
+    assert row["requires_review"] is True
+    assert "Eje Thomson de 4 metros" in row["review_reasons"]
 
 
 def test_purchase_and_transfer_decisions_preserve_suggestion(stock_database, monkeypatch):

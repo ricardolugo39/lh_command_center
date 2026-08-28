@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 import json
 import math
@@ -14,7 +14,7 @@ from app.database.transaction import transaction
 class StockForecastEngine:
     """Auditable per-SKU/branch demand and review engine."""
 
-    VERSION = "stock-demand-v2-transfers-length"
+    VERSION = "stock-demand-v3-vendor-length-policies"
 
     @classmethod
     def analyze(cls, snapshot_id: int) -> dict[str, Any]:
@@ -102,7 +102,9 @@ class StockForecastEngine:
                 "requires_review": bool(reasons),
             })
         transfers = cls._apply_transfers(results)
-        results, transformations = cls._apply_length_transformations(results)
+        results, transformations = cls._apply_length_transformations(
+            results, profile["profile_code"]
+        )
         packaged = cls._package(results, transfers, transformations)
         with transaction(write=True) as connection:
             connection.execute(
@@ -229,7 +231,9 @@ class StockForecastEngine:
         return transfers
 
     @classmethod
-    def _apply_length_transformations(cls, rows):
+    def _apply_length_transformations(cls, rows, profile_code="thk"):
+        if str(profile_code).casefold() == "thomson":
+            return cls._apply_thomson_shaft_policy(rows)
         groups = defaultdict(list)
         for row in rows:
             parsed = cls._length_identity(row["sku"])
@@ -271,6 +275,7 @@ class StockForecastEngine:
             purchase_row["recommended_order"] = bars
             purchase_row["target_stock"] = bars
             purchase_row["length_transformation"] = True
+            purchase_row["purchase_length_mm"] = 3000
             purchase_row["length_family"] = family
             purchase_row["required_length_mm"] = required_mm
             purchase_row["component_demand"] = component_detail
@@ -282,6 +287,147 @@ class StockForecastEngine:
                 "bars": bars, "components": component_detail,
             })
         return rows, transformations
+
+    @classmethod
+    def _apply_thomson_shaft_policy(cls, rows):
+        """Keep standard shafts as sold and cover special cuts with 1/2/3 m stock."""
+        groups = defaultdict(list)
+        standard_rows = {}
+        transformations = []
+        for row in rows:
+            parsed = cls._thomson_shaft_identity(row["sku"])
+            if not parsed:
+                continue
+            family, length = parsed
+            key = (family, row["branch"])
+            if length in (1000, 2000, 3000):
+                standard_rows[(key, length)] = row
+            elif length == 4000:
+                if row["recommended_order"] > 0:
+                    row["review_reasons"] = list(dict.fromkeys(
+                        [*row["review_reasons"], "Eje Thomson de 4 metros"]
+                    ))
+                    row["requires_review"] = True
+            elif 0 < length <= 3000 and row["recommended_order"] > 0:
+                groups[key].extend([length] * int(row["recommended_order"]))
+
+        for key, pieces in groups.items():
+            family, branch = key
+            allowed_lengths = tuple(
+                length for length in (1000, 2000, 3000)
+                if (key, length) in standard_rows
+            )
+            if not allowed_lengths or max(allowed_lengths, default=0) < max(pieces):
+                for row in rows:
+                    parsed = cls._thomson_shaft_identity(row["sku"])
+                    if parsed and (parsed[0], row["branch"]) == key \
+                            and parsed[1] not in (1000, 2000, 3000, 4000) \
+                            and row["recommended_order"] > 0:
+                        row["review_reasons"] = list(dict.fromkeys([
+                            *row["review_reasons"],
+                            "No existe un eje estándar suficientemente largo para el corte",
+                        ]))
+                        row["requires_review"] = True
+                continue
+            bars = cls._best_bar_mix(pieces, allowed_lengths)
+            component_rows = []
+            for row in rows:
+                parsed = cls._thomson_shaft_identity(row["sku"])
+                if not parsed or (parsed[0], row["branch"]) != key:
+                    continue
+                length = parsed[1]
+                units = int(row["recommended_order"])
+                if length not in (1000, 2000, 3000, 4000) and units > 0:
+                    component_rows.append({
+                        "sku": row["sku"], "units": units,
+                        "length_mm": length, "required_mm": units * length,
+                    })
+                    row["recommended_order"] = 0
+                    row["covered_by_standard_bars"] = True
+            purchased = []
+            for length, quantity in sorted(bars.items()):
+                if quantity <= 0:
+                    continue
+                purchase_row = standard_rows.get((key, length))
+                purchase_row["recommended_order"] += quantity
+                purchase_row["target_stock"] += quantity
+                purchase_row["special_cut_bars"] = (
+                    purchase_row.get("special_cut_bars", 0) + quantity
+                )
+                purchase_row["special_cut_demand"] = component_rows
+                purchase_row["purchase_length_mm"] = length
+                purchased.append({"sku": purchase_row["sku"], "length_mm": length,
+                                  "bars": quantity})
+            if purchased:
+                transformations.append({
+                    "type": "thomson_special_cuts", "family": family,
+                    "branch": branch, "required_mm": sum(pieces),
+                    "bars": purchased, "components": component_rows,
+                    "waste_mm": sum(x["length_mm"] * x["bars"] for x in purchased)
+                    - sum(pieces),
+                })
+        return rows, transformations
+
+    @staticmethod
+    def _thomson_shaft_identity(sku):
+        normalized = sku.upper().strip()
+        match = re.fullmatch(
+            r"(?P<family>W \d+ H6|WZ .+? L)/(?P<length>\d+)"
+            r"(?: ?MM)?(?P<variant>.*)THO",
+            normalized,
+        )
+        if not match or "MAQ" in match.group("variant"):
+            return None
+        material = "SS" if "SS" in match.group("variant") else "STD"
+        return f"{match.group('family')}|{material}", int(match.group("length"))
+
+    @staticmethod
+    def _best_bar_mix(pieces, allowed_lengths=(1000, 2000, 3000)):
+        """Exact small cutting-stock search; minimize purchased mm, then bar count."""
+        pieces = tuple(sorted((int(x) for x in pieces), reverse=True))
+        if not pieces:
+            return {}
+        if len(pieces) > 12:
+            # Defensive bound for anomalous forecasts; deterministic best-fit fallback.
+            bins = []
+            for piece in pieces:
+                target = min(length for length in allowed_lengths if length >= piece)
+                candidates = [
+                    (remaining - piece, i)
+                    for i, (_, remaining) in enumerate(bins)
+                    if remaining >= piece
+                ]
+                fit = min(candidates)[1] if candidates else None
+                if fit is None:
+                    bins.append((target, target - piece))
+                else:
+                    length, remaining = bins[fit]
+                    bins[fit] = (length, remaining - piece)
+            return dict(Counter(length for length, _ in bins))
+
+        best = None
+        def search(index, bins):
+            nonlocal best
+            if index == len(pieces):
+                score = (sum(length for length, _ in bins), len(bins))
+                if best is None or score < best[0]:
+                    best = (score, tuple(bins))
+                return
+            if best and sum(length for length, _ in bins) > best[0][0]:
+                return
+            piece = pieces[index]
+            seen = set()
+            for i, (length, remaining) in enumerate(bins):
+                if remaining >= piece and remaining not in seen:
+                    seen.add(remaining)
+                    updated = list(bins)
+                    updated[i] = (length, remaining - piece)
+                    search(index + 1, tuple(sorted(updated)))
+            for length in allowed_lengths:
+                if length >= piece:
+                    search(index + 1, tuple(sorted((*bins, (length, length - piece)))))
+        search(0, ())
+        return dict(Counter(length for length, _ in best[1]))
 
     @staticmethod
     def _length_identity(sku):

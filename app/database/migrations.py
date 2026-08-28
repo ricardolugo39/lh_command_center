@@ -3257,6 +3257,22 @@ def _migration_0048_rocio_rocha_management_access(connection: Connection) -> Non
     )
 
 
+def _migration_0049_enable_thomson_stock_planning(connection: Connection) -> None:
+    """Expose Thomson using the ERP aliases already present in sales/inventory."""
+    connection.execute(
+        """INSERT INTO stock_planning_vendor_profiles (
+            vendor_name,profile_code,inventory_brand_codes_json,
+            sales_suffixes_json,lead_time_day_basis,is_active
+        ) VALUES ('Thomson','Thomson','["THO"]','["THO"]','calendar',1)
+        ON CONFLICT(profile_code) DO UPDATE SET
+            vendor_name=excluded.vendor_name,
+            inventory_brand_codes_json=excluded.inventory_brand_codes_json,
+            sales_suffixes_json=excluded.sales_suffixes_json,
+            is_active=1,
+            updated_at=CURRENT_TIMESTAMP"""
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3370,6 +3386,10 @@ MIGRATION_MANIFEST = (
     Migration(
         48, "rocio_rocha_management_access",
         _migration_0048_rocio_rocha_management_access,
+    ),
+    Migration(
+        49, "enable_thomson_stock_planning",
+        _migration_0049_enable_thomson_stock_planning,
     ),
 )
 

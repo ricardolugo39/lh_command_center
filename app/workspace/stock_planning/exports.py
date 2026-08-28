@@ -34,7 +34,10 @@ class StockPlanningExportService:
                 "Referencia proveedor": vendor_skus.get(item["sku"], item["sku"]),
                 "Referencia interna": item["sku"],
                 "Cantidad aprobada": int(item["final_quantity"]),
-                "Unidad": "Barra 3 m" if item.get("length_transformation") else "Unidad",
+                "Unidad": (
+                    f"Barra {item['purchase_length_mm'] / 1000:g} m"
+                    if item.get("purchase_length_mm") else "Unidad"
+                ),
                 "Inventario utilizable": item["usable"],
                 "En tránsito": item["transit"],
                 "Cantidad sugerida": item["recommended_order"],
