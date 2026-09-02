@@ -24,8 +24,8 @@ class RFQRepository:
                     next_action, next_action_at, expected_decision_at,
                     prequotation_number, prequotation_number_normalized,
                     workflow_status
-                    , sales_rep_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    , sales_rep_name, vendor_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     values["rfq_number"], values["customer_id"],
                     values.get("contact_id"), values["owner_user_id"],
@@ -40,6 +40,7 @@ class RFQRepository:
                     values["prequotation_number_normalized"],
                     values["workflow_status"],
                     values["sales_rep_name"],
+                    values.get("vendor_message"),
                 ),
             )
             return int(cursor.lastrowid)
@@ -148,6 +149,41 @@ class RFQRepository:
                 (rfq_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def add_document(rfq_id: int, values: dict[str, Any]) -> int:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """INSERT INTO rfq_documents(
+                    rfq_id,original_filename,stored_filename,mime_type,
+                    size_bytes,uploaded_by_user_id
+                ) VALUES (?,?,?,?,?,?)""",
+                (
+                    rfq_id, values["original_filename"],
+                    values["stored_filename"], values.get("mime_type"),
+                    values["size_bytes"], values.get("uploaded_by_user_id"),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    @staticmethod
+    def list_documents(rfq_id: int) -> list[dict[str, Any]]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT * FROM rfq_documents
+                WHERE rfq_id=? AND is_active=1 ORDER BY uploaded_at,id""",
+                (rfq_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def update_vendor_message(rfq_id: int, message: str | None) -> None:
+        with connection_scope() as connection:
+            connection.execute(
+                """UPDATE rfqs SET vendor_message=?,updated_at=CURRENT_TIMESTAMP
+                WHERE id=?""",
+                (message, rfq_id),
+            )
 
     @staticmethod
     def update_vendor_response(item_id: int, values: dict[str, Any]) -> None:

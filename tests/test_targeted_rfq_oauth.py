@@ -204,7 +204,8 @@ def test_vendor_rfq_send_and_sync_tracks_real_reply(targeted_database):
         assert len(gmail.sent) == 4
         assert rfq["rfq_number"] in gmail.sent[2]["subject"]
         assert rfq["rfq_number"] in gmail.sent[2]["body_text"]
-        assert gmail.sent[2]["subject"] == "RFQ RFQ-000001 - THK"
+        assert gmail.sent[2]["subject"] == "RFQ-000001 - THK"
+        assert "Hello," in gmail.sent[2]["body_text"]
         assert "RFQ-000001" in gmail.sent[2]["body_text"]
         assert "HSR25" in gmail.sent[2]["body_text"]
         assert "SBN4555" in gmail.sent[3]["body_text"]

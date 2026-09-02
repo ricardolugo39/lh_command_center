@@ -12,6 +12,7 @@ from app.workspace.services.rfq_service import RFQService
 from app.workspace.services.rfq_email_service import RFQEmailService
 from app.workspace.services.quote_management_service import QuoteManagementService
 from app.workspace.services.rfq_vendor_request_service import RFQVendorRequestService
+from app.workspace.services.rfq_document_service import RFQDocumentService
 from app.workspace.constants.commercial_office import OFFICES
 
 
@@ -43,6 +44,7 @@ def new():
     )
     if request.method == "POST":
         try:
+            uploads = RFQDocumentService.validate(request.files.getlist("attachments"))
             values = request.form.to_dict()
             references = request.form.getlist("item_reference")
             vendor = request.form.get("vendor", "").strip()
@@ -60,6 +62,7 @@ def new():
                 for index, reference in enumerate(references)
             ]
             rfq_id = RFQService.create(values)
+            RFQDocumentService.save_many(rfq_id, uploads, g.current_user["id"])
             return redirect(url_for("rfqs.detail", rfq_id=rfq_id))
         except ValueError as exception:
             error = str(exception)
@@ -207,6 +210,27 @@ def test_vendor_email(rfq_id: int):
             error=str(exception),
         ), 400
     return redirect(url_for("rfqs.detail", rfq_id=rfq_id, test_sent=1))
+
+
+@rfqs_bp.post("/<int:rfq_id>/vendor-content")
+@roles_required("administrator", "commercial_management")
+def vendor_content(rfq_id: int):
+    try:
+        page = RFQService.detail(rfq_id)
+        if page["vendor_requests"]:
+            raise ValueError("El contenido no se puede cambiar después del envío.")
+        uploads = RFQDocumentService.validate(
+            request.files.getlist("attachments")
+        )
+        message = request.form.get("vendor_message", "").strip() or None
+        RFQRepository.update_vendor_message(rfq_id, message)
+        RFQDocumentService.save_many(rfq_id, uploads, g.current_user["id"])
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("rfqs.detail", rfq_id=rfq_id, content_saved=1))
 
 
 @rfqs_bp.post("/<int:rfq_id>/sync-vendor-responses")

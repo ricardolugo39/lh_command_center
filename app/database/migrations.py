@@ -3661,6 +3661,11 @@ def _migration_0058_integration_credentials(connection: Connection) -> None:
     )
 
 
+def _migration_0059_rfq_vendor_message(connection: Connection) -> None:
+    """Allow free-form instructions to accompany a vendor RFQ."""
+    _add_column(connection, "rfqs", "vendor_message", "TEXT")
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3806,6 +3811,7 @@ MIGRATION_MANIFEST = (
     ),
     Migration(57, "vendor_rfq_inbox", _migration_0057_vendor_rfq_inbox),
     Migration(58, "integration_credentials", _migration_0058_integration_credentials),
+    Migration(59, "rfq_vendor_message", _migration_0059_rfq_vendor_message),
 )
 
 

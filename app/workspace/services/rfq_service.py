@@ -160,6 +160,7 @@ class RFQService:
         )
         return {
             "rfq": rfq, "items": RFQRepository.list_items(rfq_id),
+            "documents": RFQRepository.list_documents(rfq_id),
             "history": RFQRepository.list_history(rfq_id),
             "conclusion": RFQRepository.get_conclusion(rfq_id),
             "status_labels": cls.STATUS_LABELS,
@@ -253,6 +254,7 @@ class RFQService:
         return {
             **values, "customer_id": customer_id, "contact_id": contact_id,
             "owner_user_id": owner, "description": description,
+            "vendor_message": str(values.get("vendor_message") or "").strip() or None,
             "sales_rep_name": sales_rep_name,
             "received_at": received_at,
             "prequotation_number": prequotation or None,

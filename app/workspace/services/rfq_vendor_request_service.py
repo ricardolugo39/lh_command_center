@@ -16,7 +16,9 @@ class RFQVendorRequestService:
     TEST_RECIPIENT = "ricardo.lugo@lugohermanos.com"
 
     @staticmethod
-    def _message(number: str, items: list[dict]) -> tuple[str, str]:
+    def _message(
+        number: str, items: list[dict], additional_text: str | None = None,
+    ) -> tuple[str, str]:
         rows = "".join(
             "<tr>" + "".join(
                 f"<td style='padding:6px;border:1px solid #ddd'>{html.escape(str(value or ''))}</td>"
@@ -26,25 +28,44 @@ class RFQVendorRequestService:
                 )
             ) + "</tr>" for item in items
         )
+        extra_html = (
+            f"<p>{html.escape(additional_text).replace(chr(10), '<br>')}</p>"
+            if additional_text else ""
+        )
         body_html = (
-            f"<p><strong>RFQ {html.escape(number)}</strong></p>"
-            "<p>Please provide price, availability, lead time and validity. "
+            "<p>Hello,</p>"
+            "<p>We are requesting pricing and lead time for the following product(s):</p>"
+            f"{extra_html}"
+            "<p>Please also provide availability and quotation validity. "
             f"Please keep <strong>{html.escape(number)}</strong> in the subject.</p>"
             "<table style='border-collapse:collapse'><thead><tr><th>Product</th>"
             "<th>Quantity</th><th>Comments</th></tr></thead>"
             f"<tbody>{rows}</tbody></table>"
+            "<p>Thank you,<br>Ricardo Lugo</p>"
         )
         body_text = "\n".join(
             [
-                f"RFQ {number}",
-                "Please provide price, availability, lead time and validity. "
+                "Hello,",
+                "",
+                "We are requesting pricing and lead time for the following product(s):",
+                *( ["", additional_text] if additional_text else [] ),
+                "",
+                "Please also provide availability and quotation validity. "
                 f"Please keep {number} in the subject.",
             ] + [
                 f"{item['reference']} | {item['quantity']} | {item.get('notes') or ''}"
                 for item in items
-            ]
+            ] + ["", "Thank you,", "Ricardo Lugo"]
         )
         return body_text, body_html
+
+    @staticmethod
+    def _attachments(rfq_id: int) -> list[dict]:
+        return [{
+            "path": document["stored_filename"],
+            "filename": document["original_filename"],
+            "mime_type": document.get("mime_type"),
+        } for document in RFQRepository.list_documents(rfq_id)]
 
     @classmethod
     def send_test(cls, rfq_id: int) -> int:
@@ -57,13 +78,16 @@ class RFQVendorRequestService:
         number = rfq["rfq_number"]
         sent = 0
         for brand, items in groups.items():
-            body_text, body_html = cls._message(number, items)
+            body_text, body_html = cls._message(
+                number, items, rfq.get("vendor_message")
+            )
             try:
                 current_app.extensions["gmail_provider"].send(
                     sender=cls.TEST_RECIPIENT,
                     recipients=[cls.TEST_RECIPIENT], cc=[],
-                    subject=f"[PRUEBA] RFQ {number} - {brand}",
+                    subject=f"[PRUEBA] {number} - {brand}",
                     body_text=body_text, body_html=body_html,
+                    attachments=cls._attachments(rfq_id),
                 )
             except Exception as error:
                 raise ValueError("No fue posible enviar el correo de prueba.") from error
@@ -100,14 +124,17 @@ class RFQVendorRequestService:
             existing = RFQVendorRequestRepository.latest_for_brand(rfq_id, brand)
             if existing and existing.get("status") in {"sent", "responded"}:
                 raise ValueError(f"La solicitud a {brand} ya fue enviada.")
-            subject = f"RFQ {number} - {brand}"
-            body_text, body_html = RFQVendorRequestService._message(number, items)
+            subject = f"{number} - {brand}"
+            body_text, body_html = RFQVendorRequestService._message(
+                number, items, rfq.get("vendor_message")
+            )
             cc = json.loads(config["default_cc_json"])
             try:
                 result = current_app.extensions["gmail_provider"].send(
                     sender="ricardo.lugo@lugohermanos.com",
                     recipients=[config["vendor_email"]], cc=cc, subject=subject,
                     body_text=body_text, body_html=body_html,
+                    attachments=RFQVendorRequestService._attachments(rfq_id),
                 )
             except Exception as error:
                 raise ValueError(
