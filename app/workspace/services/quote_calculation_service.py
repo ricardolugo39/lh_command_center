@@ -88,16 +88,11 @@ class QuoteCalculationService:
         total_fob = sum((line["fob"] for line in work), ZERO)
         total_weight = sum((line["weight"] for line in work), ZERO)
         chargeable, calculated_shipping, final_shipping = cls.shipping(
-            profile["id"], total_weight, mapping["zone"], quote.get("premium_service")
+            profile["id"], total_weight, mapping["zone"], None
         )
         final_zone = mapping["zone"]
-        if quote.get("final_dhl_zone") and quote.get("zone_override_reason"):
-            final_zone = int(quote["final_dhl_zone"])
-            _, _, final_shipping = cls.shipping(
-                profile["id"], total_weight, final_zone, quote.get("premium_service")
-            )
-        if quote.get("final_shipping_usd") and quote.get("shipping_override_reason"):
-            final_shipping = money(quote["final_shipping_usd"])
+        if quote.get("manual_shipping_usd") not in (None, ""):
+            final_shipping = money(quote["manual_shipping_usd"])
         settings = QuoteManagementRepository.settings()
         customs_applied = total_fob > Decimal("2000") or total_weight > Decimal("50")
         customs = Decimal("300.00") if customs_applied else ZERO

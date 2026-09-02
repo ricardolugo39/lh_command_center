@@ -150,10 +150,13 @@ class QuoteManagementService:
         quote = QuoteManagementRepository.get(quote_id)
         if not quote or quote.get("issued_at"):
             raise ValueError("La revisión emitida es inmutable.")
-        if header.get("final_dhl_zone") and not str(header.get("zone_override_reason") or "").strip():
-            raise ValueError("El override de zona requiere un motivo.")
-        if header.get("final_shipping_usd") and not str(header.get("shipping_override_reason") or "").strip():
-            raise ValueError("El override de envío requiere un motivo.")
+        origin = str(header.get("origin_option") or "").split("|", 1)
+        if len(origin) == 2:
+            header["origin_country_code"] = origin[0]
+            header["origin_service_area_code"] = origin[1]
+        manual_shipping = str(header.get("manual_shipping_usd") or "").strip()
+        if manual_shipping and (self_value := RFQService._number(manual_shipping)) is not None and self_value < 0:
+            raise ValueError("El costo de envío manual no puede ser negativo.")
         QuoteManagementRepository.update_header(quote_id, header, actor_user_id)
         existing = {line["id"] for line in QuoteManagementRepository.lines(quote_id)}
         for values in line_values:
@@ -238,6 +241,9 @@ class QuoteManagementService:
     @transactional
     def generate_pdf(quote_id: int, actor_user_id: int) -> Path:
         page = QuoteManagementService.workspace(quote_id)
+        if not page["quote"].get("amount") or not page["quote"].get("final_dhl_zone"):
+            QuoteManagementService.calculate(quote_id)
+            page = QuoteManagementService.workspace(quote_id)
         quote, lines = page["quote"], page["lines"]
         QuoteManagementService.validate_for_issue(quote, lines)
         PDF_ROOT.mkdir(parents=True, exist_ok=True)

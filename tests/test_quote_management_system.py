@@ -72,8 +72,7 @@ def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     QuoteManagementService.save_workspace(
         quote_id,
         {
-            "origin_country_code": "BR",
-            "origin_service_area_code": "default",
+            "origin_option": "BR|default",
         },
         [{
             "id": line["id"], "vendor_fob_unit_usd": "20",
@@ -99,7 +98,7 @@ def test_customs_is_fixed_300_usd_over_value_threshold(quote_database):
     line = QuoteManagementRepository.lines(quote_id)[0]
     QuoteManagementService.save_workspace(
         quote_id,
-        {"origin_country_code": "BR", "origin_service_area_code": "default"},
+        {"origin_option": "BR|default"},
         [{
             "id": line["id"], "vendor_fob_unit_usd": "1001",
             "unit_weight_kg": "1", "lead_time": "4 weeks",
@@ -133,3 +132,23 @@ def test_manual_overrides_require_reasons(quote_database):
         QuoteManagementService.save_workspace(
             quote_id, {}, [{"id": line["id"], "pricing_override_value": "10"}], 1
         )
+
+
+def test_manual_shipping_is_the_only_freight_override(quote_database):
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    QuoteManagementService.save_workspace(
+        quote_id,
+        {"origin_option": "BR|default", "manual_shipping_usd": "25"},
+        [{
+            "id": line["id"], "vendor_fob_unit_usd": "20",
+            "unit_weight_kg": "1", "lead_time": "4 weeks",
+            "pricing_override_value": "100",
+            "pricing_override_reason": "Precio autorizado",
+        }],
+        1,
+    )
+    result = QuoteManagementService.calculate(quote_id)
+    assert Decimal(result["quote"]["calculated_shipping_usd"]) == Decimal("52.35")
+    assert Decimal(result["quote"]["final_shipping_usd"]) == Decimal("25.00")
+    assert result["quote"]["final_dhl_zone"] == 4

@@ -242,9 +242,7 @@ class QuoteManagementRepository:
     def update_header(quote_id: int, values: dict[str, Any], actor_user_id: int) -> None:
         columns = (
             "origin_country_code", "origin_service_area_code",
-            "premium_service", "commercial_comments", "internal_notes",
-            "final_dhl_zone", "zone_override_reason", "final_shipping_usd",
-            "shipping_override_reason",
+            "commercial_comments", "internal_notes", "manual_shipping_usd",
         )
         with connection_scope() as connection:
             connection.execute(
@@ -253,13 +251,7 @@ class QuoteManagementRepository:
                 + " WHERE id=?",
                 tuple(values.get(name) or None for name in columns) + (quote_id,),
             )
-            if values.get("zone_override_reason"):
-                connection.execute(
-                    """UPDATE ws_project_quotes SET zone_overridden_by_user_id=?,
-                    zone_overridden_at=CURRENT_TIMESTAMP WHERE id=?""",
-                    (actor_user_id, quote_id),
-                )
-            if values.get("shipping_override_reason"):
+            if values.get("manual_shipping_usd"):
                 connection.execute(
                     """UPDATE ws_project_quotes SET shipping_overridden_by_user_id=?,
                     shipping_overridden_at=CURRENT_TIMESTAMP WHERE id=?""",
