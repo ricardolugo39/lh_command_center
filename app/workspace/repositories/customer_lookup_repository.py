@@ -23,12 +23,15 @@ class CustomerLookupRepository:
                 ORDER BY
                     CASE
                         WHEN name LIKE ? COLLATE NOCASE THEN 0
-                        ELSE 1
+                        WHEN name LIKE ? COLLATE NOCASE THEN 1
+                        ELSE 2
                     END,
+                    INSTR(LOWER(name), LOWER(?)),
                     name, id
                 LIMIT ?""",
                 (
-                    search, search, f"{clean_text}%",
+                    search, search, f"{clean_text}%", f"% {clean_text}%",
+                    clean_text,
                     min(max(limit, 1), 20),
                 ),
             ).fetchall()

@@ -3,6 +3,7 @@
 {% block page_title %}RFQ a proveedores{% endblock %}
 {% block page_actions %}<div class="col-auto ms-auto"><a class="btn btn-primary" href="{{ url_for('rfqs.new') }}">Nueva RFQ</a></div>{% endblock %}
 {% block content %}
+{% if request.args.get('deleted') %}<div class="alert alert-success">RFQ eliminada permanentemente.</div>{% endif %}
 <div class="mb-3 text-secondary">Solicitudes de precio enviadas a THK y Thomson.</div>
 <form class="card card-body mb-3" method="get"><div class="row g-2">
   <div class="col-md-6"><input class="form-control" name="q" value="{{ search }}" placeholder="Buscar RFQ, cliente o referencia"></div>
@@ -18,7 +19,7 @@
   <td><div>{{ rfq.reference_summary or '—' }}</div><div class="small text-secondary">{{ rfq.item_count }} referencia(s)</div></td>
   <td>{{ (rfq.vendor_summary or '—').replace(',', ', ') }}</td>
   <td>{% if rfq.vendor_request_count == 0 %}<span class="badge bg-secondary-lt">Borrador</span>{% elif rfq.vendor_response_count == rfq.vendor_request_count %}<span class="badge bg-green-lt">Respuesta recibida</span>{% else %}<span class="badge bg-yellow-lt">Esperando proveedor</span>{% endif %}</td>
-  <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">Abrir</a></td>
+  <td class="text-end"><div class="d-flex justify-content-end gap-1"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">Abrir</a>{% if current_user.role == 'administrator' and rfq.vendor_request_count == 0 %}<form method="post" action="{{ url_for('rfqs.delete',rfq_id=rfq.id) }}" onsubmit="return confirm('Eliminar {{ rfq.rfq_number }} permanentemente? Esta acción no se puede deshacer.')"><button class="btn btn-sm btn-outline-danger">Eliminar</button></form>{% endif %}</div></td>
 </tr>{% else %}<tr><td colspan="7" class="text-center text-secondary py-5">No hay RFQs de proveedor.</td></tr>{% endfor %}</tbody>
 </table></div></div>
 {% endblock %}

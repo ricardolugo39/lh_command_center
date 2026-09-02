@@ -110,6 +110,13 @@ def test_rfq_can_create_a_customer_not_present_in_erp(targeted_database):
     )
 
 
+def test_draft_rfq_can_be_deleted_but_sent_rfq_cannot(targeted_database):
+    draft_id = RFQService.create(_rfq_values("DELETE-ME"))
+    assert RFQService.delete_draft(draft_id) == []
+    with pytest.raises(ValueError, match="no existe"):
+        RFQService.require(draft_id)
+
+
 def test_rfq_rules_and_normalized_unique_number(targeted_database):
     first = RFQService.create(_rfq_values())
     assert RFQService.detail(first)["rfq"]["opportunity_id"] is None

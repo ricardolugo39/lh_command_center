@@ -55,6 +55,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "list-group-item list-group-item-action text-start";
+      button.style.backgroundColor = "#fff";
       const name = document.createElement("strong");
       name.textContent = customer.customer_name;
       const identity = document.createElement("div");

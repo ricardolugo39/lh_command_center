@@ -1,4 +1,5 @@
 from typing import Any
+from pathlib import Path
 from sqlite3 import IntegrityError
 
 from app.database.transaction import transactional
@@ -176,6 +177,32 @@ class RFQService:
             "vendor_messages": RFQVendorRequestRepository.list_messages(rfq_id),
             "related_quotes": QuoteManagementRepository.related_to_rfq(rfq_id),
         }
+
+    @classmethod
+    @transactional
+    def delete_draft(cls, rfq_id: int) -> list[str]:
+        rfq = cls.require(rfq_id)
+        if RFQVendorRequestRepository.list_for_rfq(rfq_id):
+            raise ValueError("No se puede eliminar una RFQ enviada al proveedor.")
+        from app.workspace.repositories.quote_management_repository import (
+            QuoteManagementRepository,
+        )
+        if QuoteManagementRepository.related_to_rfq(rfq_id):
+            raise ValueError("No se puede eliminar una RFQ convertida en cotización.")
+        paths = [
+            document["stored_filename"]
+            for document in RFQRepository.list_documents(rfq_id)
+        ]
+        RFQRepository.delete(rfq_id)
+        return paths
+
+    @staticmethod
+    def remove_document_files(paths: list[str]) -> None:
+        for value in paths:
+            try:
+                Path(value).unlink(missing_ok=True)
+            except OSError:
+                pass
 
     @classmethod
     @transactional

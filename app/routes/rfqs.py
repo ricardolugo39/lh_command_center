@@ -92,6 +92,20 @@ def detail(rfq_id: int):
     return render_template("rfqs/detail.html", page=page, error=None)
 
 
+@rfqs_bp.post("/<int:rfq_id>/delete")
+@roles_required("administrator")
+def delete(rfq_id: int):
+    try:
+        paths = RFQService.delete_draft(rfq_id)
+        RFQService.remove_document_files(paths)
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("rfqs.index", deleted=1))
+
+
 @rfqs_bp.post("/<int:rfq_id>/advance")
 @roles_required("administrator", "commercial_management", "advisor")
 def advance(rfq_id: int):

@@ -186,6 +186,13 @@ class RFQRepository:
             )
 
     @staticmethod
+    def delete(rfq_id: int) -> None:
+        with connection_scope() as connection:
+            cursor = connection.execute("DELETE FROM rfqs WHERE id=?", (rfq_id,))
+            if cursor.rowcount == 0:
+                raise ValueError("La RFQ no existe.")
+
+    @staticmethod
     def update_vendor_response(item_id: int, values: dict[str, Any]) -> None:
         with connection_scope() as connection:
             cursor = connection.execute(
