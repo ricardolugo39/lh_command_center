@@ -18,6 +18,8 @@ from app.workspace.repositories.quote_management_repository import (
 from app.workspace.repositories.rfq_repository import RFQRepository
 from app.workspace.services.quote_calculation_service import QuoteCalculationService
 from app.workspace.services.rfq_service import RFQService
+from app.workspace.repositories.customer_repository import CustomerRepository
+from app.workspace.repositories.contact_repository import ActivityFormRepository
 
 
 PDF_ROOT = Path("output/pdf")
@@ -32,6 +34,59 @@ QUOTE_STATUSES = {
 
 
 class QuoteManagementService:
+    @staticmethod
+    @transactional
+    def create_direct(values: dict[str, Any], actor_user_id: int) -> int:
+        customer_id = RFQService._integer(values.get("customer_id"))
+        new_name = str(values.get("new_customer_name") or "").strip()
+        if not customer_id and new_name:
+            existing = CustomerRepository.find_by_name(new_name)
+            customer_id = (
+                existing["id"] if existing
+                else CustomerRepository.create_customer(new_name)
+            )
+        if not customer_id or not ActivityFormRepository.get_customer(customer_id):
+            raise ValueError("Seleccione o registre un cliente válido.")
+        sales_rep_name = str(values.get("sales_rep_name") or "").strip()
+        sales_rep_email = str(values.get("sales_rep_email") or "").strip().casefold()
+        if not sales_rep_name:
+            raise ValueError("Indique el asesor comercial.")
+        if "@" not in sales_rep_email:
+            raise ValueError("Indique un correo válido para el asesor.")
+        items = values.get("items") or []
+        if not items:
+            raise ValueError("Agregue al menos un producto.")
+        clean_items = []
+        for index, item in enumerate(items, 1):
+            reference = str(item.get("reference") or "").strip()
+            brand = str(item.get("brand") or "").strip()
+            lead_time = str(item.get("lead_time") or "").strip()
+            quantity = RFQService._number(item.get("quantity"))
+            fob = RFQService._number(item.get("fob_unit_usd"))
+            weight = RFQService._number(item.get("unit_weight_kg"))
+            if not reference or not brand:
+                raise ValueError(f"Complete referencia y marca en la fila {index}.")
+            if not quantity or quantity <= 0 or not fob or fob <= 0 or not weight or weight <= 0:
+                raise ValueError(f"Cantidad, precio USD y peso deben ser positivos en la fila {index}.")
+            if not lead_time:
+                raise ValueError(f"Indique el tiempo de entrega en la fila {index}.")
+            clean_items.append({
+                **item, "reference": reference, "brand": brand,
+                "lead_time": lead_time, "quantity": quantity,
+                "fob_unit_usd": fob, "unit_weight_kg": weight,
+                "display_order": index - 1,
+                "source_note": str(item.get("source_note") or "").strip() or None,
+                "notes": str(item.get("notes") or "").strip() or None,
+            })
+        quote_id = QuoteManagementRepository.create_direct({
+            "customer_id": customer_id, "sales_rep_name": sales_rep_name,
+            "sales_rep_email": sales_rep_email,
+            "comments": str(values.get("comments") or "").strip() or None,
+        }, actor_user_id)
+        for item in clean_items:
+            QuoteManagementRepository.add_direct_line(quote_id, item)
+        return quote_id
+
     @staticmethod
     @transactional
     def delete_draft(quote_id: int) -> int | None:

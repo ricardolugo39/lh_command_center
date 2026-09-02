@@ -8,6 +8,7 @@ from app.storage import upload_path
 from app.workspace.repositories.quote_management_repository import QuoteManagementRepository
 from app.workspace.services.quote_management_service import QuoteManagementService, QUOTE_STATUSES
 from app.workspace.constants.commercial_office import OFFICES
+from app.workspace.repositories.contact_repository import ActivityFormRepository
 
 
 quotes_bp = Blueprint("quotes", __name__, url_prefix="/quotes")
@@ -22,6 +23,47 @@ def index():
     return render_template(
         "quotes/index.html", quotes=QuoteManagementRepository.portfolio(filters),
         filters=filters, statuses=QUOTE_STATUSES, offices=OFFICES,
+    )
+
+
+@quotes_bp.route("/new-direct", methods=["GET", "POST"])
+@roles_required("administrator")
+def new_direct():
+    error = None
+    customer_id = request.form.get("customer_id", type=int)
+    if request.method == "POST":
+        try:
+            fields = (
+                "item_reference", "item_brand", "item_quantity",
+                "item_fob_unit_usd", "item_unit_weight_kg", "item_lead_time",
+                "item_source_note", "item_notes",
+            )
+            lists = {field: request.form.getlist(field) for field in fields}
+            count = len(lists["item_reference"])
+            values = request.form.to_dict()
+            values["items"] = [{
+                "reference": lists["item_reference"][index],
+                "brand": lists["item_brand"][index] if index < len(lists["item_brand"]) else "",
+                "quantity": lists["item_quantity"][index] if index < len(lists["item_quantity"]) else "",
+                "fob_unit_usd": lists["item_fob_unit_usd"][index] if index < len(lists["item_fob_unit_usd"]) else "",
+                "unit_weight_kg": lists["item_unit_weight_kg"][index] if index < len(lists["item_unit_weight_kg"]) else "",
+                "lead_time": lists["item_lead_time"][index] if index < len(lists["item_lead_time"]) else "",
+                "source_note": lists["item_source_note"][index] if index < len(lists["item_source_note"]) else "",
+                "notes": lists["item_notes"][index] if index < len(lists["item_notes"]) else "",
+            } for index in range(count)]
+            quote_id = QuoteManagementService.create_direct(
+                values, g.current_user["id"]
+            )
+            return redirect(url_for("quotes.workspace", quote_id=quote_id))
+        except (TypeError, ValueError) as exception:
+            error = str(exception)
+    return render_template(
+        "quotes/direct_form.html", error=error, form=request.form,
+        sales_representatives=ActivityFormRepository.list_sales_representatives(),
+        customer=(
+            ActivityFormRepository.get_customer(customer_id)
+            if customer_id else None
+        ),
     )
 
 

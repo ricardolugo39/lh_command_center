@@ -45,6 +45,27 @@ def test_rfq_conversion_preserves_request_and_lines(quote_database):
     assert page["lines"][0]["quantity"] == 2
 
 
+def test_direct_quote_uses_same_usd_processor_without_rfq(quote_database):
+    quote_id = QuoteManagementService.create_direct({
+        "customer_id": 1,
+        "sales_rep_name": "Asesor Externo",
+        "sales_rep_email": "asesor@example.com",
+        "comments": "Precio consultado en plataforma",
+        "items": [{
+            "reference": "ABC-123", "brand": "Otra Marca",
+            "quantity": "2", "fob_unit_usd": "125.50",
+            "unit_weight_kg": "1.25", "lead_time": "3 weeks",
+            "source_note": "Portal del fabricante",
+        }],
+    }, 1)
+    page = QuoteManagementService.workspace(quote_id)
+    assert page["quote"]["originating_rfq_id"] is None
+    assert page["quote"]["currency_code"] == "USD"
+    assert page["quote"]["sales_rep_email"] == "asesor@example.com"
+    assert page["lines"][0]["brand"] == "Otra Marca"
+    assert page["lines"][0]["vendor_fob_unit_usd"] == "125.5"
+
+
 def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
     line = QuoteManagementRepository.lines(quote_id)[0]

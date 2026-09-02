@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Nueva cotización directa · Commercial Command Center{% endblock %}
+{% block page_title %}Nueva cotización directa{% endblock %}
+{% block content %}
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<form method="post" class="card" id="rfq-form">
+  <div class="card-body">
+    <div class="alert alert-info">Use este flujo cuando el precio proviene de una plataforma u otra fuente. No se enviará ningún correo a proveedores.</div>
+    <div class="row g-3">
+      <div class="col-md-6 position-relative"><label class="form-label required">Cliente</label><input class="form-control" id="rfq-customer-search" value="{{ customer.name if customer else form.get('new_customer_name','') }}" placeholder="Buscar por nombre, NIT o ERP ID" autocomplete="off" required><input type="hidden" name="customer_id" id="rfq-customer-id" value="{{ customer.id if customer else '' }}"><input type="hidden" name="new_customer_name" id="rfq-new-customer-name" value="{{ form.get('new_customer_name','') }}"><div id="rfq-customer-results" class="list-group position-absolute shadow d-none" style="z-index:2000;top:72px;left:12px;right:12px;max-height:320px;overflow-y:auto;background:#fff;border:1px solid #d9dee8;border-radius:8px"></div><button class="btn btn-sm btn-link px-0 d-none" type="button" id="rfq-use-new-customer"></button><div class="form-hint" id="rfq-customer-status">Seleccione un resultado o registre un cliente nuevo.</div></div>
+      <div class="col-md-3"><label class="form-label required">Asesor comercial</label><input class="form-control" name="sales_rep_name" list="sales-reps" value="{{ form.get('sales_rep_name','') }}" required><datalist id="sales-reps">{% for name in sales_representatives %}<option value="{{ name }}">{% endfor %}</datalist></div>
+      <div class="col-md-3"><label class="form-label required">Correo del asesor</label><input class="form-control" type="email" name="sales_rep_email" value="{{ form.get('sales_rep_email','') }}" required></div>
+      <div class="col-12"><label class="form-label">Comentarios internos</label><textarea class="form-control" name="comments" rows="2">{{ form.get('comments','') }}</textarea></div>
+    </div><hr class="my-4">
+    <div class="d-flex justify-content-between align-items-center mb-3"><div><h3 class="mb-0">Productos</h3><div class="small text-secondary">Precios obtenidos fuera del correo RFQ.</div></div><button class="btn btn-outline-primary" type="button" id="add-rfq-item">+ Agregar producto</button></div>
+    <div id="rfq-items"></div>
+    <template id="rfq-item-template"><div class="border rounded p-3 mb-3 rfq-item"><div class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label required">Referencia</label><input class="form-control" name="item_reference" required></div><div class="col-md-2"><label class="form-label required">Marca</label><input class="form-control" name="item_brand" placeholder="Cualquier marca" required></div><div class="col-md-1"><label class="form-label required">Cantidad</label><input class="form-control" type="number" min="0.000001" step="any" name="item_quantity" required></div><div class="col-md-2"><label class="form-label required">FOB unit. USD</label><input class="form-control" type="number" min="0.01" step="0.01" name="item_fob_unit_usd" required></div><div class="col-md-2"><label class="form-label required">Peso unit. kg</label><input class="form-control" type="number" min="0.001" step="0.001" name="item_unit_weight_kg" required></div><div class="col-md-2"><label class="form-label required">Entrega</label><input class="form-control" name="item_lead_time" required></div><div class="col-md-5"><label class="form-label">Fuente del precio</label><input class="form-control" name="item_source_note" placeholder="Plataforma, portal o referencia"></div><div class="col-md-6"><label class="form-label">Notas</label><input class="form-control" name="item_notes"></div><div class="col-md-1"><button class="btn btn-outline-danger remove-rfq-item" type="button">×</button></div></div></div></template>
+  </div>
+  <div class="card-footer d-flex justify-content-between"><a class="btn" href="{{ url_for('quotes.index') }}">Cancelar</a><button class="btn btn-primary">Crear cotización directa</button></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/rfq-form.js') }}"></script>{% endblock %}

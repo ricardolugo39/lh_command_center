@@ -137,6 +137,46 @@ class QuoteManagementRepository:
             return int(cursor.lastrowid)
 
     @staticmethod
+    def create_direct(values: dict[str, Any], actor_user_id: int) -> int:
+        number = QuoteManagementRepository.next_rl_number()
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """INSERT INTO ws_project_quotes(
+                    customer_id,quote_series_key,quote_number,prefix,quote_date,
+                    amount,normalized_amount,quote_status,currency_code,revision,
+                    exchange_rate,exchange_rate_type,sales_rep_name,sales_rep_email,
+                    rfq_number_snapshot,request_comments_snapshot,validity_days,
+                    created_by_user_id
+                ) VALUES (?,? ,?,'RL',DATE('now'),0,0,'draft','USD',1,1,
+                    'fixed',?,?,'Cotización directa',?,10,?)""",
+                (
+                    values["customer_id"], f"RL:{number}", number,
+                    values["sales_rep_name"], values["sales_rep_email"],
+                    values.get("comments"), actor_user_id,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    @staticmethod
+    def add_direct_line(quote_id: int, values: dict[str, Any]) -> int:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """INSERT INTO ws_quote_lines(
+                    quote_id,brand,part_number,description,quantity,unit_price,
+                    line_total,currency_code,display_order,vendor_fob_unit_usd,
+                    unit_weight_kg,lead_time,vendor_comments,internal_notes
+                ) VALUES (?,?,?,?,?,0,0,'USD',?,?,?,?,?,?)""",
+                (
+                    quote_id, values["brand"], values["reference"],
+                    values["reference"], values["quantity"],
+                    values["display_order"], values["fob_unit_usd"],
+                    values["unit_weight_kg"], values["lead_time"],
+                    values.get("source_note"), values.get("notes"),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    @staticmethod
     def copy_rfq_lines(quote_id: int, rfq_id: int) -> None:
         with connection_scope() as connection:
             connection.execute(

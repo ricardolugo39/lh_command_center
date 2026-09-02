@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Cotizaciones · Commercial Command Center{% endblock %}
-{% block page_title %}<div class="d-flex align-items-center justify-content-between"><span>Cotizaciones</span><a class="btn btn-primary" href="{{ url_for('rfqs.index') }}">Crear desde RFQ</a></div>{% endblock %}
+{% block page_title %}<div class="d-flex align-items-center justify-content-between"><span>Cotizaciones</span><div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{{ url_for('quotes.new_direct') }}">Nueva cotización directa</a><a class="btn btn-primary" href="{{ url_for('rfqs.index') }}">Crear desde RFQ</a></div></div>{% endblock %}
 {% block content %}
 <div class="alert alert-info">La cotización se crea normalmente desde una RFQ para heredar cliente, vendedor, comentarios, adjuntos y líneas. Abra la RFQ correspondiente y seleccione <strong>Crear cotización desde RFQ</strong>.</div>
 <div class="card mb-3"><div class="card-body"><form method="get" class="row g-2">
