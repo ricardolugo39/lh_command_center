@@ -4,6 +4,7 @@ from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.auth import init_auth
+from app.auth.oauth import GmailOAuthProvider
 from app.auth.configuration import OAUTH_VARIABLES, source_label
 from app.configuration import (
     LEGACY_ENV_PATH, PROJECT_CONFIG_PATH, PROJECT_ENV_PATH, resolve_settings,
@@ -78,6 +79,7 @@ def create_app(
     init_auth(application, oauth_provider)
     application.extensions["oauth_configuration_sources"] = provenance
     application.extensions["gmail_provider"] = gmail_provider or GmailProvider()
+    application.extensions["gmail_oauth_provider"] = GmailOAuthProvider()
     application.extensions["schema_migration_report"] = migration_report
 
     if migration_report:

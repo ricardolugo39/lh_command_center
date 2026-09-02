@@ -4,6 +4,7 @@ from app.workspace.services.commercial_visit_service import (
     CommercialVisitService,
 )
 from app.workspace.services.erp_import_service import ERPImportService
+from app.workspace.connectors.gmail_provider import GmailProvider
 
 
 class IntegrationCenterService:
@@ -20,4 +21,5 @@ class IntegrationCenterService:
                 "execution_count": len(history),
             },
             "google_visits": CommercialVisitService.get_integration_status(),
+            "gmail": {"ready": GmailProvider.configured()},
         }

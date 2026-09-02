@@ -12,6 +12,31 @@
     <section class="card h-100">
       <div class="card-header">
         <div class="d-flex align-items-center justify-content-between w-100 gap-3">
+          <div><div class="text-secondary small">Google Gmail</div>
+            <h2 class="card-title mb-0">Correos de RFQ</h2></div>
+          {% if page.gmail.ready %}<span class="badge bg-green-lt">Conectado</span>
+          {% else %}<span class="badge bg-yellow-lt">Sin conectar</span>{% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        {% if request.args.get('gmail') == 'connected' %}
+        <div class="alert alert-success">Gmail quedó conectado correctamente.</div>
+        {% elif request.args.get('gmail') == 'failed' %}
+        <div class="alert alert-danger">No fue posible conectar Gmail. Intente nuevamente.</div>
+        {% endif %}
+        <p class="mb-0">Envía las pruebas y RFQ desde ricardo.lugo@lugohermanos.com y permite detectar respuestas reales.</p>
+      </div>
+      <div class="card-footer bg-transparent">
+        <a class="btn btn-primary" href="{{ url_for('integrations.gmail_connect') }}">
+          {{ 'Reconectar Gmail' if page.gmail.ready else 'Conectar Gmail' }}
+        </a>
+      </div>
+    </section>
+  </div>
+  <div class="col-xl-6">
+    <section class="card h-100">
+      <div class="card-header">
+        <div class="d-flex align-items-center justify-content-between w-100 gap-3">
           <div><div class="text-secondary small">ERP</div>
             <h2 class="card-title mb-0">Clientes y ventas</h2></div>
           <span class="badge bg-green-lt">Disponible</span>

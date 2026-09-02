@@ -3650,6 +3650,17 @@ def _migration_0057_vendor_rfq_inbox(connection: Connection) -> None:
     ))
 
 
+def _migration_0058_integration_credentials(connection: Connection) -> None:
+    """Store encrypted OAuth credentials for server-side integrations."""
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS integration_credentials (
+            credential_key TEXT PRIMARY KEY,
+            encrypted_value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3794,6 +3805,7 @@ MIGRATION_MANIFEST = (
         _migration_0056_nicolas_lugo_administrator,
     ),
     Migration(57, "vendor_rfq_inbox", _migration_0057_vendor_rfq_inbox),
+    Migration(58, "integration_credentials", _migration_0058_integration_credentials),
 )
 
 

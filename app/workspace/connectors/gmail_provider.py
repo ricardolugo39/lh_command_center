@@ -9,12 +9,27 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from app.configuration import resolve_settings
+from app.workspace.repositories.integration_credential_repository import (
+    IntegrationCredentialRepository,
+)
 
 
 class GmailProvider:
+    CREDENTIAL_KEY = "gmail_rfq"
+
+    @classmethod
+    def configured(cls) -> bool:
+        values, _ = resolve_settings(("GOOGLE_GMAIL_TOKEN_JSON",))
+        return bool(
+            values.get("GOOGLE_GMAIL_TOKEN_JSON")
+            or IntegrationCredentialRepository.exists(cls.CREDENTIAL_KEY)
+        )
+
     def _service(self):
         values, _ = resolve_settings(("GOOGLE_GMAIL_TOKEN_JSON",))
-        token = values.get("GOOGLE_GMAIL_TOKEN_JSON")
+        token = values.get("GOOGLE_GMAIL_TOKEN_JSON") or (
+            IntegrationCredentialRepository.get(self.CREDENTIAL_KEY)
+        )
         if not token:
             raise RuntimeError("La integración con Gmail no está configurada.")
         credentials = Credentials.from_authorized_user_info(json.loads(token))

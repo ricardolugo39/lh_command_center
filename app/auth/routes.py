@@ -9,6 +9,10 @@ from oauthlib.oauth2 import OAuth2Error
 from app.auth.configuration import OAuthConfigurationService
 from app.auth.repository import UserRepository
 from app.auth.service import AuthenticationService
+from app.workspace.connectors.gmail_provider import GmailProvider
+from app.workspace.repositories.integration_credential_repository import (
+    IntegrationCredentialRepository,
+)
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -55,6 +59,27 @@ def google():
 
 @auth_bp.get("/callback")
 def callback():
+    gmail_state = session.get("gmail_oauth_state")
+    if gmail_state:
+        expected_state = session.pop("gmail_oauth_state", None)
+        code_verifier = session.pop("gmail_oauth_code_verifier", None)
+        expected_user_id = session.pop("gmail_oauth_user_id", None)
+        if request.args.get("state") != expected_state:
+            return redirect(url_for("integrations.index", gmail="failed"))
+        if not g.current_user or g.current_user["id"] != expected_user_id:
+            return redirect(url_for("auth.login", error="oauth_failed"))
+        try:
+            token = current_app.extensions[
+                "gmail_oauth_provider"
+            ].fetch_credentials(request.url, code_verifier=code_verifier)
+            IntegrationCredentialRepository.save(
+                GmailProvider.CREDENTIAL_KEY, token
+            )
+        except (KeyError, OAuth2Error, RuntimeError, ValueError, Warning):
+            current_app.logger.exception("Gmail OAuth callback rejected")
+            return redirect(url_for("integrations.index", gmail="failed"))
+        return redirect(url_for("integrations.index", gmail="connected"))
+
     if request.args.get("state") != session.pop("oauth_state", None):
         session.pop("oauth_code_verifier", None)
         return redirect(url_for("auth.login", error="oauth_failed"))

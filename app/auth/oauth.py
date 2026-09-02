@@ -102,3 +102,33 @@ class GoogleOAuthProvider:
             code_verifier=code_verifier,
             autogenerate_code_verifier=code_verifier is None,
         )
+
+
+class GmailOAuthProvider(GoogleOAuthProvider):
+    SCOPES = (
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.readonly",
+    )
+
+    def authorization_url(self) -> tuple[str, str, str]:
+        flow = self._flow()
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            prompt="consent select_account",
+            include_granted_scopes="false",
+        )
+        if not flow.code_verifier:
+            raise RuntimeError("Google OAuth no generó el verificador PKCE.")
+        return authorization_url, state, flow.code_verifier
+
+    def fetch_credentials(
+        self, authorization_response: str, *, code_verifier: str,
+    ) -> str:
+        if not code_verifier:
+            raise ValueError("Falta el verificador PKCE de OAuth.")
+        flow = self._flow(code_verifier=code_verifier)
+        with self._local_http_transport(authorization_response):
+            flow.fetch_token(authorization_response=authorization_response)
+        if not flow.credentials.refresh_token:
+            raise RuntimeError("Google no entregó un permiso renovable de Gmail.")
+        return flow.credentials.to_json()
