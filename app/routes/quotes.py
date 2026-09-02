@@ -43,6 +43,25 @@ def new_direct():
             lists = {field: request.form.getlist(field) for field in fields}
             count = len(lists["item_reference"])
             values = request.form.to_dict()
+            new_rep_name = str(values.get("new_sales_rep_name") or "").strip()
+            new_rep_email = str(values.get("new_sales_rep_email") or "").strip().casefold()
+            if new_rep_name or new_rep_email:
+                if not new_rep_name or "@" not in new_rep_email:
+                    raise ValueError("Complete nombre y correo válido del vendedor nuevo.")
+                QuoteManagementRepository.create_sales_recipient(
+                    new_rep_name, new_rep_email, g.current_user["id"]
+                )
+                values["sales_rep_name"] = new_rep_name
+                values["sales_rep_email"] = new_rep_email
+            else:
+                selected_email = str(values.get("sales_recipient_email") or "").strip()
+                selected_rep = QuoteManagementRepository.sales_recipient_by_email(
+                    selected_email
+                )
+                if not selected_rep:
+                    raise ValueError("Seleccione un vendedor de la lista.")
+                values["sales_rep_name"] = selected_rep["display_name"]
+                values["sales_rep_email"] = selected_rep["email"]
             values["items"] = [{
                 "reference": lists["item_reference"][index],
                 "brand": lists["item_brand"][index] if index < len(lists["item_brand"]) else "",
@@ -62,7 +81,7 @@ def new_direct():
             error = str(exception)
     return render_template(
         "quotes/direct_form.html", error=error, form=request.form,
-        sales_representatives=ActivityFormRepository.list_sales_representatives(),
+        sales_recipients=QuoteManagementRepository.sales_recipients(),
         product_types=PRODUCT_TYPES,
         customer=(
             ActivityFormRepository.get_customer(customer_id)
