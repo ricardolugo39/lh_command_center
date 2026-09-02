@@ -35,6 +35,13 @@ def index():
     )
 
 
+@rfqs_bp.post("/sync-pending")
+@roles_required("administrator", "commercial_management")
+def sync_pending_responses():
+    result = RFQVendorRequestService.sync_pending(g.current_user["id"])
+    return redirect(url_for("rfqs.index", sync=1, **result))
+
+
 @rfqs_bp.route("/new", methods=["GET", "POST"])
 @roles_required("administrator", "commercial_management", "advisor")
 def new():

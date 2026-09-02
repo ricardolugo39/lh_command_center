@@ -226,6 +226,7 @@ def test_vendor_rfq_send_and_sync_tracks_real_reply(targeted_database):
         assert "RFQ-000001" in gmail.sent[2]["body_text"]
         assert "HSR25" in gmail.sent[2]["body_text"]
         assert "SBN4555" in gmail.sent[3]["body_text"]
+        assert RFQVendorRequestRepository.pending_rfq_ids() == [rfq_id]
         with pytest.raises(ValueError, match="ya fue enviada"):
             RFQVendorRequestService.send(rfq_id, 1)
         assert RFQVendorRequestService.sync(rfq_id, 1) == 2

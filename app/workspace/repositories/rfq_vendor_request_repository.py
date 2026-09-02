@@ -6,6 +6,16 @@ from app.database.transaction import connection_scope
 
 class RFQVendorRequestRepository:
     @staticmethod
+    def pending_rfq_ids() -> list[int]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT rfq_id FROM rfq_vendor_requests
+                WHERE status='sent' AND provider_thread_id IS NOT NULL
+                ORDER BY rfq_id"""
+            ).fetchall()
+        return [int(row["rfq_id"]) for row in rows]
+
+    @staticmethod
     def list_for_rfq(rfq_id: int) -> list[dict[str, Any]]:
         with connection_scope() as connection:
             rows = connection.execute(

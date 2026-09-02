@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}RFQ a proveedores · Commercial Command Center{% endblock %}
 {% block page_title %}RFQ a proveedores{% endblock %}
-{% block page_actions %}<div class="col-auto ms-auto"><a class="btn btn-primary" href="{{ url_for('rfqs.new') }}">Nueva RFQ</a></div>{% endblock %}
+{% block page_actions %}<div class="col-auto ms-auto d-flex gap-2">{% if current_user.role in ['administrator','commercial_management'] %}<form method="post" action="{{ url_for('rfqs.sync_pending_responses') }}"><button class="btn btn-outline-primary">Buscar respuestas pendientes</button></form>{% endif %}<a class="btn btn-primary" href="{{ url_for('rfqs.new') }}">Nueva RFQ</a></div>{% endblock %}
 {% block content %}
 {% if request.args.get('deleted') %}<div class="alert alert-success">RFQ eliminada permanentemente.</div>{% endif %}
+{% if request.args.get('sync') %}<div class="alert {{ 'alert-warning' if request.args.get('errors','0')|int else 'alert-success' }}">Se revisaron {{ request.args.get('checked','0') }} RFQ pendientes y se encontraron {{ request.args.get('responses','0') }} respuesta(s) nueva(s).{% if request.args.get('errors','0')|int %} {{ request.args.get('errors') }} RFQ no pudieron revisarse.{% endif %}</div>{% endif %}
 <div class="mb-3 text-secondary">Solicitudes de precio enviadas a THK y Thomson.</div>
 <form class="card card-body mb-3" method="get"><div class="row g-2">
   <div class="col-md-6"><input class="form-control" name="q" value="{{ search }}" placeholder="Buscar RFQ, cliente o referencia"></div>

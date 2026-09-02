@@ -212,6 +212,30 @@ class RFQVendorRequestService:
             )
         return response_count
 
+    @classmethod
+    def sync_pending(cls, actor_user_id: int) -> dict[str, int]:
+        rfq_ids = RFQVendorRequestRepository.pending_rfq_ids()
+        result = {"checked": 0, "responses": 0, "errors": 0}
+        for rfq_id in rfq_ids:
+            before = sum(
+                bool(item["has_response"])
+                for item in RFQVendorRequestRepository.list_for_rfq(rfq_id)
+            )
+            try:
+                cls.sync(rfq_id, actor_user_id)
+                after = sum(
+                    bool(item["has_response"])
+                    for item in RFQVendorRequestRepository.list_for_rfq(rfq_id)
+                )
+                result["checked"] += 1
+                result["responses"] += max(after - before, 0)
+            except ValueError:
+                current_app.logger.exception(
+                    "No fue posible sincronizar la RFQ %s", rfq_id
+                )
+                result["errors"] += 1
+        return result
+
     @staticmethod
     def _safe_html(value) -> str:
         return "<p>" + html.escape(str(value or "")).replace("\n", "<br>") + "</p>"
