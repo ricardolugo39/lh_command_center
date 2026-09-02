@@ -100,6 +100,16 @@ def test_customer_autocomplete_searches_name_nit_and_erp_id(targeted_database):
     assert len(CustomerLookupRepository.search_workspace_customers("I", 1)) <= 1
 
 
+def test_rfq_can_create_a_customer_not_present_in_erp(targeted_database):
+    values = _rfq_values()
+    values["customer_id"] = ""
+    values["new_customer_name"] = "Cliente Nuevo de Prueba"
+    rfq_id = RFQService.create(values)
+    assert RFQService.detail(rfq_id)["rfq"]["customer_name"] == (
+        "Cliente Nuevo de Prueba"
+    )
+
+
 def test_rfq_rules_and_normalized_unique_number(targeted_database):
     first = RFQService.create(_rfq_values())
     assert RFQService.detail(first)["rfq"]["opportunity_id"] is None

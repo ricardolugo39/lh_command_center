@@ -9,6 +9,7 @@ from app.workspace.repositories.contact_repository import (
 )
 from app.workspace.repositories.project_repository import ProjectRepository
 from app.workspace.repositories.rfq_repository import RFQRepository
+from app.workspace.repositories.customer_repository import CustomerRepository
 from app.workspace.repositories.rfq_email_repository import RFQEmailRepository
 from app.workspace.repositories.rfq_vendor_request_repository import (
     RFQVendorRequestRepository,
@@ -216,6 +217,15 @@ class RFQService:
         cls, values: dict[str, Any]
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         customer_id = cls._integer(values.get("customer_id"))
+        new_customer_name = str(values.get("new_customer_name") or "").strip()
+        if not customer_id and new_customer_name:
+            if len(new_customer_name) < 2:
+                raise ValueError("El nombre del cliente nuevo es demasiado corto.")
+            existing = CustomerRepository.find_by_name(new_customer_name)
+            customer_id = (
+                existing["id"] if existing
+                else CustomerRepository.create_customer(new_customer_name)
+            )
         customer = ActivityFormRepository.get_customer(customer_id or 0)
         if not customer:
             raise ValueError("Seleccione un cliente válido.")

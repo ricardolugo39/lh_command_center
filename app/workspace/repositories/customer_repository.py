@@ -6,6 +6,16 @@ from app.database.transaction import connection_scope
 class CustomerRepository:
 
     @staticmethod
+    def find_by_name(name: str) -> dict[str, Any] | None:
+        with connection_scope() as conn:
+            row = conn.execute(
+                """SELECT id,name,erp_customer_id FROM ws_customers
+                WHERE LOWER(TRIM(name))=LOWER(TRIM(?)) LIMIT 1""",
+                (name,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
     def create_customer(
         name: str,
         erp_customer_id: str | None = None,
