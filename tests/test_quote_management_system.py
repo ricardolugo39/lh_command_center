@@ -55,7 +55,7 @@ def test_direct_quote_uses_same_usd_processor_without_rfq(quote_database):
             "reference": "ABC-123", "brand": "Otra Marca",
             "quantity": "2", "fob_unit_usd": "125.50",
             "unit_weight_kg": "1.25", "lead_time": "3 weeks",
-            "source_note": "Portal del fabricante",
+            "source_note": "Portal del fabricante", "product_type": "BRG",
         }],
     }, 1)
     page = QuoteManagementService.workspace(quote_id)
@@ -85,12 +85,12 @@ def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     result = QuoteManagementService.calculate(quote_id)
     quote = result["quote"]
     assert quote["calculated_dhl_zone"] == 4
-    assert Decimal(quote["calculated_shipping_usd"]) == Decimal("52.35")
+    assert Decimal(quote["calculated_shipping_usd"]) == Decimal("65.11")
     assert Decimal(quote["customs_usd"]) == 0
     assert Decimal(quote["bank_fee_usd"]) == Decimal("30.00")
-    assert Decimal(quote["landed_cost_usd"]) == Decimal("122.35")
-    assert Decimal(quote["profit_usd"]) == Decimal("77.65")
-    assert Decimal(result["lines"][0]["shipping"]) == Decimal("52.35")
+    assert Decimal(quote["landed_cost_usd"]) == Decimal("143.11")
+    assert Decimal(quote["profit_usd"]) == Decimal("56.89")
+    assert Decimal(result["lines"][0]["shipping"]) == Decimal("65.11")
 
 
 def test_customs_is_fixed_300_usd_over_value_threshold(quote_database):
@@ -132,6 +132,7 @@ def test_price_is_automatic_and_manual_override_needs_no_reason(quote_database):
         quote_id, {"origin_option": "BR|default"}, [{
             "id": line["id"], "vendor_fob_unit_usd": "20",
             "unit_weight_kg": "1", "lead_time": "4 weeks",
+            "product_type": "SCREW",
         }], 1
     )
     automatic = QuoteManagementService.calculate(quote_id)
@@ -139,6 +140,41 @@ def test_price_is_automatic_and_manual_override_needs_no_reason(quote_database):
     QuoteManagementService.save_workspace(
         quote_id, {}, [{"id": line["id"], "pricing_override_value": "10"}], 1
     )
+
+
+def test_sheet_product_factors_and_free_price(quote_database):
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    common = {
+        "id": line["id"], "vendor_fob_unit_usd": "20",
+        "unit_weight_kg": "1", "lead_time": "4 weeks",
+    }
+    QuoteManagementService.save_workspace(
+        quote_id, {"origin_option": "BR|default"},
+        [{**common, "product_type": "SCREW"}], 1,
+    )
+    screw = Decimal(QuoteManagementService.calculate(quote_id)["lines"][0]["selling_unit"])
+    QuoteManagementService.save_workspace(
+        quote_id, {"origin_option": "BR|default"}, [{**common, "product_type": "BLOCK"}], 1,
+    )
+    block = Decimal(QuoteManagementService.calculate(quote_id)["lines"][0]["selling_unit"])
+    assert block > screw
+    QuoteManagementService.save_workspace(
+        quote_id, {"origin_option": "BR|default"},
+        [{**common, "product_type": "FREE", "pricing_override_value": "88"}], 1,
+    )
+    free = QuoteManagementService.calculate(quote_id)
+    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("88.00")
+
+
+def test_sales_recipient_directory_is_seeded_and_extendable(quote_database):
+    recipients = QuoteManagementRepository.sales_recipients()
+    assert any(row["email"] == "juancarlos.benavides@lugohermanos.com" for row in recipients)
+    recipient_id = QuoteManagementRepository.create_sales_recipient(
+        "Nueva Vendedora", "nueva@example.com", 1
+    )
+    assert recipient_id
+    assert QuoteManagementRepository.sales_recipient_by_email("NUEVA@example.com")["display_name"] == "Nueva Vendedora"
 
 
 def test_manual_shipping_is_the_only_freight_override(quote_database):
@@ -156,6 +192,6 @@ def test_manual_shipping_is_the_only_freight_override(quote_database):
         1,
     )
     result = QuoteManagementService.calculate(quote_id)
-    assert Decimal(result["quote"]["calculated_shipping_usd"]) == Decimal("52.35")
+    assert Decimal(result["quote"]["calculated_shipping_usd"]) == Decimal("65.11")
     assert Decimal(result["quote"]["final_shipping_usd"]) == Decimal("25.00")
     assert result["quote"]["final_dhl_zone"] == 4

@@ -6,7 +6,9 @@ from werkzeug.utils import secure_filename
 from app.auth import roles_required
 from app.storage import upload_path
 from app.workspace.repositories.quote_management_repository import QuoteManagementRepository
-from app.workspace.services.quote_management_service import QuoteManagementService, QUOTE_STATUSES
+from app.workspace.services.quote_management_service import (
+    QuoteManagementService, QUOTE_STATUSES, PRODUCT_TYPES,
+)
 from app.workspace.constants.commercial_office import OFFICES
 from app.workspace.repositories.contact_repository import ActivityFormRepository
 
@@ -36,7 +38,7 @@ def new_direct():
             fields = (
                 "item_reference", "item_brand", "item_quantity",
                 "item_fob_unit_usd", "item_unit_weight_kg", "item_lead_time",
-                "item_source_note", "item_notes",
+                "item_source_note", "item_notes", "item_product_type",
             )
             lists = {field: request.form.getlist(field) for field in fields}
             count = len(lists["item_reference"])
@@ -50,6 +52,7 @@ def new_direct():
                 "lead_time": lists["item_lead_time"][index] if index < len(lists["item_lead_time"]) else "",
                 "source_note": lists["item_source_note"][index] if index < len(lists["item_source_note"]) else "",
                 "notes": lists["item_notes"][index] if index < len(lists["item_notes"]) else "",
+                "product_type": lists["item_product_type"][index] if index < len(lists["item_product_type"]) else "",
             } for index in range(count)]
             quote_id = QuoteManagementService.create_direct(
                 values, g.current_user["id"]
@@ -60,6 +63,7 @@ def new_direct():
     return render_template(
         "quotes/direct_form.html", error=error, form=request.form,
         sales_representatives=ActivityFormRepository.list_sales_representatives(),
+        product_types=PRODUCT_TYPES,
         customer=(
             ActivityFormRepository.get_customer(customer_id)
             if customer_id else None
@@ -77,7 +81,7 @@ def workspace(quote_id: int):
             values = []
             fields = (
                 "vendor_fob_unit_usd", "unit_weight_kg", "lead_time",
-                "pricing_override_value", "internal_notes",
+                "product_type", "pricing_override_value", "internal_notes",
             )
             lists = {field: request.form.getlist(field) for field in fields}
             for index, raw_id in enumerate(ids):
@@ -150,6 +154,28 @@ def delivery(quote_id: int):
     if request.method == "POST":
         review = request.form.to_dict()
         review["attachment_ids"] = request.form.getlist("attachment_ids")
+        new_name = str(request.form.get("new_recipient_name") or "").strip()
+        new_email = str(request.form.get("new_recipient_email") or "").strip().casefold()
+        if new_name or new_email:
+            if not new_name or "@" not in new_email:
+                return "Complete nombre y correo válido del nuevo vendedor.", 400
+            QuoteManagementRepository.create_sales_recipient(
+                new_name, new_email, g.current_user["id"]
+            )
+            review["recipient_email"] = new_email
+        upload = request.files.get("additional_file")
+        if upload and upload.filename:
+            safe_name = secure_filename(upload.filename)
+            root = upload_path("quotes", str(quote_id))
+            root.mkdir(parents=True, exist_ok=True)
+            path = root / safe_name
+            upload.save(path)
+            attachment_id = QuoteManagementRepository.add_attachment(quote_id, {
+                "original_filename": upload.filename, "stored_filename": str(path),
+                "mime_type": upload.mimetype, "size_bytes": path.stat().st_size,
+                "category": "other", "uploaded_by_user_id": g.current_user["id"],
+            })
+            review["attachment_ids"].append(str(attachment_id))
         QuoteManagementService.prepare_delivery(quote_id, g.current_user["id"], review)
         return redirect(url_for("quotes.delivery", quote_id=quote_id))
     page = QuoteManagementService.workspace(quote_id)

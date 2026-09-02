@@ -8,6 +8,11 @@ from app.workspace.repositories.quote_management_repository import (
 
 ZERO = Decimal("0")
 CENT = Decimal("0.01")
+PRODUCT_FACTORS = {
+    "SCREW": Decimal("0.65"), "NUT": Decimal("0.60"),
+    "BLOCK": Decimal("0.55"), "BRG": Decimal("0.75"),
+    "RAIL": Decimal("0.60"), "REDUCER": Decimal("0.75"),
+}
 
 
 def money(value: Any) -> Decimal:
@@ -83,7 +88,9 @@ class QuoteCalculationService:
             if not str(line.get("lead_time") or "").strip():
                 raise ValueError(f"Falta el tiempo de entrega en la línea {index}.")
             fob = money(quantity * fob_unit)
-            weight = quantity * unit_weight
+            # The worksheet uses a 1.6 packing/chargeable-weight factor before
+            # consulting DHL and before evaluating the 50 kg customs threshold.
+            weight = quantity * unit_weight * Decimal("1.6")
             work.append({**line, "quantity_d": quantity, "fob": fob, "weight": weight})
         total_fob = sum((line["fob"] for line in work), ZERO)
         total_weight = sum((line["weight"] for line in work), ZERO)
@@ -102,35 +109,31 @@ class QuoteCalculationService:
         for position, line in enumerate(work):
             last = position == len(work) - 1
             shipping = money(final_shipping * line["weight"] / total_weight) if not last else money(final_shipping - allocated_shipping)
-            custom = money(customs * line["fob"] / total_fob) if not last else money(customs - allocated_customs)
-            bank_part = money(bank * line["fob"] / total_fob) if not last else money(bank - allocated_bank)
+            custom = money(customs * line["weight"] / total_weight) if not last else money(customs - allocated_customs)
+            bank_part = money(bank * line["weight"] / total_weight) if not last else money(bank - allocated_bank)
             allocated_shipping += shipping
             allocated_customs += custom
             allocated_bank += bank_part
-            landed = money(line["fob"] + shipping + custom + bank_part)
+            landed = money(line["fob"] * Decimal("1.2") + shipping + custom + bank_part)
             manual_price = line.get("pricing_override_value")
-            if manual_price not in (None, ""):
+            product_type = str(line.get("product_type") or "").upper()
+            if product_type == "FREE":
+                if manual_price in (None, ""):
+                    raise ValueError(f"Indique el precio libre en la línea {position + 1}.")
                 selling_unit = money(manual_price)
-            elif line.get("pricing_rule_id"):
-                rule = QuoteManagementRepository.pricing_rule(int(line["pricing_rule_id"]))
-                if not rule:
-                    raise ValueError("La regla de precio seleccionada no está activa.")
-                landed_unit = landed / line["quantity_d"]
-                value = decimal_value(rule["default_value"])
-                if rule["rule_type"] == "cost_multiplier":
-                    selling_unit = money(landed_unit * value)
-                elif rule["rule_type"] == "markup":
-                    selling_unit = money(landed_unit * (Decimal("1") + value / 100))
-                else:
-                    if value >= 100:
-                        raise ValueError("El margen bruto configurado debe ser menor a 100%.")
-                    selling_unit = money(landed_unit / (Decimal("1") - value / 100))
+            elif manual_price not in (None, ""):
+                selling_unit = money(manual_price)
             else:
-                # The normal workflow must not require the user to choose an
-                # internal pricing rule.  Until a more specific stored rule is
-                # attached to the line, use the worksheet's standard 0.65
-                # profitability factor automatically.
-                selling_unit = money((landed / line["quantity_d"]) / Decimal("0.65"))
+                factor = PRODUCT_FACTORS.get(product_type)
+                if not factor:
+                    raise ValueError(f"Seleccione el tipo de producto en la línea {position + 1}.")
+                # Exact worksheet structure: FOB carries 20%, the product
+                # component is divided by its profitability factor, freight
+                # carries 70%, and bank/customs are passed through.
+                selling_unit = money(
+                    (decimal_value(line.get("vendor_fob_unit_usd")) * Decimal("1.2") / factor)
+                    + (shipping * Decimal("1.7") + custom + bank_part) / line["quantity_d"]
+                )
             selling_total = money(selling_unit * line["quantity_d"])
             profit = money(selling_total - landed)
             margin = money(profit / selling_total * 100) if selling_total else ZERO
@@ -142,7 +145,7 @@ class QuoteCalculationService:
                 "profit": str(profit), "margin": str(margin), "roi": str(roi),
             })
         selling_total = sum((money(row["selling_total"]) for row in results), ZERO)
-        landed_total = money(total_fob + final_shipping + customs + bank)
+        landed_total = money(total_fob * Decimal("1.2") + final_shipping + customs + bank)
         profit = money(selling_total - landed_total)
         return {
             "quote": {

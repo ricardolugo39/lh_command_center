@@ -3671,6 +3671,58 @@ def _migration_0060_manual_quote_shipping(connection: Connection) -> None:
     _add_column(connection, "ws_project_quotes", "manual_shipping_usd", "TEXT")
 
 
+def _migration_0061_quote_pricing_and_recipients(connection: Connection) -> None:
+    """Add worksheet product types and a reusable sales-recipient directory."""
+    _add_column(connection, "ws_quote_lines", "product_type", "TEXT")
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS quote_sales_recipients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            display_name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+            created_by_user_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(created_by_user_id) REFERENCES ws_users(id) ON DELETE SET NULL
+        )"""
+    )
+    recipients = (
+        ("Ricardo Lugo", "ricardo.lugo@lugohermanos.com"),
+        ("Jairo Vera", "jairo.vera@lugohermanos.com"),
+        ("Sebastian Cordoba", "sebastian.cordoba@lugohermanos.com"),
+        ("Harol Camargo", "harol.camargo@lugohermanos.com"),
+        ("Ferney Rincon", "ferney.rincon@lugohermanos.com"),
+        ("German Beltran", "german.beltran@lugohermanos.com"),
+        ("Yeisson Renteria", "yeisson.renteria@lugohermanos.com"),
+        ("Jeisman Holguin", "jeisman-holguin@lugohermanos.com"),
+        ("John Pinzon", "jhon.pinzon@lugohermanos.com"),
+        ("John Fredy Moreno", "john.moreno@lugohermanos.com"),
+        ("Fabio Nelson Valencia", "fabio.valencia@lugohermanos.com"),
+        ("Ferney Ordonez", "ferney.ordonez@lugohermanos.com"),
+        ("Nicolas Lugo D.", "nicolas.lugo@lugohermanos.com"),
+        ("Juan Carlos Benavides", "juancarlos.benavides@lugohermanos.com"),
+        ("Maria Sierra", "ventasonline@lugohermanos.com"),
+        ("Nicolas Lugo G.", "nicolas.gomez@lugohermanos.com"),
+        ("Jean Florez", "jeanp.florez@lugohermanos.com"),
+        ("Edwin Arbelaez", "edwin.arbelaez@lugohermanos.com"),
+        ("Tomas Vargas", "asesor1@lugohermanos.com"),
+        ("Andrea Jimenez", "andrea.jimenez@lugohermanos.com"),
+        ("Jose Beltran", "jose.beltran@lugohermanos.com"),
+        ("Duban Quintero", "duban.quintero@lugohermanos.com"),
+        ("Daniel Mariño Gómez", "comercial@lugohermanos.com"),
+        ("Hernando Guzman", "hernando.guzman@lugohermanos.com"),
+        ("Ricardo Castaneda", "ricardo.castaneda@lugohermanos.com"),
+        ("Adbeiro Cuesta", "adbeiro.cuesta@lugohermanos.com"),
+        ("Ricardo Bazza", "ricardo.bazza@ptcingenieria.com"),
+        ("CONSTANZA RAMIREZ", "constanza.ramirez@lugohermanos.com"),
+    )
+    connection.executemany(
+        """INSERT OR IGNORE INTO quote_sales_recipients(display_name,email)
+        VALUES (?,?)""",
+        recipients,
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3818,6 +3870,7 @@ MIGRATION_MANIFEST = (
     Migration(58, "integration_credentials", _migration_0058_integration_credentials),
     Migration(59, "rfq_vendor_message", _migration_0059_rfq_vendor_message),
     Migration(60, "manual_quote_shipping", _migration_0060_manual_quote_shipping),
+    Migration(61, "quote_pricing_and_recipients", _migration_0061_quote_pricing_and_recipients),
 )
 
 

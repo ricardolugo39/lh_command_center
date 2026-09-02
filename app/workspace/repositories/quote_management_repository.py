@@ -104,6 +104,41 @@ class QuoteManagementRepository:
         return dict(row) if row else None
 
     @staticmethod
+    def sales_recipients() -> list[dict[str, Any]]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT * FROM quote_sales_recipients WHERE is_active=1
+                ORDER BY display_name COLLATE NOCASE,id"""
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def create_sales_recipient(name: str, email: str, actor: int) -> int:
+        with connection_scope() as connection:
+            connection.execute(
+                """INSERT INTO quote_sales_recipients(
+                display_name,email,created_by_user_id) VALUES (?,?,?)
+                ON CONFLICT(email) DO UPDATE SET display_name=excluded.display_name,
+                is_active=1,updated_at=CURRENT_TIMESTAMP""",
+                (name, email, actor),
+            )
+            row = connection.execute(
+                "SELECT id FROM quote_sales_recipients WHERE email=? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+        return int(row["id"])
+
+    @staticmethod
+    def sales_recipient_by_email(email: str) -> dict[str, Any] | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """SELECT * FROM quote_sales_recipients
+                WHERE email=? COLLATE NOCASE AND is_active=1 LIMIT 1""",
+                (email,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
     def next_rl_number() -> str:
         with connection_scope() as connection:
             rows = connection.execute(
@@ -164,14 +199,14 @@ class QuoteManagementRepository:
                 """INSERT INTO ws_quote_lines(
                     quote_id,brand,part_number,description,quantity,unit_price,
                     line_total,currency_code,display_order,vendor_fob_unit_usd,
-                    unit_weight_kg,lead_time,vendor_comments,internal_notes
-                ) VALUES (?,?,?,?,?,0,0,'USD',?,?,?,?,?,?)""",
+                    unit_weight_kg,lead_time,vendor_comments,internal_notes,product_type
+                ) VALUES (?,?,?,?,?,0,0,'USD',?,?,?,?,?,?,?)""",
                 (
                     quote_id, values["brand"], values["reference"],
                     values["reference"], values["quantity"],
                     values["display_order"], values["fob_unit_usd"],
                     values["unit_weight_kg"], values["lead_time"],
-                    values.get("source_note"), values.get("notes"),
+                    values.get("source_note"), values.get("notes"), values.get("product_type"),
                 ),
             )
             return int(cursor.lastrowid)
@@ -262,7 +297,7 @@ class QuoteManagementRepository:
     def update_line(line_id: int, values: dict[str, Any], actor_user_id: int) -> None:
         columns = (
             "vendor_fob_unit_usd", "unit_weight_kg", "lead_time",
-            "pricing_override_value", "internal_notes",
+            "product_type", "pricing_override_value", "internal_notes",
         )
         with connection_scope() as connection:
             connection.execute(

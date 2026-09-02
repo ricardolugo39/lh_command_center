@@ -31,6 +31,11 @@ QUOTE_STATUSES = {
     "followup_due": "Seguimiento vencido", "won": "Ganada", "lost": "Perdida",
     "cancelled": "Cancelada", "expired": "Vencida",
 }
+PRODUCT_TYPES = {
+    "SCREW": "Tornillo", "NUT": "Tuerca", "BLOCK": "Patín / bloque",
+    "BRG": "Rodamiento", "RAIL": "Riel", "REDUCER": "Reductor",
+    "FREE": "Libre",
+}
 
 
 class QuoteManagementService:
@@ -70,6 +75,9 @@ class QuoteManagementService:
                 raise ValueError(f"Cantidad, precio USD y peso deben ser positivos en la fila {index}.")
             if not lead_time:
                 raise ValueError(f"Indique el tiempo de entrega en la fila {index}.")
+            product_type = str(item.get("product_type") or "").strip().upper()
+            if product_type not in PRODUCT_TYPES:
+                raise ValueError(f"Seleccione el tipo de producto en la fila {index}.")
             clean_items.append({
                 **item, "reference": reference, "brand": brand,
                 "lead_time": lead_time, "quantity": quantity,
@@ -77,6 +85,7 @@ class QuoteManagementService:
                 "display_order": index - 1,
                 "source_note": str(item.get("source_note") or "").strip() or None,
                 "notes": str(item.get("notes") or "").strip() or None,
+                "product_type": product_type,
             })
         quote_id = QuoteManagementRepository.create_direct({
             "customer_id": customer_id, "sales_rep_name": sales_rep_name,
@@ -136,6 +145,8 @@ class QuoteManagementService:
             "lines": QuoteManagementRepository.lines(quote_id),
             "origins": QuoteManagementRepository.origin_options(profile["id"]) if profile else [],
             "pricing_rules": QuoteManagementRepository.pricing_rules(),
+            "product_types": PRODUCT_TYPES,
+            "sales_recipients": QuoteManagementRepository.sales_recipients(),
             "attachments": QuoteManagementRepository.attachments(quote_id),
             "pdf": QuoteManagementRepository.latest_pdf(quote_id),
             "statuses": QUOTE_STATUSES,
@@ -306,16 +317,32 @@ class QuoteManagementService:
         products = ", ".join(dict.fromkeys(line.get("part_number") or line["description"] for line in lines))[:80]
         brands = ", ".join(dict.fromkeys(line.get("brand") or "" for line in lines if line.get("brand")))
         subject = f"Cotización: {quote['customer_name']} - {quote['prefix']}-{quote['quote_number']} - {products} ({brands})"[:180]
-        text = f"Hola {quote.get('sales_rep_name') or ''},\n\nAdjunto cotización.\n\nQuedo atento.\nRicardo Lugo"
         review = review or {}
         recipient = str(review.get("recipient_email") or quote["sales_rep_email"]).strip()
         if not recipient:
             raise ValueError("La entrega requiere destinatario.")
+        recipient_record = QuoteManagementRepository.sales_recipient_by_email(recipient)
+        recipient_name = (
+            recipient_record.get("display_name") if recipient_record
+            else quote.get("sales_rep_name") or ""
+        )
+        text = (
+            f"Estimado(a) {recipient_name},\n\n"
+            "Adjunto cotización.\n\nComentarios:\n\n"
+            "- Los precios cotizados son válidos únicamente para la compra total "
+            "de unidades especificadas en esta cotización.\n"
+            "- TRM del día de la factura.\n"
+            "- Disponibilidad sujeta a confirmación en fábrica.\n"
+            "- Vigencia de la oferta: 10 días.\n\n"
+            "Si tiene alguna pregunta o necesita información adicional, favor contactarme.\n\n"
+            "Saludos cordiales,\nRicardo Lugo"
+        )
         cc = [item.strip() for item in str(review.get("cc") or "").split(",") if item.strip()]
         advisor_note = str(review.get("advisor_note") or "").strip()
         body_text = str(review.get("body_text") or text)
-        if advisor_note:
-            body_text += f"\n\nNota para el asesor:\n{advisor_note}"
+        additional_text = str(review.get("additional_text") or "").strip()
+        if additional_text:
+            body_text += f"\n\n{additional_text}"
         body_html = "<p>" + escape(body_text).replace("\n", "<br>") + "</p>"
         return QuoteManagementRepository.save_delivery(quote_id, {
             "recipient_email": recipient, "cc": cc,
