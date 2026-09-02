@@ -115,25 +115,25 @@ class QuoteCalculationService:
             allocated_customs += custom
             allocated_bank += bank_part
             landed = money(line["fob"] * Decimal("1.2") + shipping + custom + bank_part)
-            manual_price = line.get("pricing_override_value")
+            custom_divisor = line.get("pricing_override_value")
             product_type = str(line.get("product_type") or "").upper()
             if product_type == "FREE":
-                if manual_price in (None, ""):
-                    raise ValueError(f"Indique el precio libre en la línea {position + 1}.")
-                selling_unit = money(manual_price)
-            elif manual_price not in (None, ""):
-                selling_unit = money(manual_price)
+                factor = decimal_value(custom_divisor)
+                if factor <= ZERO or factor >= Decimal("1"):
+                    raise ValueError(
+                        f"El divisor libre de la línea {position + 1} debe ser mayor que 0 y menor que 1."
+                    )
             else:
                 factor = PRODUCT_FACTORS.get(product_type)
                 if not factor:
                     raise ValueError(f"Seleccione el tipo de producto en la línea {position + 1}.")
-                # Exact worksheet structure: FOB carries 20%, the product
-                # component is divided by its profitability factor, freight
-                # carries 70%, and bank/customs are passed through.
-                selling_unit = money(
-                    (decimal_value(line.get("vendor_fob_unit_usd")) * Decimal("1.2") / factor)
-                    + (shipping * Decimal("1.7") + custom + bank_part) / line["quantity_d"]
-                )
+            # Exact worksheet structure: FOB carries 20%, the product
+            # component is divided by its profitability factor, freight
+            # carries 70%, and bank/customs are passed through.
+            selling_unit = money(
+                (decimal_value(line.get("vendor_fob_unit_usd")) * Decimal("1.2") / factor)
+                + (shipping * Decimal("1.7") + custom + bank_part) / line["quantity_d"]
+            )
             selling_total = money(selling_unit * line["quantity_d"])
             profit = money(selling_total - landed)
             margin = money(profit / selling_total * 100) if selling_total else ZERO

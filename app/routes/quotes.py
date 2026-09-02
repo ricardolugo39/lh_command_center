@@ -144,6 +144,12 @@ def generate_pdf(quote_id: int):
 def pdf(quote_id: int):
     artifact = QuoteManagementRepository.latest_pdf(quote_id)
     if not artifact or not Path(artifact["stored_filename"]).is_file():
+        try:
+            QuoteManagementService.generate_pdf(quote_id, g.current_user["id"])
+            artifact = QuoteManagementRepository.latest_pdf(quote_id)
+        except ValueError:
+            abort(404)
+    if not artifact or not Path(artifact["stored_filename"]).is_file():
         abort(404)
     return send_file(Path(artifact["stored_filename"]).resolve(), mimetype="application/pdf")
 

@@ -12,6 +12,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.database.transaction import connection_scope, transactional
+from app.storage import data_path
 from app.workspace.repositories.quote_management_repository import (
     QuoteManagementRepository,
 )
@@ -22,7 +23,6 @@ from app.workspace.repositories.customer_repository import CustomerRepository
 from app.workspace.repositories.contact_repository import ActivityFormRepository
 
 
-PDF_ROOT = Path("output/pdf")
 QUOTE_STATUSES = {
     "draft": "Borrador", "waiting_vendor": "Esperando proveedor",
     "partial_vendor_response": "Respuesta parcial", "ready_pricing": "Lista para costear",
@@ -32,9 +32,13 @@ QUOTE_STATUSES = {
     "cancelled": "Cancelada", "expired": "Vencida",
 }
 PRODUCT_TYPES = {
-    "SCREW": "Tornillo", "NUT": "Tuerca", "BLOCK": "Patín / bloque",
-    "BRG": "Rodamiento", "RAIL": "Riel", "REDUCER": "Reductor",
-    "FREE": "Libre",
+    "SCREW": "Tornillo · divisor 0.65 · margen base 35%",
+    "NUT": "Tuerca · divisor 0.60 · margen base 40%",
+    "BLOCK": "Patín / bloque · divisor 0.55 · margen base 45%",
+    "BRG": "Rodamiento · divisor 0.75 · margen base 25%",
+    "RAIL": "Riel · divisor 0.60 · margen base 40%",
+    "REDUCER": "Reductor · divisor 0.75 · margen base 25%",
+    "FREE": "Libre · escribir divisor",
 }
 
 
@@ -140,6 +144,9 @@ class QuoteManagementService:
         if not quote:
             raise ValueError("La cotización no existe.")
         profile = QuoteManagementRepository.active_profile()
+        pdf = QuoteManagementRepository.latest_pdf(quote_id)
+        if pdf and not Path(pdf["stored_filename"]).is_file():
+            pdf = None
         return {
             "quote": quote,
             "lines": QuoteManagementRepository.lines(quote_id),
@@ -148,7 +155,7 @@ class QuoteManagementService:
             "product_types": PRODUCT_TYPES,
             "sales_recipients": QuoteManagementRepository.sales_recipients(),
             "attachments": QuoteManagementRepository.attachments(quote_id),
-            "pdf": QuoteManagementRepository.latest_pdf(quote_id),
+            "pdf": pdf,
             "statuses": QUOTE_STATUSES,
         }
 
@@ -253,9 +260,10 @@ class QuoteManagementService:
             page = QuoteManagementService.workspace(quote_id)
         quote, lines = page["quote"], page["lines"]
         QuoteManagementService.validate_for_issue(quote, lines)
-        PDF_ROOT.mkdir(parents=True, exist_ok=True)
+        pdf_root = data_path("pdf")
+        pdf_root.mkdir(parents=True, exist_ok=True)
         filename = f"{quote['prefix']}-{quote['quote_number']}-R{quote['revision']}.pdf"
-        path = PDF_ROOT / filename
+        path = pdf_root / filename
         styles = getSampleStyleSheet()
         title = ParagraphStyle("title", parent=styles["Title"], textColor=colors.HexColor("#17365D"), alignment=TA_CENTER)
         doc = SimpleDocTemplate(str(path), pagesize=letter, rightMargin=15*mm, leftMargin=15*mm, topMargin=14*mm, bottomMargin=14*mm)
@@ -361,8 +369,11 @@ class QuoteManagementService:
             raise ValueError("El borrador de entrega no existe.")
         quote = QuoteManagementRepository.get(delivery["quote_id"])
         pdf = QuoteManagementRepository.latest_pdf(delivery["quote_id"])
-        if not quote or not pdf:
+        if not quote:
             raise ValueError("La entrega no tiene una cotización PDF.")
+        if not pdf or not Path(pdf["stored_filename"]).is_file():
+            QuoteManagementService.generate_pdf(delivery["quote_id"], actor)
+            pdf = QuoteManagementRepository.latest_pdf(delivery["quote_id"])
         import json
         requested_ids = {str(value) for value in json.loads(delivery["attachment_ids_json"])}
         attachments = [{

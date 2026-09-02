@@ -77,8 +77,7 @@ def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
         [{
             "id": line["id"], "vendor_fob_unit_usd": "20",
             "unit_weight_kg": "1", "lead_time": "4 weeks",
-            "pricing_override_value": "100",
-            "pricing_override_reason": "Precio autorizado",
+            "product_type": "SCREW",
         }],
         1,
     )
@@ -89,7 +88,7 @@ def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     assert Decimal(quote["customs_usd"]) == 0
     assert Decimal(quote["bank_fee_usd"]) == Decimal("30.00")
     assert Decimal(quote["landed_cost_usd"]) == Decimal("143.11")
-    assert Decimal(quote["profit_usd"]) == Decimal("56.89")
+    assert Decimal(quote["profit_usd"]) == Decimal(str(quote["amount"])) - Decimal("143.11")
     assert Decimal(result["lines"][0]["shipping"]) == Decimal("65.11")
 
 
@@ -102,8 +101,7 @@ def test_customs_is_fixed_300_usd_over_value_threshold(quote_database):
         [{
             "id": line["id"], "vendor_fob_unit_usd": "1001",
             "unit_weight_kg": "1", "lead_time": "4 weeks",
-            "pricing_override_value": "1500",
-            "pricing_override_reason": "Precio autorizado",
+            "product_type": "SCREW",
         }],
         1,
     )
@@ -125,7 +123,7 @@ def test_revisions_copy_provenance_without_overwriting(quote_database):
     assert QuoteManagementRepository.lines(revision_id)[0]["source_rfq_item_id"]
 
 
-def test_price_is_automatic_and_manual_override_needs_no_reason(quote_database):
+def test_price_is_automatic_when_product_type_is_selected(quote_database):
     quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
     line = QuoteManagementRepository.lines(quote_id)[0]
     QuoteManagementService.save_workspace(
@@ -137,12 +135,9 @@ def test_price_is_automatic_and_manual_override_needs_no_reason(quote_database):
     )
     automatic = QuoteManagementService.calculate(quote_id)
     assert Decimal(automatic["lines"][0]["selling_unit"]) > 0
-    QuoteManagementService.save_workspace(
-        quote_id, {}, [{"id": line["id"], "pricing_override_value": "10"}], 1
-    )
 
 
-def test_sheet_product_factors_and_free_price(quote_database):
+def test_sheet_product_factors_and_free_divisor(quote_database):
     quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
     line = QuoteManagementRepository.lines(quote_id)[0]
     common = {
@@ -161,10 +156,10 @@ def test_sheet_product_factors_and_free_price(quote_database):
     assert block > screw
     QuoteManagementService.save_workspace(
         quote_id, {"origin_option": "BR|default"},
-        [{**common, "product_type": "FREE", "pricing_override_value": "88"}], 1,
+        [{**common, "product_type": "FREE", "pricing_override_value": "0.70"}], 1,
     )
     free = QuoteManagementService.calculate(quote_id)
-    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("88.00")
+    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("104.63")
 
 
 def test_sales_recipient_directory_is_seeded_and_extendable(quote_database):
@@ -177,6 +172,27 @@ def test_sales_recipient_directory_is_seeded_and_extendable(quote_database):
     assert QuoteManagementRepository.sales_recipient_by_email("NUEVA@example.com")["display_name"] == "Nueva Vendedora"
 
 
+def test_pdf_is_written_to_persistent_data_directory(
+    quote_database, tmp_path, monkeypatch,
+):
+    persistent = tmp_path / "persistent"
+    monkeypatch.setenv("APP_DATA_DIR", str(persistent))
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    QuoteManagementService.save_workspace(
+        quote_id, {"origin_option": "BR|default"}, [{
+            "id": line["id"], "vendor_fob_unit_usd": "20",
+            "unit_weight_kg": "1", "lead_time": "4 weeks",
+            "product_type": "SCREW",
+        }], 1,
+    )
+    path = QuoteManagementService.generate_pdf(quote_id, 1)
+    assert path.is_file()
+    assert path.parent == persistent / "pdf"
+    path.unlink()
+    assert QuoteManagementService.workspace(quote_id)["pdf"] is None
+
+
 def test_manual_shipping_is_the_only_freight_override(quote_database):
     quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
     line = QuoteManagementRepository.lines(quote_id)[0]
@@ -186,8 +202,7 @@ def test_manual_shipping_is_the_only_freight_override(quote_database):
         [{
             "id": line["id"], "vendor_fob_unit_usd": "20",
             "unit_weight_kg": "1", "lead_time": "4 weeks",
-            "pricing_override_value": "100",
-            "pricing_override_reason": "Precio autorizado",
+            "product_type": "SCREW",
         }],
         1,
     )
