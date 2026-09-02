@@ -5,6 +5,9 @@ from app.database.connection import get_connection
 from app.workspace.repositories.advisor_review_repository import AdvisorReviewRepository
 from app.workspace.repositories.commercial_visit_repository import CommercialVisitRepository
 from app.workspace.services.advisor_management_service import AdvisorManagementService
+from app.workspace.services.advisor_monthly_report_service import (
+    AdvisorMonthlyReportService,
+)
 from app.workspace.services.manager_home_service import ManagerHomeService
 from app.workspace.services.workspace_dashboard_service import (
     WorkspaceDashboardService,
@@ -79,6 +82,18 @@ def advisor_management(advisor_name: str):
         advisor_name, office, request.args.get("period", "week")
     )
     return render_template("team/advisor_management.html", page=page)
+
+
+@home_bp.get("/team/<path:advisor_name>/report")
+def advisor_monthly_report(advisor_name: str):
+    office = str(current_app.config.get("DEFAULT_COMMERCIAL_OFFICE", "Cali"))
+    try:
+        page = AdvisorMonthlyReportService.get_page(
+            advisor_name, office, request.args.get("month", "2026-08")
+        )
+    except ValueError as exc:
+        return str(exc), 400
+    return render_template("team/advisor_monthly_report.html", page=page)
 
 
 @home_bp.post("/team/<path:advisor_name>/reviews")

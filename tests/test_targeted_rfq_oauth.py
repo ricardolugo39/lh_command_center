@@ -17,6 +17,12 @@ from app.workspace.services.erp_import_service import (
 )
 from app.workspace.services.rfq_email_service import RFQEmailService
 from app.workspace.services.rfq_service import RFQService
+from app.workspace.services.rfq_vendor_request_service import (
+    RFQVendorRequestService,
+)
+from app.workspace.repositories.rfq_vendor_request_repository import (
+    RFQVendorRequestRepository,
+)
 
 
 REQUIRED_CUSTOMER = {
@@ -106,6 +112,9 @@ def test_rfq_rules_and_normalized_unique_number(targeted_database):
         RFQService.create(values)
     with pytest.raises(ValueError, match="requiere un motivo"):
         RFQService.conclude(first, outcome="cancelled")
+    automatic = _rfq_values("")
+    created = RFQService.create(automatic)
+    assert RFQService.detail(created)["rfq"]["rfq_number"].startswith("RFQ-")
 
 
 class FakeGmail:
@@ -149,6 +158,68 @@ def test_gmail_send_sync_and_failure_are_safe(targeted_database):
     with application.app_context(), pytest.raises(ValueError, match="se conservó"):
         RFQEmailService.send(second)
     assert RFQService.detail(second)["rfq"]["workflow_status"] == "draft"
+
+
+def test_vendor_rfq_send_and_sync_tracks_real_reply(targeted_database):
+    values = _rfq_values("RL-2001")
+    values["items"] = [
+        {"reference": "HSR25", "brand": "THK", "quantity": "2"},
+        {"reference": "SBN4555", "brand": "Thomson", "quantity": "1"},
+    ]
+    values.pop("prequotation_number")
+    rfq_id = RFQService.create(values)
+    rfq = RFQService.detail(rfq_id)["rfq"]
+    assert rfq["rfq_number"].startswith("RFQ-")
+    assert rfq["prequotation_number"] is None
+    assert rfq["owner_email"] == "ricardo.lugo@lugohermanos.com"
+
+    class VendorGmail:
+        def __init__(self):
+            self.sent = []
+
+        def send(self, **message):
+            self.sent.append(message)
+            index = len(self.sent)
+            return {"message_id": f"m-{index}", "thread_id": f"t-{index}"}
+
+        def thread(self, thread_id):
+            return [{
+                "id": f"reply-{thread_id}", "direction": "incoming",
+                "sender": "vendor@example.com", "recipients": [], "cc": [],
+                "subject": "Re: RFQ", "body_text": "<b>Quote attached</b>",
+                "date": "2026-07-24T10:00:00",
+            }]
+
+    gmail = VendorGmail()
+    application = create_app(
+        {"TESTING": True, "TEST_AUTH_BYPASS": True},
+        run_migrations=False, gmail_provider=gmail,
+    )
+    with application.app_context():
+        assert RFQVendorRequestService.send_test(rfq_id) == 2
+        assert gmail.sent[0]["recipients"] == ["ricardo.lugo@lugohermanos.com"]
+        assert gmail.sent[0]["subject"].startswith("[PRUEBA]")
+        assert RFQVendorRequestRepository.list_for_rfq(rfq_id) == []
+        assert RFQVendorRequestService.send(rfq_id, 1) == 2
+        assert len(gmail.sent) == 4
+        assert rfq["rfq_number"] in gmail.sent[2]["subject"]
+        assert rfq["rfq_number"] in gmail.sent[2]["body_text"]
+        assert gmail.sent[2]["subject"] == "RFQ RFQ-000001 - THK"
+        assert "RFQ-000001" in gmail.sent[2]["body_text"]
+        assert "HSR25" in gmail.sent[2]["body_text"]
+        assert "SBN4555" in gmail.sent[3]["body_text"]
+        with pytest.raises(ValueError, match="ya fue enviada"):
+            RFQVendorRequestService.send(rfq_id, 1)
+        assert RFQVendorRequestService.sync(rfq_id, 1) == 2
+
+    requests = RFQVendorRequestRepository.list_for_rfq(rfq_id)
+    assert all(request["has_response"] for request in requests)
+    assert all(request["status"] == "responded" for request in requests)
+    assert len(RFQVendorRequestRepository.list_messages(rfq_id)) == 4
+    assert RFQService.detail(rfq_id)["rfq"]["workflow_status"] == "answered"
+    assert "<b>" not in RFQVendorRequestRepository.list_messages(rfq_id)[-1][
+        "body_html_sanitized"
+    ]
 
 
 class FakeOAuth:

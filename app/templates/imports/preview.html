@@ -8,7 +8,7 @@
       <div class="col"><div class="text-secondary">Archivo</div>
         <strong>{{ preview.original_filename }}</strong></div>
       <div class="col"><div class="text-secondary">Tipo</div>
-        <strong>{{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario'}.get(preview.import_type, preview.import_type) }}</strong></div>
+        <strong>{{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','fob_prices':'Precios FOB'}.get(preview.import_type, preview.import_type) }}</strong></div>
       <div class="col"><div class="text-secondary">Filas</div>
         <strong>{{ preview.rows_read }}</strong></div>
       {% if preview.import_type == 'inventory' %}
@@ -37,6 +37,33 @@
       <div class="col"><strong class="h2">{{ preview.sync_metrics.customer_sites_unchanged }}</strong><div class="text-secondary">Sin cambios</div></div>
     </div></div></div></div>
 </div>
+{% endif %}
+{% if preview.import_type == 'fob_prices' %}
+<div class="row row-cards mb-3">
+  {% for label, value in [
+    ('Filas válidas', preview.sync_metrics.rows_valid),
+    ('Productos', preview.sync_metrics.products_count),
+    ('Marcas', preview.sync_metrics.brands_count),
+    ('Proveedores', preview.sync_metrics.suppliers_count),
+    ('FOB en cero', preview.sync_metrics.zero_fob_count)
+  ] %}
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <div class="text-secondary">{{ label }}</div><strong class="h3">{{ value }}</strong>
+  </div></div></div>
+  {% endfor %}
+</div>
+{% if preview.validation_issues %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Filas con observaciones</h3></div>
+  <div class="table-responsive"><table class="table table-sm card-table">
+    <thead><tr><th>Fila</th><th>Nivel</th><th>Código</th><th>Detalle</th></tr></thead>
+    <tbody>{% for issue in preview.validation_issues %}
+      <tr><td>{{ issue.row_number or '—' }}</td><td>{{ issue.severity }}</td>
+        <td>{{ issue.code }}</td><td>{{ issue.message }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
 {% endif %}
 {% if preview.import_type == 'inventory' %}
 <div class="row row-cards mb-3">

@@ -75,7 +75,9 @@ class StockPlanningFoundationService:
             "profiles": profiles,
             "selected_profile": profile,
             "selected_profile_id": selected,
-            "snapshots": StockPlanningRepository.list_snapshots(selected),
+            # History is global: changing the planning brand must never make
+            # previously saved analyses appear to have disappeared.
+            "snapshots": StockPlanningRepository.list_snapshots(),
             "source_status": source_status,
             "today": date.today().isoformat(),
         }
@@ -179,10 +181,14 @@ class StockPlanningFoundationService:
             sales, sales_through = cls._sales_products(
                 connection, as_of, profile["sales_suffixes"]
             )
+            sales_evidence = cls._sales_evidence(
+                connection, as_of, profile["sales_suffixes"]
+            )
             catalog = cls._catalog_products(connection, profile_id)
             transit = cls._transit_rows(connection, profile_id, as_of)
             related = cls._relationship_products(connection, profile_id)
             products = cls._build_universe(catalog, inventory, sales, transit, related)
+            fob_prices = cls._fob_prices(connection, profile, products)
             inventory = cls._complete_branch_positions(
                 planning_branches, products, inventory
             )
@@ -196,7 +202,9 @@ class StockPlanningFoundationService:
                 "as_of": as_of,
                 "inventory_date": inventory_date,
                 "sales_through": sales_through,
+                "sales_evidence": sales_evidence,
                 "products": products,
+                "fob_prices": fob_prices,
                 "inventory": inventory,
                 "transit": transit,
             }
@@ -218,7 +226,10 @@ class StockPlanningFoundationService:
                 ),
             )
             snapshot_id = int(cursor.lastrowid)
-            cls._freeze_rows(connection, snapshot_id, products, inventory, transit, issues)
+            cls._freeze_rows(
+                connection, snapshot_id, products, inventory, transit, issues,
+                fob_prices, sales_evidence,
+            )
             if assumptions:
                 connection.execute(
                     """INSERT INTO stock_planning_analysis_inputs (
@@ -371,6 +382,42 @@ class StockPlanningFoundationService:
         return [{"internal_sku": row["internal_sku"]} for row in rows]
 
     @staticmethod
+    def _sales_evidence(connection, through, suffixes):
+        if not suffixes or not StockPlanningRepository.table_exists(
+            connection, "raw_sales"
+        ):
+            return []
+        columns = StockPlanningRepository.table_columns(connection, "raw_sales")
+        required = {"fecha", "idproducto", "idbodega", "cantidad", "sufijo"}
+        if not required.issubset(columns):
+            return []
+        raw_name = (
+            "NULLIF(TRIM(s.razonsocial),'')" if "razonsocial" in columns else "NULL"
+        )
+        customer_name = f"COALESCE({raw_name},'Cliente sin nombre')"
+        warehouse_name = (
+            "COALESCE(NULLIF(TRIM(s.nombrebodega),''),TRIM(s.idbodega))"
+            if "nombrebodega" in columns else "TRIM(s.idbodega)"
+        )
+        net_value = "COALESCE(s.neto,0)" if "neto" in columns else "0"
+        marks = ",".join("?" for _ in suffixes)
+        rows = connection.execute(
+            f"""SELECT date(s.fecha) sale_date,UPPER(TRIM(s.idproducto)) internal_sku,
+                TRIM(s.idbodega) branch_code,{warehouse_name} warehouse_name,
+                {customer_name} customer_name,
+                CAST(COALESCE(s.cantidad,0) AS REAL) quantity,
+                CAST({net_value} AS REAL) net_value_cop
+            FROM raw_sales s
+            WHERE date(s.fecha)<=date(?)
+              AND date(s.fecha)>=date(?,'start of month','-35 months')
+              AND UPPER(TRIM(s.sufijo)) IN ({marks})
+              AND TRIM(s.idbodega) IN ('1','16','50')
+            ORDER BY date(s.fecha),s.rowid""",
+            (through, through, *[str(value).upper() for value in suffixes]),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    @staticmethod
     def _active_branches(connection):
         return [dict(row) for row in connection.execute(
             """SELECT branch_code,branch_name FROM stock_planning_branches
@@ -464,7 +511,39 @@ class StockPlanningFoundationService:
         return issues
 
     @staticmethod
-    def _freeze_rows(connection, snapshot_id, products, inventory, transit, issues):
+    def _fob_prices(connection, profile, products):
+        aliases = {
+            str(value).strip().upper()
+            for value in (
+                profile.get("inventory_brand_codes", [])
+                + profile.get("sales_suffixes", [])
+            )
+            if str(value).strip()
+        }
+        product_skus = {product["internal_sku"] for product in products}
+        if not aliases or not product_skus:
+            return []
+        alias_placeholders = ",".join("?" for _ in aliases)
+        sku_placeholders = ",".join("?" for _ in product_skus)
+        rows = connection.execute(
+            f"""SELECT idproducto AS internal_sku,fob_usd,lista1_cop,nit,
+                import_execution_id,imported_at,id
+            FROM erp_fob_price_history
+            WHERE UPPER(sufijo) IN ({alias_placeholders})
+              AND idproducto IN ({sku_placeholders})
+            ORDER BY imported_at DESC,import_execution_id DESC,id DESC""",
+            (*sorted(aliases), *sorted(product_skus)),
+        ).fetchall()
+        latest = {}
+        for row in rows:
+            latest.setdefault(row["internal_sku"], dict(row))
+        return list(latest.values())
+
+    @staticmethod
+    def _freeze_rows(
+        connection, snapshot_id, products, inventory, transit, issues,
+        fob_prices=None, sales_evidence=None,
+    ):
         dated_by_key: dict[tuple[str, str], float] = {}
         for row in transit:
             key = (row["branch_code"], row["internal_sku"])
@@ -475,6 +554,19 @@ class StockPlanningFoundationService:
               json.dumps(p["sources"]), p["is_catalog_product"],
               p["has_sales_history"], p["has_inventory_history"], p["has_transit"])
              for p in products],
+        )
+        connection.executemany(
+            """INSERT INTO stock_planning_snapshot_fob_prices (
+                snapshot_id,internal_sku,fob_usd,lista1_cop,supplier_nit,
+                price_import_execution_id
+            ) VALUES (?,?,?,?,?,?)""",
+            [
+                (
+                    snapshot_id, row["internal_sku"], row["fob_usd"],
+                    row["lista1_cop"], row["nit"], row["import_execution_id"],
+                )
+                for row in (fob_prices or [])
+            ],
         )
         connection.executemany(
             """INSERT INTO stock_planning_snapshot_inventory VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
@@ -488,6 +580,20 @@ class StockPlanningFoundationService:
             [(snapshot_id, r["id"], r["branch_code"], r["internal_sku"],
               r["quantity"], r["expected_date"], r["purchase_order_reference"])
              for r in transit],
+        )
+        connection.executemany(
+            """INSERT INTO stock_planning_snapshot_sales_movements (
+                snapshot_id,sale_date,internal_sku,branch_code,warehouse_name,
+                customer_name,quantity,net_value_cop
+            ) VALUES (?,?,?,?,?,?,?,?)""",
+            [
+                (
+                    snapshot_id, row["sale_date"], row["internal_sku"],
+                    row["branch_code"], row["warehouse_name"],
+                    row["customer_name"], row["quantity"], row["net_value_cop"],
+                )
+                for row in (sales_evidence or [])
+            ],
         )
         connection.executemany(
             """INSERT INTO stock_planning_snapshot_issues (

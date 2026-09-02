@@ -14,7 +14,7 @@ from app.database.transaction import transaction
 class StockForecastEngine:
     """Auditable per-SKU/branch demand and review engine."""
 
-    VERSION = "stock-demand-v4-transfer-inventory"
+    VERSION = "stock-demand-v5-bogota-warehouse-16"
 
     @classmethod
     def analyze(cls, snapshot_id: int) -> dict[str, Any]:
@@ -42,7 +42,17 @@ class StockForecastEngine:
                 WHERE snapshot_id=?""", (snapshot_id,),
             ).fetchall()
             suffixes = json.loads(profile["sales_suffixes_json"])
-            sales = cls._sales(connection, header["as_of_date"], suffixes)
+            includes_warehouse_16 = any(
+                str(position["branch_code"]) == "16" for position in positions
+            )
+            sales = cls._sales(
+                connection, header["as_of_date"], suffixes,
+                consolidate_bogota=includes_warehouse_16,
+            )
+
+        # Warehouses 1 and 16 are one demand-planning node.  We retain the
+        # physical warehouse-16 balance as evidence for transfer execution.
+        positions = cls._planning_positions(positions)
 
         end = datetime.fromisoformat(header["as_of_date"]).date()
         values = cls._abc_values(sales, end)
@@ -96,6 +106,8 @@ class StockForecastEngine:
                 "mean_24": avg, "median_24": median(monthly[-24:]),
                 "max_month_24": max(monthly[-24:], default=0),
                 "on_hand": position["on_hand"], "usable": position["usable"],
+                "warehouse_1_usable": position.get("warehouse_1_usable", 0),
+                "warehouse_16_usable": position.get("warehouse_16_usable", 0),
                 "transit": position["undated_transit"] + position["dated_transit"],
                 "lead_days": lead_days, "target_stock": target,
                 "recommended_order": order, "review_reasons": reasons,
@@ -120,7 +132,7 @@ class StockForecastEngine:
         return json.loads(stored["result_json"])
 
     @staticmethod
-    def _sales(connection, through, suffixes):
+    def _sales(connection, through, suffixes, consolidate_bogota=False):
         if not suffixes: return {}
         columns = {
             row[1] for row in connection.execute("PRAGMA table_info(raw_sales)").fetchall()
@@ -136,10 +148,45 @@ class StockForecastEngine:
         ).fetchall()
         result = defaultdict(list)
         for row in rows:
-            result[(row["sku"], row["branch"])].append(
+            branch = str(row["branch"])
+            if consolidate_bogota and branch == "16":
+                branch = "1"
+            result[(row["sku"], branch)].append(
                 (row["fecha"], float(row["cantidad"] or 0), row["customer"], float(row["neto"] or 0))
             )
         return result
+
+    @staticmethod
+    def _planning_positions(positions):
+        """Consolidate physical Bogotá storage into commercial warehouse 1."""
+        grouped = {}
+        numeric = (
+            "on_hand", "reserved", "remitted", "usable",
+            "undated_transit", "dated_transit",
+        )
+        for raw in positions:
+            row = dict(raw)
+            physical_code = str(row["branch_code"])
+            planning_code = "1" if physical_code == "16" else physical_code
+            key = (row["internal_sku"], planning_code)
+            target = grouped.get(key)
+            if target is None:
+                target = dict(row)
+                target["branch_code"] = planning_code
+                if planning_code == "1":
+                    target["branch_name"] = "Bogotá (bodegas 1 + 16)"
+                target["warehouse_1_usable"] = 0.0
+                target["warehouse_16_usable"] = 0.0
+                for field in numeric:
+                    target[field] = 0.0
+                grouped[key] = target
+            for field in numeric:
+                target[field] += float(row.get(field) or 0)
+            if physical_code == "1":
+                target["warehouse_1_usable"] += max(float(row.get("usable") or 0), 0)
+            elif physical_code == "16":
+                target["warehouse_16_usable"] += max(float(row.get("usable") or 0), 0)
+        return list(grouped.values())
 
     @staticmethod
     def _monthly(history, end, count):
@@ -229,6 +276,15 @@ class StockForecastEngine:
                     "avoided_purchase": quantity,
                     "bogota_inventory": float(branches["1"]["usable"]),
                     "cali_inventory": float(branches["50"]["usable"]),
+                    # The ERP transfer remains 1 -> 50.  Operations first move
+                    # this quantity from storage warehouse 16 into warehouse 1.
+                    "internal_move_16_to_1": (
+                        min(
+                            max(0, quantity - int(source.get("warehouse_1_usable", 0))),
+                            int(source.get("warehouse_16_usable", 0)),
+                        )
+                        if source_code == "1" else 0
+                    ),
                 })
         return transfers
 

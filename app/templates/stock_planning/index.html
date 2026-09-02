@@ -12,6 +12,18 @@
 </div>
 
 <section class="card mb-4">
+  <div class="card-header"><div><h3 class="card-title">Reabastecimiento de Cali</h3><div class="text-secondary small">Análisis por marca · ejecución automática cada 15 días con cobertura predeterminada de 90 días</div></div>{% if page.replenishment.unread_count %}<span class="badge bg-red-lt ms-auto">{{ page.replenishment.unread_count }} alerta(s)</span>{% endif %}</div>
+  <div class="card-body border-bottom"><form method="post" action="{{ url_for('stock_planning.run_replenishment') }}" class="row g-3 align-items-end">
+    <input type="hidden" name="profile_id" value="{{ page.selected_profile_id or '' }}">
+    <div class="col-md-5"><label class="form-label">Marca</label><select class="form-select" name="profile_code" required>{% for profile in page.profiles %}{% if profile.planning_purpose == 'replenishment' %}<option value="{{ profile.profile_code }}">{{ profile.vendor_name }}</option>{% endif %}{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label">Cobertura objetivo de Cali</label><div class="input-group"><input class="form-control" type="number" name="coverage_days" min="30" max="365" step="15" value="90" required><span class="input-group-text">días</span></div></div>
+    <div class="col-auto"><button class="btn btn-primary">Ejecutar análisis</button></div>
+    <div class="col-12 text-secondary small">Se aprueban automáticamente referencias vendidas en al menos 6 meses de los últimos 24. Las vendidas en 3–5 meses quedan para su revisión. Bogotá conserva su propia cobertura.</div>
+  </form></div>
+  {% if page.replenishment.notifications %}<div class="list-group list-group-flush">{% for notification in page.replenishment.notifications[:5] %}<div class="list-group-item"><div class="d-flex justify-content-between"><strong>{{ notification.title }}</strong><span class="text-secondary small">{{ notification.created_at }}</span></div><div>{{ notification.message }}</div>{% if notification.snapshot_id %}<a class="small" href="{{ url_for('stock_planning.replenishment_report', snapshot_id=notification.snapshot_id) }}">Abrir reporte de traslados</a>{% endif %}</div>{% endfor %}</div>{% else %}<div class="card-body text-secondary">Todavía no hay ejecuciones periódicas.</div>{% endif %}
+</section>
+
+<section class="card mb-4">
   <div class="card-body">
     <form method="get" class="row g-3 align-items-end">
       <div class="col-lg-7">
@@ -59,6 +71,7 @@
 </div>
 {% endif %}
 
+{% if page.selected_profile.planning_purpose != 'replenishment' %}
 <section class="card mb-4">
   <div class="card-header">
     <div>
@@ -106,17 +119,20 @@
     </div>
   </form>
 </section>
+{% else %}
+<div class="alert alert-info">{{ page.selected_profile.vendor_name }} se gestiona únicamente para traslados y solicitudes internas. Use el panel de reabastecimiento quincenal; aquí no se generarán pedidos al proveedor.</div>
+{% endif %}
 
 {% if page.snapshots %}
 <section class="card">
-  <div class="card-header"><h3 class="card-title">Análisis anteriores</h3></div>
+  <div class="card-header"><div><h3 class="card-title">Análisis anteriores</h3><div class="text-secondary small">Todas las marcas · el selector superior solo define el próximo pedido</div></div></div>
   <div class="table-responsive"><table class="table card-table">
-    <thead><tr><th>Fecha</th><th>Marca</th><th>Inventario utilizado</th><th>Productos</th><th>Excepciones</th><th></th></tr></thead>
+    <thead><tr><th>Fecha</th><th>Marca</th><th>Inventario utilizado</th><th>Productos</th><th>Decisiones</th><th>Excepciones</th><th></th></tr></thead>
     <tbody>{% for s in page.snapshots %}<tr>
       <td>{{ s.as_of_date }} {% if loop.first %}<span class="badge bg-green-lt">Más reciente</span>{% endif %}</td>
       <td>{{ s.vendor_name }}</td><td>{{ s.inventory_snapshot_date or 'No disponible' }}</td>
-      <td>{{ s.product_count }}</td><td>{{ s.issue_count }}</td>
-      <td><a class="btn btn-sm" href="{{ url_for('stock_planning.snapshot', snapshot_id=s.id) }}">Ver análisis</a></td>
+      <td>{{ s.product_count }}</td><td>{{ s.decision_count }}</td><td>{{ s.issue_count }}</td>
+      <td><div class="d-flex gap-2"><a class="btn btn-sm" href="{{ url_for('stock_planning.snapshot', snapshot_id=s.id) }}">Ver análisis</a><form method="post" action="{{ url_for('stock_planning.archive_snapshot', snapshot_id=s.id) }}" onsubmit="return confirm('¿Eliminar este análisis de la lista? La evidencia y sus decisiones se conservarán para auditoría.');"><button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button></form></div></td>
     </tr>{% endfor %}</tbody>
   </table></div>
 </section>

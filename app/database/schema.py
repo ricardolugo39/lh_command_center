@@ -47,6 +47,7 @@ OPERATIONAL_TABLES = [
     "ws_visit_followups",
     "erp_import_executions",
     "erp_import_issues",
+    "erp_fob_price_history",
     "ws_users",
     "contacts",
     "activity_participants",
@@ -77,6 +78,11 @@ OPERATIONAL_TABLES = [
     "stock_planning_snapshot_inventory",
     "stock_planning_snapshot_transit",
     "stock_planning_snapshot_issues",
+    "stock_planning_snapshot_fob_prices",
+    "stock_planning_snapshot_sales_movements",
+    "stock_planning_replenishment_runs",
+    "stock_planning_import_requests",
+    "stock_planning_notifications",
     "stock_planning_analysis_inputs",
 ]
 

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import json
 from pathlib import Path
 
 from app.configuration import resolve_file_path, resolve_settings
@@ -16,10 +17,11 @@ class GoogleSheetsVisitSource(VisitSourceAdapter):
     SCOPES = ("https://www.googleapis.com/auth/spreadsheets.readonly",)
 
     def __init__(self, spreadsheet_id: str, worksheet_name: str,
-                 credentials_path: str):
+                 credentials_path: str = "", credentials_info: dict | None = None):
         self.spreadsheet_id = spreadsheet_id
         self.worksheet_name = worksheet_name
         self.credentials_path = credentials_path
+        self.credentials_info = credentials_info
 
     @classmethod
     def configuration_status(cls) -> dict:
@@ -27,36 +29,52 @@ class GoogleSheetsVisitSource(VisitSourceAdapter):
             "GOOGLE_VISITS_SPREADSHEET_ID",
             "GOOGLE_VISITS_WORKSHEET_NAME",
             "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_PATH",
+            "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON",
         )
         configured_values, sources = resolve_settings(names)
         values = {
             "spreadsheet_id": configured_values.get(names[0], ""),
             "worksheet_name": configured_values.get(names[1], ""),
             "credentials_path": configured_values.get(names[2], ""),
+            "credentials_json": configured_values.get(names[3], ""),
         }
         missing = [
             label for key, label in (
                 ("spreadsheet_id", "GOOGLE_VISITS_SPREADSHEET_ID"),
                 ("worksheet_name", "GOOGLE_VISITS_WORKSHEET_NAME"),
-                (
-                    "credentials_path",
-                    "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_PATH",
-                ),
             )
             if not values[key]
         ]
+        if not values["credentials_path"] and not values["credentials_json"]:
+            missing.append(
+                "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON o "
+                "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_PATH"
+            )
         resolved_credentials = (
             resolve_file_path(
                 values["credentials_path"], sources.get(names[2])
             )
             if values["credentials_path"] else None
         )
-        credentials_available = bool(
+        credentials_info = None
+        credentials_json_valid = False
+        if values["credentials_json"]:
+            try:
+                credentials_info = json.loads(values["credentials_json"])
+                credentials_json_valid = bool(
+                    isinstance(credentials_info, dict)
+                    and credentials_info.get("client_email")
+                    and credentials_info.get("private_key")
+                )
+            except (TypeError, ValueError):
+                pass
+        credentials_available = credentials_json_valid or bool(
             resolved_credentials and resolved_credentials.is_file()
         )
         configured = not missing
         return {
-            **values,
+            "spreadsheet_id": values["spreadsheet_id"],
+            "worksheet_name": values["worksheet_name"],
             "credentials_path": (
                 str(resolved_credentials) if resolved_credentials else ""
             ),
@@ -70,7 +88,11 @@ class GoogleSheetsVisitSource(VisitSourceAdapter):
                 for name, source in sources.items()
             },
             "configuration_error": (
-                "No se encontró el archivo de credenciales de Google."
+                (
+                    "No se encontró el archivo de credenciales de Google."
+                    if values["credentials_path"]
+                    else "Las credenciales JSON de Google no son válidas."
+                )
                 if configured and not credentials_available else None
             ),
         }
@@ -82,10 +104,18 @@ class GoogleSheetsVisitSource(VisitSourceAdapter):
             raise ValueError("La integración de Google Sheets no está configurada.")
         if not status["credentials_available"]:
             raise ValueError("No se encontró el archivo de credenciales de Google.")
+        configured_values, _ = resolve_settings(
+            ("GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON",)
+        )
+        raw_credentials = configured_values.get(
+            "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON", ""
+        )
+        credentials_info = json.loads(raw_credentials) if raw_credentials else None
         return cls(
             spreadsheet_id=status["spreadsheet_id"],
             worksheet_name=status["worksheet_name"],
             credentials_path=status["credentials_path"],
+            credentials_info=credentials_info,
         )
 
     def read_rows(self) -> list[dict]:
@@ -96,8 +126,15 @@ class GoogleSheetsVisitSource(VisitSourceAdapter):
             raise RuntimeError(
                 "Instale google-api-python-client y google-auth para sincronizar Google Sheets."
             ) from exc
-        credentials = service_account.Credentials.from_service_account_file(
-            self.credentials_path, scopes=self.SCOPES)
+        credentials = (
+            service_account.Credentials.from_service_account_info(
+                self.credentials_info, scopes=self.SCOPES
+            )
+            if self.credentials_info
+            else service_account.Credentials.from_service_account_file(
+                self.credentials_path, scopes=self.SCOPES
+            )
+        )
         service = build("sheets", "v4", credentials=credentials,
                         cache_discovery=False)
         values = service.spreadsheets().values().get(

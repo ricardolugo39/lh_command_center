@@ -101,4 +101,10 @@ def create_app(
                 ", ".join(problems),
             )
 
+    if not application.testing and application.config["APP_ENVIRONMENT"] == "production":
+        from app.workspace.stock_planning.scheduler import (
+            start_stock_replenishment_scheduler,
+        )
+        start_stock_replenishment_scheduler()
+
     return application

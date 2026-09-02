@@ -138,13 +138,15 @@ def test_fresh_installation_creates_complete_schema(migration_database):
     assert len(versions) == len(MIGRATION_MANIFEST)
     assert [tuple(row) for row in executive_users] == [
         ("gerencia@lugohermanos.com", "commercial_management", "all"),
-        ("nicolas.lugo@lugohermanos.com", "read_only", "all"),
+        ("nicolas.lugo@lugohermanos.com", "administrator", "all"),
         ("rocio.rocha@lugohermanos.com", "commercial_management", "all"),
     ]
     assert "ws_customer_portfolio_metadata" in tables
     assert {
         "erp_import_executions",
         "erp_import_issues",
+        "erp_fob_price_history",
+        "stock_planning_snapshot_fob_prices",
         "inventario_snapshot",
         "rfqs",
         "rfq_items",
@@ -167,6 +169,12 @@ def test_fresh_installation_creates_complete_schema(migration_database):
                 "PRAGMA table_info(inventario_snapshot)"
             ).fetchall()
         }
+        snapshot_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(stock_planning_snapshots)"
+            ).fetchall()
+        }
     assert "lifecycle_status" in ask_columns
     assert {
         "fecha_snapshot", "idbodega", "idproducto", "unidad_medida",
@@ -174,6 +182,7 @@ def test_fresh_installation_creates_complete_schema(migration_database):
         "transito_1", "transito_2", "transito_3",
         "unidades_transito", "costo_unitario", "codigo_barras",
     }.issubset(inventory_columns)
+    assert {"archived_at", "archived_by"}.issubset(snapshot_columns)
 
 
 def test_application_startup_automatically_migrates_fresh_database(

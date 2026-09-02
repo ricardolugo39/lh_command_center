@@ -122,6 +122,13 @@ class StockPlanningDecisionService:
     @classmethod
     def present(cls, snapshot_id: int, forecast: dict[str, Any]) -> dict[str, Any]:
         decisions = {(d["item_type"], d["item_key"]): d for d in cls.list(snapshot_id)}
+        with transaction(write=False) as connection:
+            price_rows = connection.execute(
+                """SELECT internal_sku,fob_usd
+                FROM stock_planning_snapshot_fob_prices WHERE snapshot_id=?""",
+                (snapshot_id,),
+            ).fetchall()
+        prices = {row["internal_sku"]: float(row["fob_usd"]) for row in price_rows}
         for row in forecast["rows"]:
             key = cls.purchase_key(row["sku"], row["branch"])
             decision = decisions.get(("purchase", key))
@@ -129,6 +136,11 @@ class StockPlanningDecisionService:
             row["final_quantity"] = (
                 decision["approved_quantity"] if decision
                 else row["recommended_order"]
+            )
+            row["fob_usd"] = prices.get(row["sku"])
+            row["total_fob_usd"] = (
+                float(row["final_quantity"]) * row["fob_usd"]
+                if row["fob_usd"] is not None else None
             )
         for row in forecast.get("transfers", []):
             key = cls.transfer_key(
@@ -147,4 +159,15 @@ class StockPlanningDecisionService:
             not row["decision"] for row in forecast.get("transfers", [])
         )
         forecast["transfer_export_ready"] = forecast["pending_transfer_count"] == 0
+        purchase_rows = [
+            row for row in forecast["rows"] if row["final_quantity"] > 0
+        ]
+        forecast["total_fob_usd"] = sum(
+            row["total_fob_usd"] or 0 for row in purchase_rows
+        )
+        forecast["missing_fob_skus"] = sorted({
+            row["sku"] for row in purchase_rows if row["fob_usd"] is None
+        })
+        forecast["missing_fob_count"] = len(forecast["missing_fob_skus"])
+        forecast["fob_complete"] = forecast["missing_fob_count"] == 0
         return forecast

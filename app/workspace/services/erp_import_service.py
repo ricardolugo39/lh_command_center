@@ -59,6 +59,9 @@ class ERPImportService:
         "nit", "razonsocial", "ciudad", "direccion1", "vendedor", "cliente_credito",
         "cupocreditocc", "plazopagocc", "idciiu",
     }
+    FOB_PRICE_REQUIRED = {
+        "idproducto", "prefijo", "sufijo", "idfam2", "fob", "lista1", "nit",
+    }
     STORAGE_ROOT = upload_path("erp-imports")
 
     @classmethod
@@ -127,6 +130,8 @@ class ERPImportService:
                         "Bodegas no vistas anteriormente: "
                         + ", ".join(sync_metrics["new_warehouse_codes"])
                     )
+            elif import_type == "fob_prices":
+                sync_metrics = cls._fob_price_plan(normalized)
             else:
                 sync_metrics = {}
             execution_id = ERPImportRepository.create_execution({
@@ -194,6 +199,8 @@ class ERPImportService:
                     metrics = cls._import_inventory(
                         normalized, execution["original_filename"]
                     )
+                elif import_type == "fob_prices":
+                    metrics = cls._import_fob_prices(execution_id, normalized)
                 else:
                     metrics = cls._import_customers(normalized)
                 ERPImportRepository.update_execution(execution_id, {
@@ -323,6 +330,30 @@ class ERPImportService:
         }
 
     @classmethod
+    def _import_fob_prices(
+        cls, execution_id: int, dataframe: pd.DataFrame
+    ) -> dict[str, int]:
+        inserted = ERPImportRepository.insert_fob_prices(
+            execution_id, cls._records(dataframe)
+        )
+        return {
+            "rows_inserted": inserted,
+            "rows_updated": 0,
+            "rows_skipped": 0,
+            "duplicates_count": 0,
+        }
+
+    @staticmethod
+    def _fob_price_plan(dataframe: pd.DataFrame) -> dict[str, Any]:
+        return {
+            "rows_valid": len(dataframe),
+            "products_count": int(dataframe["idproducto"].nunique()),
+            "brands_count": int(dataframe["sufijo"].nunique()),
+            "suppliers_count": int(dataframe["nit"].nunique()),
+            "zero_fob_count": int(dataframe["fob_usd"].eq(0).sum()),
+        }
+
+    @classmethod
     def _customer_sync_plan(cls, dataframe: pd.DataFrame) -> dict[str, Any]:
         records = cls._records(dataframe)
         customers: dict[str, dict[str, Any]] = {}
@@ -382,6 +413,7 @@ class ERPImportService:
         normalized_names = {canonical for _, canonical in header_mapping}
         required = (
             cls.SALES_REQUIRED if import_type == "sales"
+            else cls.FOB_PRICE_REQUIRED if import_type == "fob_prices"
             else cls.CUSTOMER_REQUIRED
         )
         missing = sorted(required - set(normalized_names))
@@ -405,12 +437,106 @@ class ERPImportService:
                 )
             return result, warnings, header_mapping, []
 
+        if import_type == "fob_prices":
+            return cls._normalize_fob_prices(
+                result, warnings, header_mapping
+            )
+
         result["nit"] = result["nit"].map(normalize_nit)
         if result["nit"].eq("").any():
             raise ERPImportValidationError(
                 "Todos los clientes deben tener un NIT."
             )
         return result, warnings, header_mapping, []
+
+    @classmethod
+    def _normalize_fob_prices(
+        cls, dataframe: pd.DataFrame, warnings: list[str],
+        header_mapping: list[tuple[str, str]],
+    ) -> tuple[
+        pd.DataFrame, list[str], list[tuple[str, str]], list[InventoryIssue]
+    ]:
+        result = dataframe.copy()
+        result["_source_row"] = range(2, len(result) + 2)
+        issues: list[InventoryIssue] = []
+
+        def text_value(value: Any) -> str:
+            if pd.isna(value):
+                return ""
+            if isinstance(value, float) and value.is_integer():
+                return str(int(value))
+            return str(value).strip()
+
+        for column in ("idproducto", "prefijo", "sufijo", "idfam2"):
+            result[column] = result[column].map(text_value)
+        result["nit"] = result["nit"].map(normalize_nit)
+
+        for column, label in (("fob", "FOB"), ("lista1", "LISTA1")):
+            original = result[column]
+            cleaned = original.map(
+                lambda value: str(value).replace(",", "").strip()
+                if pd.notna(value) else ""
+            )
+            numeric = pd.to_numeric(cleaned, errors="coerce")
+            for index in result.index[numeric.isna()]:
+                issues.append(InventoryIssue(
+                    row_number=int(result.at[index, "_source_row"]),
+                    severity="error", code=f"{label}_NO_NUMERICO",
+                    message=f"{label} debe contener un valor numérico.",
+                    details={"value": text_value(original.at[index])},
+                ))
+            result[column] = numeric
+
+        required_text = {
+            "idproducto": "IDPRODUCTO", "sufijo": "SUFIJO", "nit": "NIT",
+        }
+        for column, label in required_text.items():
+            for index in result.index[result[column].eq("")]:
+                issues.append(InventoryIssue(
+                    row_number=int(result.at[index, "_source_row"]),
+                    severity="error", code=f"{label}_VACIO",
+                    message=f"{label} es obligatorio.", details={},
+                ))
+        for index in result.index[result["fob"].lt(0).fillna(False)]:
+            issues.append(InventoryIssue(
+                row_number=int(result.at[index, "_source_row"]),
+                severity="error", code="FOB_NEGATIVO",
+                message="FOB no puede ser negativo.", details={},
+            ))
+        zero_count = int(result["fob"].eq(0).sum())
+        if zero_count:
+            warnings.append(
+                f"{zero_count} productos tienen FOB igual a cero; "
+                "se importarán para conservar el dato del ERP."
+            )
+            for index in result.index[result["fob"].eq(0)]:
+                issues.append(InventoryIssue(
+                    row_number=int(result.at[index, "_source_row"]),
+                    severity="warning", code="FOB_CERO",
+                    message="El producto tiene FOB igual a cero.", details={},
+                ))
+
+        duplicate_mask = result.duplicated(
+            subset=["idproducto", "nit"], keep=False
+        )
+        for index in result.index[duplicate_mask]:
+            issues.append(InventoryIssue(
+                row_number=int(result.at[index, "_source_row"]),
+                severity="error", code="PRODUCTO_PROVEEDOR_DUPLICADO",
+                message="IDPRODUCTO y NIT están repetidos en el archivo.",
+                details={
+                    "idproducto": result.at[index, "idproducto"],
+                    "nit": result.at[index, "nit"],
+                },
+            ))
+
+        result = result.rename(columns={"fob": "fob_usd", "lista1": "lista1_cop"})
+        result = result.drop(columns=["_source_row"])
+        header_mapping = [
+            (source, {"fob": "fob_usd", "lista1": "lista1_cop"}.get(canonical, canonical))
+            for source, canonical in header_mapping
+        ]
+        return result, warnings, header_mapping, issues
 
     @classmethod
     def _validate(
@@ -469,7 +595,7 @@ class ERPImportService:
 
     @staticmethod
     def _validate_type(import_type: str) -> None:
-        if import_type not in {"sales", "customers", "inventory"}:
+        if import_type not in {"sales", "customers", "inventory", "fob_prices"}:
             raise ERPImportValidationError("Tipo de importación no válido.")
 
     @staticmethod

@@ -82,6 +82,18 @@ def _inventory(*, available: object = 2, warehouse: str = "54") -> pd.DataFrame:
     ]], columns=columns)
 
 
+def _fob_prices(*, fob: object = "7,000.00") -> pd.DataFrame:
+    return pd.DataFrame([{
+        "idproducto": "AD-5248ARB", "prefijo": "AD-5248",
+        "sufijo": "ARB", "idfam2": 1330, "fob": fob,
+        "lista1": "23,000,000.00", "nit": "444,444,060",
+    }, {
+        "idproducto": "4T-27620BOW", "prefijo": "4T-27620",
+        "sufijo": "BOW", "idfam2": 1290, "fob": "7.73",
+        "lista1": "45,400.00", "nit": "444,444,010",
+    }])
+
+
 def test_sales_import_is_append_only_and_idempotent(import_database):
     first = ERPImportService.prepare(
         import_type="sales", upload=_upload(_sales(), "ventas.csv"),
@@ -299,3 +311,74 @@ def test_inventory_requires_snapshot_date(import_database):
             upload=_upload(_inventory(), "inventario.xlsx"),
             executed_by="tester",
         )
+
+
+def test_fob_price_import_preserves_complete_historical_extract(
+    import_database,
+):
+    preview = ERPImportService.prepare(
+        import_type="fob_prices",
+        upload=_upload(_fob_prices(), "precios-fob.xlsx"),
+        executed_by="tester",
+    )
+
+    assert preview.can_confirm
+    assert preview.snapshot_date is None
+    assert preview.sync_metrics == {
+        "rows_valid": 2, "products_count": 2, "brands_count": 2,
+        "suppliers_count": 2, "zero_fob_count": 0,
+    }
+    assert ("fob", "fob_usd") in preview.header_mapping
+    result = ERPImportService.confirm(preview.execution_id)
+    assert result["rows_inserted"] == 2
+
+    second = ERPImportService.prepare(
+        import_type="fob_prices",
+        upload=_upload(_fob_prices(fob="7100"), "precios-fob-nuevo.xlsx"),
+        executed_by="tester",
+    )
+    ERPImportService.confirm(second.execution_id)
+    with sqlite3.connect(import_database) as connection:
+        rows = connection.execute(
+            """SELECT idproducto,sufijo,fob_usd,lista1_cop,nit
+            FROM erp_fob_price_history
+            WHERE idproducto='AD-5248ARB' ORDER BY id"""
+        ).fetchall()
+    assert rows == [
+        ("AD-5248ARB", "ARB", 7000.0, 23000000.0, "444444060"),
+        ("AD-5248ARB", "ARB", 7100.0, 23000000.0, "444444060"),
+    ]
+
+
+def test_fob_price_import_reports_zero_and_blocks_invalid_rows(import_database):
+    zero = ERPImportService.prepare(
+        import_type="fob_prices",
+        upload=_upload(_fob_prices(fob=0), "precios-fob.xlsx"),
+        executed_by="tester",
+    )
+    assert zero.can_confirm
+    assert zero.sync_metrics["zero_fob_count"] == 1
+    assert any(issue["code"] == "FOB_CERO" for issue in zero.validation_issues)
+
+    invalid = ERPImportService.prepare(
+        import_type="fob_prices",
+        upload=_upload(_fob_prices(fob="no-numérico"), "precios-mal.xlsx"),
+        executed_by="tester",
+    )
+    assert not invalid.can_confirm
+    with pytest.raises(ERPImportValidationError, match="errores de validación"):
+        ERPImportService.confirm(invalid.execution_id)
+
+
+def test_fob_price_import_blocks_duplicate_product_supplier(import_database):
+    duplicated = pd.concat([_fob_prices().iloc[[0]], _fob_prices().iloc[[0]]])
+    preview = ERPImportService.prepare(
+        import_type="fob_prices",
+        upload=_upload(duplicated, "precios-duplicados.xlsx"),
+        executed_by="tester",
+    )
+    assert not preview.can_confirm
+    assert any(
+        issue["code"] == "PRODUCTO_PROVEEDOR_DUPLICADO"
+        for issue in preview.validation_issues
+    )

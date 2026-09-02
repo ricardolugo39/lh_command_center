@@ -3273,6 +3273,383 @@ def _migration_0049_enable_thomson_stock_planning(connection: Connection) -> Non
     )
 
 
+def _migration_0050_erp_fob_price_import(connection: Connection) -> None:
+    """Retain immutable ERP FOB price extracts and audit their imports."""
+    execution_sql = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' "
+        "AND name='erp_import_executions'"
+    ).fetchone()["sql"]
+    if "'fob_prices'" not in str(execution_sql):
+        _execute_statements(connection, (
+            """CREATE TABLE erp_import_executions_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                import_type TEXT NOT NULL CHECK(import_type IN (
+                    'sales','customers','inventory','crm_opportunities',
+                    'fob_prices'
+                )),
+                original_filename TEXT NOT NULL,
+                stored_file_path TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                schema_version TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN (
+                    'previewed','processing','completed','failed'
+                )),
+                rows_read INTEGER NOT NULL DEFAULT 0,
+                rows_inserted INTEGER NOT NULL DEFAULT 0,
+                rows_updated INTEGER NOT NULL DEFAULT 0,
+                rows_skipped INTEGER NOT NULL DEFAULT 0,
+                duplicates_count INTEGER NOT NULL DEFAULT 0,
+                warnings_json TEXT,
+                errors_json TEXT,
+                execution_log_json TEXT NOT NULL DEFAULT '{}',
+                executed_by TEXT NOT NULL,
+                started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TEXT,
+                customers_inserted INTEGER NOT NULL DEFAULT 0,
+                customers_updated INTEGER NOT NULL DEFAULT 0,
+                customers_unchanged INTEGER NOT NULL DEFAULT 0,
+                customer_sites_inserted INTEGER NOT NULL DEFAULT 0,
+                customer_sites_updated INTEGER NOT NULL DEFAULT 0,
+                customer_sites_unchanged INTEGER NOT NULL DEFAULT 0,
+                snapshot_date TEXT,
+                mapping_profile_version_id INTEGER REFERENCES
+                    opportunity_import_profile_versions(id) ON DELETE RESTRICT,
+                groups_identified INTEGER NOT NULL DEFAULT 0,
+                groups_to_create INTEGER NOT NULL DEFAULT 0,
+                groups_to_update INTEGER NOT NULL DEFAULT 0,
+                groups_unchanged INTEGER NOT NULL DEFAULT 0,
+                groups_needs_review INTEGER NOT NULL DEFAULT 0,
+                groups_blocked INTEGER NOT NULL DEFAULT 0,
+                customer_resolutions_json TEXT NOT NULL DEFAULT '{}',
+                groups_eligible INTEGER NOT NULL DEFAULT 0,
+                groups_imported INTEGER NOT NULL DEFAULT 0,
+                groups_deferred INTEGER NOT NULL DEFAULT 0
+            )""",
+            """INSERT INTO erp_import_executions_new SELECT *
+            FROM erp_import_executions""",
+            """CREATE TABLE erp_import_issues_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                import_execution_id INTEGER NOT NULL,
+                row_number INTEGER,
+                severity TEXT NOT NULL CHECK(severity IN ('warning','error')),
+                code TEXT NOT NULL,
+                message TEXT NOT NULL,
+                details_json TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(import_execution_id)
+                    REFERENCES erp_import_executions_new(id) ON DELETE CASCADE
+            )""",
+            """INSERT INTO erp_import_issues_new SELECT * FROM erp_import_issues""",
+            "DROP TABLE erp_import_issues",
+            "DROP TABLE erp_import_executions",
+            "ALTER TABLE erp_import_executions_new RENAME TO erp_import_executions",
+            "ALTER TABLE erp_import_issues_new RENAME TO erp_import_issues",
+        ))
+    _execute_statements(connection, (
+        """CREATE INDEX IF NOT EXISTS idx_erp_import_executions_type_started
+        ON erp_import_executions(import_type, started_at DESC)""",
+        """CREATE INDEX IF NOT EXISTS idx_erp_import_executions_hash
+        ON erp_import_executions(file_hash, import_type)""",
+        """CREATE INDEX IF NOT EXISTS idx_erp_import_issues_execution
+        ON erp_import_issues(import_execution_id, severity)""",
+        """CREATE TABLE IF NOT EXISTS erp_fob_price_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_execution_id INTEGER NOT NULL,
+            idproducto TEXT NOT NULL,
+            prefijo TEXT,
+            sufijo TEXT NOT NULL,
+            idfam2 TEXT,
+            fob_usd REAL NOT NULL CHECK(fob_usd >= 0),
+            lista1_cop REAL,
+            nit TEXT NOT NULL,
+            imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(import_execution_id)
+                REFERENCES erp_import_executions(id) ON DELETE RESTRICT,
+            UNIQUE(import_execution_id, idproducto, nit)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_erp_fob_product_import
+        ON erp_fob_price_history(idproducto, imported_at DESC)""",
+        """CREATE INDEX IF NOT EXISTS idx_erp_fob_suffix_import
+        ON erp_fob_price_history(sufijo, imported_at DESC)""",
+    ))
+
+
+def _migration_0051_stock_planning_fob_values(connection: Connection) -> None:
+    """Freeze the applicable ERP FOB value with each planning snapshot."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS stock_planning_snapshot_fob_prices (
+            snapshot_id INTEGER NOT NULL,
+            internal_sku TEXT NOT NULL,
+            fob_usd REAL NOT NULL CHECK(fob_usd >= 0),
+            lista1_cop REAL,
+            supplier_nit TEXT NOT NULL,
+            price_import_execution_id INTEGER NOT NULL,
+            PRIMARY KEY(snapshot_id, internal_sku),
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY(price_import_execution_id)
+                REFERENCES erp_import_executions(id) ON DELETE RESTRICT
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_stock_snapshot_fob_import
+        ON stock_planning_snapshot_fob_prices(price_import_execution_id)""",
+        """INSERT OR IGNORE INTO stock_planning_snapshot_fob_prices (
+            snapshot_id,internal_sku,fob_usd,lista1_cop,supplier_nit,
+            price_import_execution_id
+        )
+        SELECT p.snapshot_id,p.internal_sku,h.fob_usd,h.lista1_cop,h.nit,
+               h.import_execution_id
+        FROM stock_planning_snapshot_products p
+        JOIN stock_planning_snapshots s ON s.id=p.snapshot_id
+        JOIN stock_planning_vendor_profiles v ON v.id=s.vendor_profile_id
+        JOIN erp_fob_price_history h ON h.id=(
+            SELECT candidate.id FROM erp_fob_price_history candidate
+            WHERE candidate.idproducto=p.internal_sku
+              AND UPPER(candidate.sufijo) IN (
+                  SELECT UPPER(value) FROM json_each(v.inventory_brand_codes_json)
+                  UNION
+                  SELECT UPPER(value) FROM json_each(v.sales_suffixes_json)
+              )
+            ORDER BY candidate.imported_at DESC,
+                     candidate.import_execution_id DESC,candidate.id DESC
+            LIMIT 1
+        )""",
+    ))
+
+
+def _migration_0052_archivable_stock_snapshots(connection: Connection) -> None:
+    """Allow administrators to hide test analyses without destroying evidence."""
+    _add_column(connection, "stock_planning_snapshots", "archived_at", "TEXT")
+    _add_column(connection, "stock_planning_snapshots", "archived_by", "TEXT")
+    _execute_statements(connection, (
+        "DROP TRIGGER IF EXISTS trg_stock_snapshot_no_update",
+        """CREATE TRIGGER trg_stock_snapshot_no_update
+        BEFORE UPDATE ON stock_planning_snapshots
+        WHEN NEW.vendor_profile_id IS NOT OLD.vendor_profile_id
+          OR NEW.snapshot_key IS NOT OLD.snapshot_key
+          OR NEW.as_of_date IS NOT OLD.as_of_date
+          OR NEW.inventory_snapshot_date IS NOT OLD.inventory_snapshot_date
+          OR NEW.sales_through_date IS NOT OLD.sales_through_date
+          OR NEW.source_fingerprint IS NOT OLD.source_fingerprint
+          OR NEW.status IS NOT OLD.status
+          OR NEW.created_by IS NOT OLD.created_by
+          OR NEW.created_at IS NOT OLD.created_at
+        BEGIN
+            SELECT RAISE(ABORT, 'stock planning snapshots are immutable');
+        END""",
+        """CREATE INDEX IF NOT EXISTS idx_stock_snapshots_active_profile
+        ON stock_planning_snapshots(vendor_profile_id,archived_at,created_at DESC)""",
+    ))
+
+
+def _migration_0053_bogota_kr68_stock_planning(connection: Connection) -> None:
+    """Include KR 68 as active physical storage in Bogotá planning snapshots."""
+    connection.execute(
+        """INSERT INTO stock_planning_branches (
+            branch_code,branch_name,is_primary_receipt,is_active
+        ) VALUES ('16','Bogotá · KR 68',0,1)
+        ON CONFLICT(branch_code) DO UPDATE SET
+            branch_name=excluded.branch_name,
+            is_primary_receipt=0,
+            is_active=1,
+            updated_at=CURRENT_TIMESTAMP"""
+    )
+
+
+def _migration_0054_stock_planning_sales_evidence(connection: Connection) -> None:
+    """Freeze customer-name sales movements used to explain each analysis."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS stock_planning_snapshot_sales_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_id INTEGER NOT NULL,
+            sale_date TEXT NOT NULL,
+            internal_sku TEXT NOT NULL,
+            branch_code TEXT NOT NULL,
+            warehouse_name TEXT,
+            customer_name TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            net_value_cop REAL NOT NULL DEFAULT 0,
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
+                ON DELETE RESTRICT
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_stock_snapshot_sales_product
+        ON stock_planning_snapshot_sales_movements(
+            snapshot_id,internal_sku,branch_code,sale_date DESC
+        )""",
+    ))
+    if not _table_exists(connection, "raw_sales"):
+        return
+    required = {"fecha", "idproducto", "idbodega", "cantidad", "sufijo"}
+    raw_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(raw_sales)")
+    }
+    if not required.issubset(raw_columns):
+        return
+    raw_name = (
+        "NULLIF(TRIM(r.razonsocial),'')" if "razonsocial" in raw_columns else "NULL"
+    )
+    customer_name = f"COALESCE({raw_name},'Cliente sin nombre')"
+    warehouse_name = (
+        "COALESCE(NULLIF(TRIM(r.nombrebodega),''),TRIM(r.idbodega))"
+        if "nombrebodega" in raw_columns else "TRIM(r.idbodega)"
+    )
+    net_value = "COALESCE(r.neto,0)" if "neto" in raw_columns else "0"
+    connection.execute(
+        """CREATE INDEX IF NOT EXISTS idx_raw_sales_planning_evidence
+        ON raw_sales(sufijo,fecha,idbodega,idproducto)"""
+    )
+    snapshots = connection.execute(
+        """SELECT s.id,s.as_of_date,v.sales_suffixes_json
+        FROM stock_planning_snapshots s
+        JOIN stock_planning_vendor_profiles v ON v.id=s.vendor_profile_id
+        WHERE s.archived_at IS NULL"""
+    ).fetchall()
+    for snapshot in snapshots:
+        suffixes = [
+            str(value).strip().upper()
+            for value in json.loads(snapshot["sales_suffixes_json"] or "[]")
+            if str(value).strip()
+        ]
+        if not suffixes:
+            continue
+        marks = ",".join("?" for _ in suffixes)
+        connection.execute(
+            f"""INSERT INTO stock_planning_snapshot_sales_movements (
+                snapshot_id,sale_date,internal_sku,branch_code,warehouse_name,
+                customer_name,quantity,net_value_cop
+            )
+            SELECT ?,date(r.fecha),UPPER(TRIM(r.idproducto)),TRIM(r.idbodega),
+                   {warehouse_name},{customer_name},
+                   CAST(COALESCE(r.cantidad,0) AS REAL),CAST({net_value} AS REAL)
+            FROM raw_sales r
+            WHERE r.sufijo IN ({marks})
+              AND date(r.fecha)<=date(?)
+              AND date(r.fecha)>=date(?,'start of month','-35 months')
+              AND TRIM(r.idbodega) IN ('1','16','50')""",
+            (snapshot["id"], *suffixes, snapshot["as_of_date"], snapshot["as_of_date"]),
+        )
+
+
+def _migration_0055_periodic_stock_replenishment(connection: Connection) -> None:
+    """Configure transfer-only brands and their internal replenishment inbox."""
+    _add_column(
+        connection, "stock_planning_vendor_profiles", "planning_purpose",
+        "TEXT NOT NULL DEFAULT 'purchase_order'",
+    )
+    for brand in ("SKF", "FAG", "NTN", "NQK", "KMK"):
+        connection.execute(
+            """INSERT INTO stock_planning_vendor_profiles (
+                vendor_name,profile_code,inventory_brand_codes_json,
+                sales_suffixes_json,lead_time_day_basis,is_active
+            ) VALUES (?,?,?,?, 'calendar',1)
+            ON CONFLICT(profile_code) DO UPDATE SET
+                vendor_name=excluded.vendor_name,
+                inventory_brand_codes_json=excluded.inventory_brand_codes_json,
+                sales_suffixes_json=excluded.sales_suffixes_json,
+                is_active=1,updated_at=CURRENT_TIMESTAMP""",
+            (brand, brand, json.dumps([brand]), json.dumps([brand])),
+        )
+    connection.execute(
+        """UPDATE stock_planning_vendor_profiles
+        SET planning_purpose='replenishment'
+        WHERE UPPER(profile_code) IN ('SKF','FAG','NTN','NQK','KMK')"""
+    )
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS stock_planning_replenishment_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_profile_id INTEGER NOT NULL,
+            scheduled_for TEXT NOT NULL,
+            inventory_snapshot_date TEXT,
+            snapshot_id INTEGER,
+            status TEXT NOT NULL CHECK(status IN ('running','completed','skipped','failed')),
+            triggered_by TEXT NOT NULL,
+            message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            completed_at TEXT,
+            FOREIGN KEY(vendor_profile_id) REFERENCES stock_planning_vendor_profiles(id),
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id),
+            UNIQUE(vendor_profile_id,scheduled_for)
+        )""",
+        """CREATE TABLE IF NOT EXISTS stock_planning_import_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            replenishment_run_id INTEGER NOT NULL,
+            snapshot_id INTEGER NOT NULL,
+            vendor_profile_id INTEGER NOT NULL,
+            internal_sku TEXT NOT NULL,
+            branch_code TEXT NOT NULL DEFAULT '50',
+            suggested_quantity REAL NOT NULL CHECK(suggested_quantity > 0),
+            abc_class TEXT NOT NULL,
+            xyz_class TEXT NOT NULL,
+            assigned_to TEXT,
+            status TEXT NOT NULL DEFAULT 'pending_review'
+                CHECK(status IN ('ready','pending_review','reviewed','dismissed','resolved')),
+            reason TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(replenishment_run_id) REFERENCES stock_planning_replenishment_runs(id),
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id),
+            FOREIGN KEY(vendor_profile_id) REFERENCES stock_planning_vendor_profiles(id),
+            UNIQUE(snapshot_id,internal_sku,branch_code)
+        )""",
+        """CREATE TABLE IF NOT EXISTS stock_planning_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            replenishment_run_id INTEGER NOT NULL,
+            recipient_email TEXT NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            snapshot_id INTEGER,
+            read_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(replenishment_run_id) REFERENCES stock_planning_replenishment_runs(id),
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_stock_import_requests_status
+        ON stock_planning_import_requests(status,created_at DESC)""",
+        """CREATE INDEX IF NOT EXISTS idx_stock_notifications_recipient
+        ON stock_planning_notifications(recipient_email,read_at,created_at DESC)""",
+    ))
+
+
+def _migration_0056_nicolas_lugo_administrator(connection: Connection) -> None:
+    """Grant Nicolás Lugo full application access with global scope."""
+    connection.execute(
+        """UPDATE ws_users
+        SET role='administrator', is_active=1, portfolio_scope='all'
+        WHERE email_normalized=LOWER(TRIM(?))
+           OR LOWER(TRIM(email))=LOWER(TRIM(?))""",
+        (
+            "nicolas.lugo@lugohermanos.com",
+            "nicolas.lugo@lugohermanos.com",
+        ),
+    )
+
+
+def _migration_0057_vendor_rfq_inbox(connection: Connection) -> None:
+    """Persist the email conversation for each vendor request."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS rfq_vendor_request_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_request_id INTEGER NOT NULL,
+            provider_message_id TEXT NOT NULL,
+            direction TEXT NOT NULL CHECK(direction IN ('incoming','outgoing')),
+            sender_email TEXT,
+            recipient_emails_json TEXT NOT NULL DEFAULT '[]',
+            cc_emails_json TEXT NOT NULL DEFAULT '[]',
+            subject TEXT,
+            body_text TEXT,
+            body_html_sanitized TEXT,
+            message_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(vendor_request_id) REFERENCES rfq_vendor_requests(id)
+                ON DELETE CASCADE,
+            UNIQUE(vendor_request_id, provider_message_id)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_vendor_rfq_messages_request
+        ON rfq_vendor_request_messages(vendor_request_id,message_at,id)""",
+        """CREATE INDEX IF NOT EXISTS idx_vendor_rfq_requests_rfq
+        ON rfq_vendor_requests(rfq_id,brand,created_at)""",
+    ))
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3391,6 +3768,32 @@ MIGRATION_MANIFEST = (
         49, "enable_thomson_stock_planning",
         _migration_0049_enable_thomson_stock_planning,
     ),
+    Migration(50, "erp_fob_price_import", _migration_0050_erp_fob_price_import),
+    Migration(
+        51, "stock_planning_fob_values",
+        _migration_0051_stock_planning_fob_values,
+    ),
+    Migration(
+        52, "archivable_stock_snapshots",
+        _migration_0052_archivable_stock_snapshots,
+    ),
+    Migration(
+        53, "bogota_kr68_stock_planning",
+        _migration_0053_bogota_kr68_stock_planning,
+    ),
+    Migration(
+        54, "stock_planning_sales_evidence",
+        _migration_0054_stock_planning_sales_evidence,
+    ),
+    Migration(
+        55, "periodic_stock_replenishment",
+        _migration_0055_periodic_stock_replenishment,
+    ),
+    Migration(
+        56, "nicolas_lugo_administrator",
+        _migration_0056_nicolas_lugo_administrator,
+    ),
+    Migration(57, "vendor_rfq_inbox", _migration_0057_vendor_rfq_inbox),
 )
 
 
@@ -3409,7 +3812,9 @@ def upgrade() -> MigrationReport:
                 "SELECT version, name FROM schema_migrations"
             ).fetchall()
         }
-        suspend_foreign_keys = 28 not in applied or 32 not in applied
+        suspend_foreign_keys = (
+            28 not in applied or 32 not in applied or 50 not in applied
+        )
         baseline_foreign_key_violations = {
             tuple(row) for row in connection.execute(
                 "PRAGMA foreign_key_check"
@@ -3452,7 +3857,7 @@ def upgrade() -> MigrationReport:
             } - baseline_foreign_key_violations
             if violations:
                 raise RuntimeError(
-                    "Migration 28 produced foreign-key violations."
+                    "A schema-rebuilding migration produced foreign-key violations."
                 )
         connection.commit()
         if suspend_foreign_keys:

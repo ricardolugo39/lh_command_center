@@ -155,8 +155,10 @@ class StockPlanningRepository:
         parameters: tuple[Any, ...] = ()
         where = ""
         if profile_id:
-            where = "WHERE s.vendor_profile_id=?"
+            where = "WHERE s.vendor_profile_id=? AND s.archived_at IS NULL"
             parameters = (profile_id,)
+        else:
+            where = "WHERE s.archived_at IS NULL"
         with connection_scope() as connection:
             rows = connection.execute(
                 f"""SELECT s.*,v.vendor_name,
@@ -164,7 +166,9 @@ class StockPlanningRepository:
                      WHERE p.snapshot_id=s.id) AS product_count,
                     (SELECT COUNT(*) FROM stock_planning_snapshot_issues i
                      WHERE i.snapshot_id=s.id
-                       AND i.issue_code <> 'PRODUCT_NOT_IN_CATALOG') AS issue_count
+                       AND i.issue_code <> 'PRODUCT_NOT_IN_CATALOG') AS issue_count,
+                    (SELECT COUNT(*) FROM stock_planning_decisions d
+                     WHERE d.snapshot_id=s.id) AS decision_count
                 FROM stock_planning_snapshots s
                 JOIN stock_planning_vendor_profiles v ON v.id=s.vendor_profile_id
                 {where} ORDER BY s.created_at DESC,s.id DESC""", parameters,
@@ -175,15 +179,21 @@ class StockPlanningRepository:
     def snapshot_detail(snapshot_id: int) -> dict[str, Any] | None:
         with connection_scope() as connection:
             header = connection.execute(
-                """SELECT s.*,v.vendor_name FROM stock_planning_snapshots s
+                """SELECT s.*,v.vendor_name,v.profile_code,v.planning_purpose
+                FROM stock_planning_snapshots s
                 JOIN stock_planning_vendor_profiles v ON v.id=s.vendor_profile_id
-                WHERE s.id=?""", (snapshot_id,),
+                WHERE s.id=? AND s.archived_at IS NULL""", (snapshot_id,),
             ).fetchone()
             if not header:
                 return None
             products = connection.execute(
-                """SELECT * FROM stock_planning_snapshot_products
-                WHERE snapshot_id=? ORDER BY internal_sku""", (snapshot_id,),
+                """SELECT p.*,f.fob_usd,f.lista1_cop,f.supplier_nit,
+                    f.price_import_execution_id
+                FROM stock_planning_snapshot_products p
+                LEFT JOIN stock_planning_snapshot_fob_prices f
+                  ON f.snapshot_id=p.snapshot_id
+                 AND f.internal_sku=p.internal_sku
+                WHERE p.snapshot_id=? ORDER BY p.internal_sku""", (snapshot_id,),
             ).fetchall()
             inventory = connection.execute(
                 """SELECT * FROM stock_planning_snapshot_inventory
@@ -213,6 +223,76 @@ class StockPlanningRepository:
             "issues": [dict(row) for row in issues],
             "inputs": dict(inputs) if inputs else None,
         }
+
+    @staticmethod
+    def product_sales_movements(
+        snapshot_id: int, sku: str, branch: str, months: int = 36,
+    ) -> dict[str, Any]:
+        """Return the sales evidence used by a frozen planning analysis.
+
+        Only the customer display name is returned to the presentation layer.
+        """
+        months = months if months in {12, 24, 36} else 36
+        with connection_scope() as connection:
+            snapshot = connection.execute(
+                "SELECT as_of_date FROM stock_planning_snapshots WHERE id=?",
+                (snapshot_id,),
+            ).fetchone()
+            if not snapshot:
+                return {"rows": [], "months": months, "summary": {}}
+            has_warehouse_16 = connection.execute(
+                """SELECT 1 FROM stock_planning_snapshot_inventory
+                WHERE snapshot_id=? AND branch_code='16' LIMIT 1""",
+                (snapshot_id,),
+            ).fetchone()
+            branch_codes = (
+                ("1", "16") if str(branch) == "1" and has_warehouse_16
+                else (("1",) if str(branch) == "1" else ("50",))
+            )
+            placeholders = ",".join("?" for _ in branch_codes)
+            rows = connection.execute(
+                f"""SELECT sale_date,customer_name,branch_code warehouse_code,
+                    warehouse_name,quantity,net_value_cop
+                FROM stock_planning_snapshot_sales_movements
+                WHERE snapshot_id=? AND internal_sku=?
+                  AND branch_code IN ({placeholders})
+                  AND date(sale_date)>=date(?,'start of month',?)
+                ORDER BY date(sale_date) DESC,id DESC""",
+                (
+                    snapshot_id, sku.upper(), *branch_codes,
+                    snapshot["as_of_date"], f"-{months - 1} months",
+                ),
+            ).fetchall()
+        movements = [dict(row) for row in rows]
+        summary = {
+            "movement_count": len(movements),
+            "net_units": sum(float(row["quantity"] or 0) for row in movements),
+            "customer_count": len({
+                row["customer_name"] for row in movements
+                if row["customer_name"] != "Cliente sin nombre"
+            }),
+            "net_value_cop": sum(float(row["net_value_cop"] or 0) for row in movements),
+        }
+        return {"rows": movements, "months": months, "summary": summary}
+
+    @staticmethod
+    def archive_snapshot(
+        snapshot_id: int, archived_by: str
+    ) -> dict[str, Any] | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """SELECT id,vendor_profile_id,snapshot_key
+                FROM stock_planning_snapshots
+                WHERE id=? AND archived_at IS NULL""", (snapshot_id,),
+            ).fetchone()
+            if not row:
+                return None
+            connection.execute(
+                """UPDATE stock_planning_snapshots
+                SET archived_at=CURRENT_TIMESTAMP,archived_by=? WHERE id=?""",
+                (archived_by, snapshot_id),
+            )
+        return dict(row)
 
     @staticmethod
     def upsert_catalog_product(profile_id: int, values: dict[str, Any]) -> int:

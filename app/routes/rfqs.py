@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, abort, g, redirect, render_template, request, url_for
 from app.auth import roles_required
 
@@ -43,13 +45,13 @@ def new():
         try:
             values = request.form.to_dict()
             references = request.form.getlist("item_reference")
-            brands = request.form.getlist("item_brand")
+            vendor = request.form.get("vendor", "").strip()
             quantities = request.form.getlist("item_quantity")
             notes = request.form.getlist("item_notes")
             values["items"] = [
                 {
                     "reference": reference,
-                    "brand": brands[index] if index < len(brands) else "",
+                    "brand": vendor,
                     "quantity": (
                         quantities[index] if index < len(quantities) else ""
                     ),
@@ -73,6 +75,7 @@ def new():
         sales_representatives=ActivityFormRepository.list_sales_representatives(),
         brand_options=ActivityFormRepository.list_brand_options(),
         default_responsible_email=RFQService.default_responsible_email(),
+        default_received_at=date.today().isoformat(),
         form=request.form,
     )
 
@@ -182,12 +185,38 @@ def convert_to_quote(rfq_id: int):
 
 
 @rfqs_bp.post("/<int:rfq_id>/request-vendor-prices")
-@roles_required("administrator")
+@roles_required("administrator", "commercial_management")
 def request_vendor_prices(rfq_id: int):
     try:
         RFQVendorRequestService.send(rfq_id, g.current_user["id"])
     except ValueError as exception:
         return render_template(
             "rfqs/detail.html", page=RFQService.detail(rfq_id), error=str(exception)
+        ), 400
+    return redirect(url_for("rfqs.detail", rfq_id=rfq_id))
+
+
+@rfqs_bp.post("/<int:rfq_id>/test-vendor-email")
+@roles_required("administrator", "commercial_management")
+def test_vendor_email(rfq_id: int):
+    try:
+        RFQVendorRequestService.send_test(rfq_id)
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("rfqs.detail", rfq_id=rfq_id, test_sent=1))
+
+
+@rfqs_bp.post("/<int:rfq_id>/sync-vendor-responses")
+@roles_required("administrator", "commercial_management")
+def sync_vendor_responses(rfq_id: int):
+    try:
+        RFQVendorRequestService.sync(rfq_id, g.current_user["id"])
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
         ), 400
     return redirect(url_for("rfqs.detail", rfq_id=rfq_id))

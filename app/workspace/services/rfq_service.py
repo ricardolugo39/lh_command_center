@@ -10,6 +10,9 @@ from app.workspace.repositories.contact_repository import (
 from app.workspace.repositories.project_repository import ProjectRepository
 from app.workspace.repositories.rfq_repository import RFQRepository
 from app.workspace.repositories.rfq_email_repository import RFQEmailRepository
+from app.workspace.repositories.rfq_vendor_request_repository import (
+    RFQVendorRequestRepository,
+)
 from app.configuration import resolve_settings
 
 
@@ -37,7 +40,7 @@ class RFQService:
         config, _ = resolve_settings(("RFQ_DEFAULT_RESPONSIBLE_EMAIL",))
         return config.get(
             "RFQ_DEFAULT_RESPONSIBLE_EMAIL",
-            "jeanp.florez@lugohermanos.com",
+            "ricardo.lugo@lugohermanos.com",
         ).strip().casefold()
 
     @classmethod
@@ -67,7 +70,7 @@ class RFQService:
             contact_id=clean.get("contact_id"),
             advisor_user_id=clean["owner_user_id"],
             activity_type=ActivityType.NOTE,
-            title=f"Precotización {clean['prequotation_number']} creada",
+            title=f"RFQ {clean['rfq_number']} creada",
             details=clean["description"],
             purpose="RFQ recibida",
             summary=clean["description"],
@@ -167,6 +170,8 @@ class RFQService:
             },
             "email_thread": RFQEmailRepository.get_thread(rfq_id),
             "email_messages": RFQEmailRepository.list_messages(rfq_id),
+            "vendor_requests": RFQVendorRequestRepository.list_for_rfq(rfq_id),
+            "vendor_messages": RFQVendorRequestRepository.list_messages(rfq_id),
             "related_quotes": QuoteManagementRepository.related_to_rfq(rfq_id),
         }
 
@@ -221,7 +226,7 @@ class RFQService:
             owner = owner or (default_user["id"] if default_user else None)
         if not owner:
             raise ValueError("Seleccione un responsable válido.")
-        users = {user["id"] for user in ActivityFormRepository.list_sales_users()}
+        users = {user["id"] for user in ActivityFormRepository.list_users()}
         if owner not in users:
             raise ValueError("Seleccione un responsable activo.")
         sales_rep_name = str(values.get("sales_rep_name") or "").strip()
@@ -229,34 +234,30 @@ class RFQService:
             raise ValueError("Seleccione un vendedor válido de la base de ventas.")
         if not sales_rep_name:
             sales_rep_name = next(
-                user["display_name"] for user in ActivityFormRepository.list_sales_users()
+                user["display_name"] for user in ActivityFormRepository.list_users()
                 if user["id"] == owner
             )
-        prequotation = str(
-            values.get("prequotation_number") or ""
-        ).strip()
-        if not prequotation:
-            raise ValueError("El número de precotización es obligatorio.")
+        prequotation = str(values.get("prequotation_number") or "").strip()
+        items = cls._validate_items(values.get("items") or [])
         description = str(values.get("description") or "").strip()
+        if not description:
+            description = ", ".join(item["reference"] for item in items)[:500]
         received_at = str(values.get("received_at") or "").strip()
-        if not description or not received_at:
-            raise ValueError(
-                "Descripción y fecha recibida son obligatorias."
-            )
+        if not received_at:
+            raise ValueError("La fecha recibida es obligatoria.")
         contact_id = cls._integer(values.get("contact_id"))
         if contact_id:
             contact = ContactRepository.get(contact_id)
             if not contact or contact["customer_id"] != customer_id:
                 raise ValueError("El contacto no pertenece al cliente.")
-        items = cls._validate_items(values.get("items") or [])
         return {
             **values, "customer_id": customer_id, "contact_id": contact_id,
             "owner_user_id": owner, "description": description,
             "sales_rep_name": sales_rep_name,
             "received_at": received_at,
-            "prequotation_number": prequotation,
-            "prequotation_number_normalized": cls._normalize_prequotation(
-                prequotation
+            "prequotation_number": prequotation or None,
+            "prequotation_number_normalized": (
+                cls._normalize_prequotation(prequotation) if prequotation else None
             ),
             "estimated_value": None, "currency_code": None,
         }, items
@@ -276,6 +277,8 @@ class RFQService:
                 raise ValueError(f"La referencia de la fila {index} es obligatoria.")
             if not brand:
                 raise ValueError(f"La marca de la fila {index} es obligatoria.")
+            if brand.casefold() in {"thk", "thomson"}:
+                brand = "THK" if brand.casefold() == "thk" else "Thomson"
             if quantity is None or quantity <= 0:
                 raise ValueError(
                     f"La cantidad de la fila {index} debe ser mayor que cero."

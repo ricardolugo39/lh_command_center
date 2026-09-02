@@ -13,6 +13,7 @@ def integration_client(tmp_path, monkeypatch):
         "GOOGLE_VISITS_SPREADSHEET_ID",
         "GOOGLE_VISITS_WORKSHEET_NAME",
         "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_PATH",
+        "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(
@@ -95,6 +96,25 @@ def test_configured_google_integration_keeps_manual_sync_action(
     )
     assert button is not None
     assert not button.has_attr("disabled")
+
+
+def test_google_integration_accepts_secret_json_without_exposing_it(
+    integration_client, monkeypatch,
+):
+    secret = '{"client_email":"visits@example.test","private_key":"secret-key"}'
+    monkeypatch.setenv("GOOGLE_VISITS_SPREADSHEET_ID", "sheet-id")
+    monkeypatch.setenv("GOOGLE_VISITS_WORKSHEET_NAME", "Visitas")
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON", secret)
+
+    from app.workspace.connectors.visit_source import GoogleSheetsVisitSource
+
+    status = GoogleSheetsVisitSource.configuration_status()
+    source = GoogleSheetsVisitSource.from_environment()
+
+    assert status["ready"] is True
+    assert "credentials_json" not in status
+    assert "secret-key" not in repr(status)
+    assert source.credentials_info["client_email"] == "visits@example.test"
 
 
 def test_missing_credential_file_is_reported_without_breaking_page(

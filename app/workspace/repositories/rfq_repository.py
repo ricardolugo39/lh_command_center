@@ -107,9 +107,11 @@ class RFQRepository:
             params.append(status)
         if search:
             clauses.append(
-                "(r.prequotation_number LIKE ? OR c.name LIKE ?)"
+                "(r.prequotation_number LIKE ? OR c.name LIKE ? OR EXISTS ("
+                "SELECT 1 FROM rfq_items si WHERE si.rfq_id=r.id "
+                "AND (si.reference LIKE ? OR si.brand LIKE ?)))"
             )
-            params.extend((f"%{search}%", f"%{search}%"))
+            params.extend((f"%{search}%",) * 4)
         if office in {"Bogotá", "Cali"}:
             clauses.append(f"{sql_office_case('r.sales_rep_name')} = ?")
             params.append(office)
@@ -117,7 +119,18 @@ class RFQRepository:
         with connection_scope() as connection:
             rows = connection.execute(
                 f"""SELECT r.*, c.name AS customer_name,
-                    COALESCE(r.sales_rep_name,u.display_name) AS owner_name
+                    COALESCE(r.sales_rep_name,u.display_name) AS owner_name,
+                    (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id=r.id)
+                        AS item_count,
+                    (SELECT GROUP_CONCAT(DISTINCT i.brand) FROM rfq_items i
+                        WHERE i.rfq_id=r.id) AS vendor_summary,
+                    (SELECT GROUP_CONCAT(i.reference, ', ') FROM rfq_items i
+                        WHERE i.rfq_id=r.id) AS reference_summary,
+                    (SELECT COUNT(*) FROM rfq_vendor_requests vr
+                        WHERE vr.rfq_id=r.id) AS vendor_request_count,
+                    (SELECT COUNT(*) FROM rfq_vendor_requests vr
+                        WHERE vr.rfq_id=r.id AND vr.status='responded')
+                        AS vendor_response_count
                 FROM rfqs r JOIN ws_customers c ON c.id = r.customer_id
                 JOIN ws_users u ON u.id = r.owner_user_id
                 {where}

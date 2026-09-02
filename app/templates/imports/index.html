@@ -7,9 +7,10 @@
   {% for import_type, title, description in [
     ('sales','Actualizar ventas','Agrega nuevas transacciones sin duplicar ventas ya importadas.'),
     ('customers','Sincronizar clientes','Actualiza el maestro ERP preservando los identificadores internos.'),
-    ('inventory','Actualizar inventario','Guarda el corte por producto y bodega, actualizando sin duplicar el mismo snapshot.')
+    ('inventory','Actualizar inventario','Guarda el corte por producto y bodega, actualizando sin duplicar el mismo snapshot.'),
+    ('fob_prices','Actualizar precios FOB','Conserva una extracción histórica completa de FOB USD y precio de lista COP, sin pedir marca.')
   ] %}
-  <div class="col-md-4">
+  <div class="col-md-6 col-xl-3">
     <form class="card h-100" method="post" action="{{ url_for('imports.preview') }}"
           enctype="multipart/form-data">
       <div class="card-body">
@@ -84,7 +85,7 @@
       {% for item in executions %}
         <tr>
           <td>{{ item.started_at }}</td>
-          <td>{{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','crm_opportunities':'Oportunidades CRM'}.get(item.import_type, item.import_type) }}</td>
+          <td>{{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','fob_prices':'Precios FOB','crm_opportunities':'Oportunidades CRM'}.get(item.import_type, item.import_type) }}</td>
           <td>{{ item.original_filename }}</td>
           <td><span class="badge">{{ item.status }}</span></td>
           <td>{{ item.rows_read }}</td><td>{{ item.rows_inserted }}</td>

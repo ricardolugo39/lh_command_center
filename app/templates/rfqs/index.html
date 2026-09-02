@@ -1,25 +1,24 @@
 {% extends "base.html" %}
-{% block title %}RFQs · Commercial Command Center{% endblock %}
-{% block page_title %}Solicitudes de cotización{% endblock %}
-{% block page_actions %}<div class="col-auto ms-auto"><a class="btn btn-primary"
-href="{{ url_for('rfqs.new') }}">Nueva RFQ</a></div>{% endblock %}
+{% block title %}RFQ a proveedores · Commercial Command Center{% endblock %}
+{% block page_title %}RFQ a proveedores{% endblock %}
+{% block page_actions %}<div class="col-auto ms-auto"><a class="btn btn-primary" href="{{ url_for('rfqs.new') }}">Nueva RFQ</a></div>{% endblock %}
 {% block content %}
-<form class="mb-3" method="get"><div class="input-group">
-<input class="form-control" name="q" value="{{ search }}" placeholder="Buscar precotización o cliente">
-<select class="form-select" name="office"><option value="">Todas las sedes</option>{% for value in offices %}<option value="{{ value }}" {{ 'selected' if office == value }}>{{ value }}</option>{% endfor %}</select>
-{% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
-<button class="btn">Buscar</button></div></form>
-<div class="btn-list mb-3"><a class="btn {{ 'btn-primary' if not status else 'btn-outline-secondary' }}"
-href="{{ url_for('rfqs.index',q=search,office=office) }}">Todas</a>{% for value,label in labels.items() %}
-<a class="btn {{ 'btn-primary' if status == value else 'btn-outline-secondary' }}"
-href="{{ url_for('rfqs.index',status=value,q=search,office=office) }}">{{ label }}</a>{% endfor %}</div>
+<div class="mb-3 text-secondary">Solicitudes de precio enviadas a THK y Thomson.</div>
+<form class="card card-body mb-3" method="get"><div class="row g-2">
+  <div class="col-md-6"><input class="form-control" name="q" value="{{ search }}" placeholder="Buscar RFQ, cliente o referencia"></div>
+  <div class="col-md-3"><select class="form-select" name="office"><option value="">Todas las sedes</option>{% for value in offices %}<option value="{{ value }}" {{ 'selected' if office == value }}>{{ value }}</option>{% endfor %}</select></div>
+  <div class="col-md-3 d-flex gap-2"><button class="btn btn-outline-primary flex-fill">Buscar</button>{% if search or office %}<a class="btn" href="{{ url_for('rfqs.index') }}">Limpiar</a>{% endif %}</div>
+</div></form>
 <div class="card"><div class="table-responsive"><table class="table table-vcenter card-table">
-<thead><tr><th>RFQ</th><th>Cliente</th><th>Estado</th><th>Responsable</th>
-<th>Próxima acción</th><th>Fecha</th></tr></thead><tbody>
-{% for rfq in rfqs %}<tr><td><a href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">
-{{ rfq.prequotation_number or rfq.rfq_number }}</a></td><td>{{ rfq.customer_name }}</td>
-<td><span class="badge">{{ labels[rfq.workflow_status] }}</span></td><td>{{ rfq.owner_name }}</td>
-<td>{{ rfq.description }}</td><td>{{ rfq.updated_at }}</td></tr>
-{% else %}<tr><td colspan="6" class="text-center text-secondary py-5">No hay RFQs.</td></tr>{% endfor %}
-</tbody></table></div></div>
+<thead><tr><th>Fecha</th><th>RFQ</th><th>Asesor / cliente</th><th>Productos</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead>
+<tbody>{% for rfq in rfqs %}<tr>
+  <td class="text-nowrap">{{ rfq.received_at }}</td>
+  <td><a class="fw-semibold" href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">{{ rfq.rfq_number }}</a></td>
+  <td><div>{{ rfq.owner_name }}</div><div class="small text-secondary">{{ rfq.customer_name }}</div></td>
+  <td><div>{{ rfq.reference_summary or '—' }}</div><div class="small text-secondary">{{ rfq.item_count }} referencia(s)</div></td>
+  <td>{{ (rfq.vendor_summary or '—').replace(',', ', ') }}</td>
+  <td>{% if rfq.vendor_request_count == 0 %}<span class="badge bg-secondary-lt">Borrador</span>{% elif rfq.vendor_response_count == rfq.vendor_request_count %}<span class="badge bg-green-lt">Respuesta recibida</span>{% else %}<span class="badge bg-yellow-lt">Esperando proveedor</span>{% endif %}</td>
+  <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">Abrir</a></td>
+</tr>{% else %}<tr><td colspan="7" class="text-center text-secondary py-5">No hay RFQs de proveedor.</td></tr>{% endfor %}</tbody>
+</table></div></div>
 {% endblock %}

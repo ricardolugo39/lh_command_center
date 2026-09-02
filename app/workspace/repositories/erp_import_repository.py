@@ -224,6 +224,29 @@ class ERPImportRepository:
         return len(keys - existing), len(keys & existing)
 
     @staticmethod
+    def insert_fob_prices(
+        execution_id: int, rows: list[dict[str, Any]]
+    ) -> int:
+        if not rows:
+            return 0
+        columns = (
+            "idproducto", "prefijo", "sufijo", "idfam2", "fob_usd",
+            "lista1_cop", "nit",
+        )
+        with connection_scope() as connection:
+            connection.executemany(
+                """INSERT INTO erp_fob_price_history (
+                    import_execution_id,idproducto,prefijo,sufijo,idfam2,
+                    fob_usd,lista1_cop,nit
+                ) VALUES (?,?,?,?,?,?,?,?)""",
+                [
+                    (execution_id, *(row.get(column) for column in columns))
+                    for row in rows
+                ],
+            )
+        return len(rows)
+
+    @staticmethod
     def create_issues(
         execution_id: int, issues: Iterable[Any]
     ) -> None:

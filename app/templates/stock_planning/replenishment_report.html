@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Traslados {{ page.snapshot.vendor_name }} · Planeación de inventario{% endblock %}
+{% block page_title %}Reabastecimiento de Cali · {{ page.snapshot.vendor_name }}{% endblock %}
+{% block page_actions %}<div class="col-auto ms-auto"><a class="btn" href="{{ url_for('stock_planning.index', profile_id=page.snapshot.vendor_profile_id) }}">Volver</a></div>{% endblock %}
+{% block content %}
+{% set report = page.replenishment %}
+{% if page.message %}<div class="alert alert-info">{{ page.message }}</div>{% endif %}
+
+<div class="alert alert-info">
+  Este reporte calcula lo que Cali necesita para aproximadamente <strong>{{ report.coverage_days }} días</strong> y solo permite trasladar el excedente que Bogotá conserva después de cubrir su propia demanda. Bogotá reúne las bodegas 1 y 16; el despacho comercial se registra 1 → 50.
+</div>
+
+<div class="row row-cards mb-4">
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-secondary">Inventario utilizado</div><div class="h3">{{ page.snapshot.inventory_snapshot_date }}</div></div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-secondary">Aprobados automáticamente</div><div class="h1 text-green">{{ report.automatic|length }}</div></div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-secondary">Requieren tu decisión</div><div class="h1 text-yellow">{{ report.review|length }}</div></div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-secondary">Bogotá no puede cubrir</div><div class="h1">{{ report.uncovered|length }}</div></div></div></div>
+</div>
+
+<section class="card mb-4"><div class="card-body d-flex flex-wrap gap-2 align-items-center">
+  <div class="me-auto"><div class="h3 mb-1">Archivos para compartir</div><div class="text-secondary">Los archivos contienen únicamente decisiones listas; las revisiones pendientes no se incluyen.</div></div>
+  {% if report.automatic or report.approved %}<a class="btn btn-primary" href="{{ url_for('stock_planning.export_transfers', snapshot_id=page.snapshot.id) }}">Descargar traslados aprobados</a>{% endif %}
+  {% if report.uncovered %}<a class="btn" href="{{ url_for('stock_planning.export_replenishment_uncovered', snapshot_id=page.snapshot.id) }}">{% if page.snapshot.profile_code == 'SKF' %}Descargar tabla para Jean Pierre{% else %}Descargar tabla para compras{% endif %}</a>{% endif %}
+</div></section>
+
+{% macro transfer_table(items, editable=false) %}
+<div class="table-responsive"><table class="table card-table table-sm align-middle">
+  <thead><tr><th>Referencia</th><th>Frecuencia Cali</th><th class="text-end">Venta Cali 12m</th><th class="text-end">Demanda Cali/mes</th><th class="text-end">Inv. Cali</th><th class="text-end">Inv. Bogotá</th><th class="text-end">Mínimo a conservar en Bogotá</th><th>Movimiento previo</th><th class="text-end">Trasladar</th>{% if editable %}<th>Decisión</th>{% endif %}</tr></thead>
+  <tbody>{% for item in items %}<tr>
+    <td><a href="{{ url_for('stock_planning.product_analysis', snapshot_id=page.snapshot.id, sku=item.sku, branch='50') }}">{{ item.sku }}</a></td>
+    <td><span class="badge bg-blue-lt">{{ item.active_months_24 }} de 24 meses</span><div class="small text-secondary">{{ item.class_code }}</div></td>
+    <td class="text-end">{{ item.cali_sales_12|round(0)|int }}</td>
+    <td class="text-end">{{ item.cali_monthly_demand|round(2) }}</td>
+    <td class="text-end">{{ item.cali_inventory|round(0)|int }}</td>
+    <td class="text-end">{{ item.bogota_inventory|round(0)|int }}</td>
+    <td class="text-end">{{ item.bogota_target|round(0)|int }}</td>
+    <td>{% if item.internal_move_16_to_1 %}<span class="badge bg-yellow-lt">{{ item.internal_move_16_to_1 }} de 16 → 1</span>{% else %}Disponible en bodega 1{% endif %}</td>
+    <td class="text-end"><strong>{{ item.final_quantity|round(0)|int }}</strong></td>
+    {% if editable %}<td><form class="d-flex gap-1" method="post" action="{{ url_for('stock_planning.save_transfer_decision', snapshot_id=page.snapshot.id) }}">
+      <input type="hidden" name="return_to" value="replenishment"><input type="hidden" name="sku" value="{{ item.sku }}"><input type="hidden" name="from_branch" value="1"><input type="hidden" name="to_branch" value="50">
+      <input class="form-control form-control-sm" style="width:75px" type="number" min="0" step="1" name="quantity" value="{{ item.quantity|round(0)|int }}"><button class="btn btn-sm btn-primary">Confirmar</button>
+    </form><div class="small text-secondary mt-1">{{ item.review_reasons|join(', ') }}</div></td>{% endif %}
+  </tr>{% else %}<tr><td colspan="10" class="text-secondary">No hay referencias en este grupo.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endmacro %}
+
+<section class="card mb-4" id="review"><div class="card-header"><div><h3 class="card-title">Traslados que requieren tu decisión</h3><div class="text-secondary small">Puede confirmar la cantidad sugerida, cambiarla o escribir cero para descartarla.</div></div><span class="badge bg-yellow-lt ms-auto">{{ report.review|length }}</span></div>{{ transfer_table(report.review, true) }}</section>
+
+<section class="card mb-4"><div class="card-header"><div><h3 class="card-title">Traslados aprobados automáticamente</h3><div class="text-secondary small">Referencias vendidas en al menos 6 meses de los últimos 24 que Bogotá puede entregar sin bajar de su reserva.</div></div><span class="badge bg-green-lt ms-auto">{{ report.automatic|length + report.approved|length }}</span></div>{{ transfer_table(report.automatic + report.approved) }}</section>
+
+<section class="card mb-4"><div class="card-header"><div><h3 class="card-title">Tabla para el responsable de compra</h3><div class="text-secondary small">Cali necesita estas referencias, pero Bogotá no puede cubrirlas. El archivo es informativo y no crea un pedido.</div></div><div class="ms-auto d-flex gap-2 align-items-center"><span class="badge bg-secondary-lt">{{ report.uncovered|length }}</span>{% if report.uncovered %}<a class="btn btn-sm" href="{{ url_for('stock_planning.export_replenishment_uncovered', snapshot_id=page.snapshot.id) }}">{% if page.snapshot.profile_code == 'SKF' %}Descargar tabla para Jean Pierre{% else %}Descargar tabla para compras{% endif %}</a>{% endif %}</div></div>
+  <div class="table-responsive"><table class="table card-table table-sm"><thead><tr><th>Referencia</th><th>Frecuencia Cali</th><th class="text-end">Venta Cali 12m</th><th class="text-end">Inv. Cali</th><th class="text-end">Inv. Bogotá</th><th class="text-end">Faltante</th><th>Responsable</th></tr></thead><tbody>{% for item in report.uncovered %}<tr><td>{{ item.internal_sku }}</td><td>{{ item.active_months_24 }} de 24 meses</td><td class="text-end">{{ item.sales_12|round(0)|int }}</td><td class="text-end">{{ item.cali_inventory|round(0)|int }}</td><td class="text-end">{{ item.bogota_inventory|round(0)|int }}</td><td class="text-end"><strong>{{ item.suggested_quantity|round(0)|int }}</strong></td><td>{{ item.assigned_to or 'Sin asignar' }}</td></tr>{% else %}<tr><td colspan="7" class="text-secondary">Bogotá puede cubrir todas las necesidades prioritarias de Cali.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

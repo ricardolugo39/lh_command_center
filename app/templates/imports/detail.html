@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between mb-4">
       <div><h3 class="mb-1">{{ execution.original_filename }}</h3>
         <div class="text-secondary">
-          {{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','crm_opportunities':'Oportunidades CRM'}.get(execution.import_type, execution.import_type) }}
+          {{ {'sales':'Ventas','customers':'Clientes','inventory':'Inventario','fob_prices':'Precios FOB','crm_opportunities':'Oportunidades CRM'}.get(execution.import_type, execution.import_type) }}
           {% if execution.snapshot_date %} · Snapshot {{ execution.snapshot_date }}{% endif %}
         </div></div>
       <span class="badge">{{ execution.status }}</span>
