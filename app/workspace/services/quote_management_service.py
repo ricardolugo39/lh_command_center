@@ -226,7 +226,7 @@ class QuoteManagementService:
             story.extend([Paragraph("Comentarios comerciales", styles["Heading3"]), Paragraph(escape(quote["commercial_comments"]), styles["BodyText"]), Spacer(1,3*mm)])
         story.extend([
             Paragraph("Condiciones comerciales", styles["Heading3"]),
-            Paragraph("• Los precios aplican únicamente para la cantidad completa indicada.<br/>• TRM del día de la factura.<br/>• Disponibilidad sujeta a confirmación de fábrica.<br/>• Vigencia de la oferta: 10 días.", styles["BodyText"]),
+            Paragraph("• Valores expresados en dólares estadounidenses (USD).<br/>• Los precios aplican únicamente para la cantidad completa indicada.<br/>• Disponibilidad sujeta a confirmación de fábrica.<br/>• Vigencia de la oferta: 10 días.", styles["BodyText"]),
         ])
         doc.build(story)
         QuoteManagementRepository.save_pdf(quote_id, str(path), actor_user_id)

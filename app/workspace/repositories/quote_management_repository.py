@@ -201,7 +201,7 @@ class QuoteManagementRepository:
     @staticmethod
     def update_header(quote_id: int, values: dict[str, Any], actor_user_id: int) -> None:
         columns = (
-            "estimated_trm", "origin_country_code", "origin_service_area_code",
+            "origin_country_code", "origin_service_area_code",
             "premium_service", "commercial_comments", "internal_notes",
             "final_dhl_zone", "zone_override_reason", "final_shipping_usd",
             "shipping_override_reason",

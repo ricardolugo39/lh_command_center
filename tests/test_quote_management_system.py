@@ -51,7 +51,7 @@ def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     QuoteManagementService.save_workspace(
         quote_id,
         {
-            "estimated_trm": "4000", "origin_country_code": "BR",
+            "origin_country_code": "BR",
             "origin_service_area_code": "default",
         },
         [{
@@ -71,6 +71,26 @@ def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     assert Decimal(quote["landed_cost_usd"]) == Decimal("122.35")
     assert Decimal(quote["profit_usd"]) == Decimal("77.65")
     assert Decimal(result["lines"][0]["shipping"]) == Decimal("52.35")
+
+
+def test_customs_is_fixed_300_usd_over_value_threshold(quote_database):
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    QuoteManagementService.save_workspace(
+        quote_id,
+        {"origin_country_code": "BR", "origin_service_area_code": "default"},
+        [{
+            "id": line["id"], "vendor_fob_unit_usd": "1001",
+            "unit_weight_kg": "1", "lead_time": "4 weeks",
+            "pricing_override_value": "1500",
+            "pricing_override_reason": "Precio autorizado",
+        }],
+        1,
+    )
+    result = QuoteManagementService.calculate(quote_id)
+    assert Decimal(result["quote"]["customs_usd"]) == Decimal("300.00")
+    assert result["quote"]["exchange_rate"] == 1
+    assert result["quote"]["normalized_amount"] == result["quote"]["amount"]
 
 
 def test_revisions_copy_provenance_without_overwriting(quote_database):

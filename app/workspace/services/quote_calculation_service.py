@@ -64,9 +64,6 @@ class QuoteCalculationService:
     def calculate(cls, quote: dict[str, Any], lines: list[dict[str, Any]]):
         if not lines:
             raise ValueError("La cotización requiere al menos una línea.")
-        trm = decimal_value(quote.get("estimated_trm"))
-        if trm <= ZERO:
-            raise ValueError("Indique una TRM estimada mayor que cero.")
         profile = QuoteManagementRepository.active_profile()
         if not profile:
             raise ValueError("No existe un perfil DHL activo.")
@@ -102,9 +99,8 @@ class QuoteCalculationService:
         if quote.get("final_shipping_usd") and quote.get("shipping_override_reason"):
             final_shipping = money(quote["final_shipping_usd"])
         settings = QuoteManagementRepository.settings()
-        customs_base = money(settings.get("customs_base_cop", "300000"))
         customs_applied = total_fob > Decimal("2000") or total_weight > Decimal("50")
-        customs = money(customs_base / trm) if customs_applied else ZERO
+        customs = Decimal("300.00") if customs_applied else ZERO
         bank = money(settings.get("bank_fee_usd", "30"))
         results = []
         allocated_shipping = allocated_customs = allocated_bank = ZERO
@@ -151,14 +147,16 @@ class QuoteCalculationService:
         profit = money(selling_total - landed_total)
         return {
             "quote": {
-                "amount": float(selling_total), "normalized_amount": float(money(selling_total * trm)),
-                "exchange_rate": float(trm), "estimated_trm": str(trm),
+                "amount": float(selling_total),
+                "normalized_amount": float(selling_total),
+                "exchange_rate": 1,
+                "estimated_trm": None,
                 "calculated_dhl_zone": mapping["zone"], "final_dhl_zone": final_zone,
                 "dhl_rate_profile_id": profile["id"], "actual_weight_kg": str(total_weight),
                 "chargeable_weight_kg": str(chargeable),
                 "calculated_shipping_usd": str(calculated_shipping),
                 "final_shipping_usd": str(final_shipping), "customs_applied": int(customs_applied),
-                "customs_base_cop": str(customs_base), "customs_usd": str(customs),
+                "customs_base_cop": None, "customs_usd": str(customs),
                 "bank_fee_usd": str(bank), "landed_cost_usd": str(landed_total),
                 "profit_usd": str(profit),
                 "margin_percent": str(money(profit / selling_total * 100) if selling_total else ZERO),
