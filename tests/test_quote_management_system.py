@@ -125,13 +125,20 @@ def test_revisions_copy_provenance_without_overwriting(quote_database):
     assert QuoteManagementRepository.lines(revision_id)[0]["source_rfq_item_id"]
 
 
-def test_manual_overrides_require_reasons(quote_database):
+def test_price_is_automatic_and_manual_override_needs_no_reason(quote_database):
     quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
     line = QuoteManagementRepository.lines(quote_id)[0]
-    with pytest.raises(ValueError, match="precio manual requiere"):
-        QuoteManagementService.save_workspace(
-            quote_id, {}, [{"id": line["id"], "pricing_override_value": "10"}], 1
-        )
+    QuoteManagementService.save_workspace(
+        quote_id, {"origin_option": "BR|default"}, [{
+            "id": line["id"], "vendor_fob_unit_usd": "20",
+            "unit_weight_kg": "1", "lead_time": "4 weeks",
+        }], 1
+    )
+    automatic = QuoteManagementService.calculate(quote_id)
+    assert Decimal(automatic["lines"][0]["selling_unit"]) > 0
+    QuoteManagementService.save_workspace(
+        quote_id, {}, [{"id": line["id"], "pricing_override_value": "10"}], 1
+    )
 
 
 def test_manual_shipping_is_the_only_freight_override(quote_database):

@@ -262,8 +262,7 @@ class QuoteManagementRepository:
     def update_line(line_id: int, values: dict[str, Any], actor_user_id: int) -> None:
         columns = (
             "vendor_fob_unit_usd", "unit_weight_kg", "lead_time",
-            "pricing_rule_id", "pricing_override_value",
-            "pricing_override_reason", "internal_notes",
+            "pricing_override_value", "internal_notes",
         )
         with connection_scope() as connection:
             connection.execute(

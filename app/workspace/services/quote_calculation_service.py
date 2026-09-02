@@ -108,9 +108,9 @@ class QuoteCalculationService:
             allocated_customs += custom
             allocated_bank += bank_part
             landed = money(line["fob"] + shipping + custom + bank_part)
-            rule_value = line.get("pricing_override_value")
-            if rule_value:
-                selling_unit = money(rule_value)
+            manual_price = line.get("pricing_override_value")
+            if manual_price not in (None, ""):
+                selling_unit = money(manual_price)
             elif line.get("pricing_rule_id"):
                 rule = QuoteManagementRepository.pricing_rule(int(line["pricing_rule_id"]))
                 if not rule:
@@ -126,7 +126,11 @@ class QuoteCalculationService:
                         raise ValueError("El margen bruto configurado debe ser menor a 100%.")
                     selling_unit = money(landed_unit / (Decimal("1") - value / 100))
             else:
-                raise ValueError("Cada línea requiere una regla o precio manual autorizado.")
+                # The normal workflow must not require the user to choose an
+                # internal pricing rule.  Until a more specific stored rule is
+                # attached to the line, use the worksheet's standard 0.65
+                # profitability factor automatically.
+                selling_unit = money((landed / line["quantity_d"]) / Decimal("0.65"))
             selling_total = money(selling_unit * line["quantity_d"])
             profit = money(selling_total - landed)
             margin = money(profit / selling_total * 100) if selling_total else ZERO

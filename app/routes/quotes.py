@@ -77,8 +77,7 @@ def workspace(quote_id: int):
             values = []
             fields = (
                 "vendor_fob_unit_usd", "unit_weight_kg", "lead_time",
-                "pricing_rule_id", "pricing_override_value",
-                "pricing_override_reason", "internal_notes",
+                "pricing_override_value", "internal_notes",
             )
             lists = {field: request.form.getlist(field) for field in fields}
             for index, raw_id in enumerate(ids):

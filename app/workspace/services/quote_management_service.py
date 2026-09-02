@@ -162,10 +162,6 @@ class QuoteManagementService:
         for values in line_values:
             if values["id"] not in existing:
                 raise ValueError("Una línea no pertenece a esta cotización.")
-            if values.get("pricing_override_value") and not str(
-                values.get("pricing_override_reason") or ""
-            ).strip():
-                raise ValueError("El precio manual requiere un motivo de override.")
             QuoteManagementRepository.update_line(values["id"], values, actor_user_id)
 
     @staticmethod
