@@ -3806,6 +3806,34 @@ def _migration_0064_rfq_weight_research(connection: Connection) -> None:
     ))
 
 
+def _migration_0065_backfill_quote_vendor_values(connection: Connection) -> None:
+    """Fill missing editable quote values saved in an RFQ after conversion."""
+    connection.execute(
+        """UPDATE ws_quote_lines
+        SET vendor_fob_unit_usd=COALESCE(vendor_fob_unit_usd,(
+                SELECT i.fob_unit_usd FROM rfq_items i
+                WHERE i.id=ws_quote_lines.source_rfq_item_id
+            )),
+            unit_weight_kg=COALESCE(unit_weight_kg,(
+                SELECT i.unit_weight_kg FROM rfq_items i
+                WHERE i.id=ws_quote_lines.source_rfq_item_id
+            )),
+            lead_time=COALESCE(lead_time,(
+                SELECT i.lead_time FROM rfq_items i
+                WHERE i.id=ws_quote_lines.source_rfq_item_id
+            )),
+            updated_at=CURRENT_TIMESTAMP
+        WHERE source_rfq_item_id IS NOT NULL
+          AND quote_id IN (SELECT id FROM ws_project_quotes WHERE issued_at IS NULL)
+          AND EXISTS (
+              SELECT 1 FROM rfq_items i
+              WHERE i.id=ws_quote_lines.source_rfq_item_id
+                AND (i.fob_unit_usd IS NOT NULL OR i.unit_weight_kg IS NOT NULL
+                     OR i.lead_time IS NOT NULL)
+          )"""
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3957,6 +3985,7 @@ MIGRATION_MANIFEST = (
     Migration(62, "vendor_rfq_response_attachments", _migration_0062_vendor_rfq_response_attachments),
     Migration(63, "quote_weight_research", _migration_0063_quote_weight_research),
     Migration(64, "rfq_weight_research", _migration_0064_rfq_weight_research),
+    Migration(65, "backfill_quote_vendor_values", _migration_0065_backfill_quote_vendor_values),
 )
 
 

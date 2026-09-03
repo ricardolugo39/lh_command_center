@@ -205,7 +205,7 @@ class RFQRepository:
     ) -> None:
         with connection_scope() as connection:
             row = connection.execute(
-                """SELECT r.* FROM rfq_weight_research r
+                """SELECT r.*,i.brand,i.reference FROM rfq_weight_research r
                 JOIN rfq_items i ON i.id=r.rfq_item_id
                 WHERE r.id=? AND r.rfq_item_id=? AND i.rfq_id=?""",
                 (research_id, item_id, rfq_id),
@@ -223,6 +223,26 @@ class RFQRepository:
                     SELECT id FROM ws_project_quotes
                     WHERE originating_rfq_id=? AND issued_at IS NULL
                 )""", (row["unit_weight_kg"], item_id, rfq_id),
+            )
+            connection.execute(
+                """INSERT INTO quote_weight_research(
+                    quote_line_id,brand,part_number,unit_weight_kg,
+                    confidence_score,confidence_label,source_type,match_level,
+                    calculation_method,explanation,warning,sources_json,model,
+                    status,searched_by_user_id,searched_at,accepted_by_user_id,
+                    accepted_at
+                ) SELECT l.id,?,?,?,?,?,?,?,?,?,?,?,?,'accepted',?,?,?,CURRENT_TIMESTAMP
+                FROM ws_quote_lines l JOIN ws_project_quotes q ON q.id=l.quote_id
+                WHERE l.source_rfq_item_id=? AND q.originating_rfq_id=?
+                  AND q.issued_at IS NULL""",
+                (
+                    row["brand"], row["reference"], row["unit_weight_kg"],
+                    row["confidence_score"], row["confidence_label"],
+                    row["source_type"], row["match_level"],
+                    row["calculation_method"], row["explanation"], row["warning"],
+                    row["sources_json"], row["model"], row["searched_by_user_id"],
+                    row["searched_at"], actor, item_id, rfq_id,
+                ),
             )
             connection.execute(
                 """UPDATE rfq_weight_research SET status='accepted',
@@ -289,6 +309,21 @@ class RFQRepository:
             )
             if cursor.rowcount == 0:
                 raise ValueError("La línea RFQ no existe.")
+            connection.execute(
+                """UPDATE ws_quote_lines SET vendor_fob_unit_usd=?,
+                    unit_weight_kg=?,lead_time=?,vendor_comments=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE source_rfq_item_id=? AND quote_id IN (
+                    SELECT q.id FROM ws_project_quotes q
+                    JOIN rfq_items i ON i.rfq_id=q.originating_rfq_id
+                    WHERE i.id=? AND q.issued_at IS NULL
+                )""",
+                (
+                    values.get("fob_unit_usd"), values.get("unit_weight_kg"),
+                    values.get("lead_time"), values.get("vendor_comments"),
+                    item_id, item_id,
+                ),
+            )
 
     @staticmethod
     def list_history(rfq_id: int) -> list[dict[str, Any]]:

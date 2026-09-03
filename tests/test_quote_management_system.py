@@ -181,6 +181,25 @@ def test_rfq_weight_acceptance_updates_existing_draft_quote(
     RFQWeightResearchService.accept(rfq_id, item["id"], research_id, 1)
     assert RFQService.detail(rfq_id)["items"][0]["unit_weight_kg"] == "7.514"
     assert QuoteManagementRepository.lines(quote_id)[0]["unit_weight_kg"] == "7.514"
+    quote_research = QuoteManagementService.workspace(quote_id)["weight_research"]
+    assert quote_research[QuoteManagementRepository.lines(quote_id)[0]["id"]][
+        "status"
+    ] == "accepted"
+
+
+def test_vendor_values_saved_after_conversion_sync_to_draft_quote(quote_database):
+    rfq_id = _rfq()
+    quote_id = QuoteManagementService.create_from_rfq(rfq_id, 1)
+    item = RFQService.detail(rfq_id)["items"][0]
+    RFQService.record_vendor_response(rfq_id, item["id"], {
+        "vendor_response_status": "complete",
+        "fob_unit_usd": "917.86", "unit_weight_kg": "7.514",
+        "lead_time": "3-4 semanas",
+    }, 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    assert line["vendor_fob_unit_usd"] == "917.86"
+    assert line["unit_weight_kg"] == "7.514"
+    assert line["lead_time"] == "3-4 semanas"
 
 
 def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
