@@ -267,15 +267,30 @@ class QuoteManagementService:
         path = pdf_root / filename
         styles = getSampleStyleSheet()
         title = ParagraphStyle("title", parent=styles["Title"], textColor=colors.HexColor("#17365D"), alignment=TA_CENTER)
+        table_label = ParagraphStyle(
+            "table-label", parent=styles["BodyText"], fontName="Helvetica-Bold",
+            fontSize=8, leading=10, textColor=colors.HexColor("#172033"),
+        )
+        table_value = ParagraphStyle(
+            "table-value", parent=styles["BodyText"], fontName="Helvetica",
+            fontSize=8, leading=10, textColor=colors.black, splitLongWords=True,
+        )
+        table_header = ParagraphStyle(
+            "table-header", parent=table_label, textColor=colors.white,
+        )
+
+        def cell(value: Any, style: ParagraphStyle = table_value) -> Paragraph:
+            return Paragraph(escape(str(value or "")), style)
+
         doc = SimpleDocTemplate(str(path), pagesize=letter, rightMargin=15*mm, leftMargin=15*mm, topMargin=14*mm, bottomMargin=14*mm)
         story = [
             Paragraph("LUGO HERMANOS S.A.", title),
             Paragraph("COTIZACIÓN COMERCIAL", ParagraphStyle("sub", parent=styles["Heading2"], alignment=TA_CENTER)),
             Spacer(1, 5*mm),
             Table([
-                ["Cotización", f"{quote['prefix']}-{quote['quote_number']} · Revisión {quote['revision']}", "Fecha", quote.get("quote_date") or date.today().isoformat()],
-                ["Cliente", quote.get("customer_name") or "", "Asesor", quote.get("sales_rep_name") or ""],
-                ["Correo", quote.get("sales_rep_email") or "", "Moneda", "USD"],
+                [cell("Cotización", table_label), cell(f"{quote['prefix']}-{quote['quote_number']} · Revisión {quote['revision']}"), cell("Fecha", table_label), cell(quote.get("quote_date") or date.today().isoformat())],
+                [cell("Cliente", table_label), cell(quote.get("customer_name")), cell("Asesor", table_label), cell(quote.get("sales_rep_name"))],
+                [cell("Correo", table_label), cell(quote.get("sales_rep_email")), cell("Moneda", table_label), cell("USD")],
             ], colWidths=[24*mm,65*mm,20*mm,70*mm], style=TableStyle([
                 ("BACKGROUND",(0,0),(0,-1),colors.HexColor("#E8EEF6")),
                 ("BACKGROUND",(2,0),(2,-1),colors.HexColor("#E8EEF6")),
@@ -284,14 +299,16 @@ class QuoteManagementService:
                 ("VALIGN",(0,0),(-1,-1),"MIDDLE"), ("PADDING",(0,0),(-1,-1),5),
             ])), Spacer(1,5*mm)
         ]
-        data = [["Item", "Cantidad", "Referencia", "Marca", "Precio unitario USD", "Entrega"]]
+        data = [[cell(value, table_header) for value in (
+            "Item", "Cantidad", "Referencia", "Marca", "Precio unitario USD", "Entrega"
+        )]]
         for index, line in enumerate(lines, 1):
             data.append([
-                index, f"{line['quantity']:g}", line.get("part_number") or "",
-                line.get("brand") or "", f"USD {float(line.get('selling_unit_usd') or 0):,.2f}",
-                line.get("lead_time") or "",
+                cell(index), cell(f"{line['quantity']:g}"), cell(line.get("part_number")),
+                cell(line.get("brand")), cell(f"USD {float(line.get('selling_unit_usd') or 0):,.2f}"),
+                cell(line.get("lead_time")),
             ])
-        data.append(["", "", "", "TOTAL", f"USD {float(quote.get('amount') or 0):,.2f}", ""])
+        data.append([cell(""), cell(""), cell(""), cell("TOTAL", table_label), cell(f"USD {float(quote.get('amount') or 0):,.2f}", table_label), cell("")])
         story.extend([Table(data, colWidths=[12*mm,20*mm,42*mm,27*mm,43*mm,35*mm], repeatRows=1, style=TableStyle([
             ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#17365D")), ("TEXTCOLOR",(0,0),(-1,0),colors.white),
             ("GRID",(0,0),(-1,-2),0.4,colors.HexColor("#B7C3D0")), ("FONTSIZE",(0,0),(-1,-1),8),
