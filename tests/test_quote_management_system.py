@@ -117,6 +117,16 @@ def test_ai_weight_search_is_scored_saved_and_explicitly_accepted(
     assert QuoteManagementRepository.line(quote_id, line["id"])["unit_weight_kg"] == "1.234"
 
 
+def test_weight_search_prompt_requires_official_family_fallback():
+    prompt = QuoteWeightResearchService._prompt({
+        "brand": "Thomson", "part_number": "LL24B020-0200LEXAMMSD",
+    })
+    assert "thomsonlinear.com" in prompt
+    assert "ordering key" in prompt
+    assert "interpolación lineal" in prompt
+    assert "carga/capacidad" in prompt
+
+
 def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
     quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
     line = QuoteManagementRepository.lines(quote_id)[0]

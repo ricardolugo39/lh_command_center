@@ -11,6 +11,14 @@ from app.workspace.repositories.quote_management_repository import QuoteManageme
 
 class QuoteWeightResearchService:
     ENDPOINT = "https://api.openai.com/v1/responses"
+    OFFICIAL_DOMAIN_HINTS = {
+        "thomson": "thomsonlinear.com",
+        "thk": "thk.com",
+        "skf": "skf.com",
+        "timken": "timken.com",
+        "fag": "schaeffler.com",
+        "ina": "schaeffler.com",
+    }
 
     @classmethod
     def search(cls, quote_id: int, line_id: int, actor: int) -> int:
@@ -56,14 +64,42 @@ class QuoteWeightResearchService:
 
     @staticmethod
     def _prompt(line: dict[str, Any]) -> str:
+        brand = str(line["brand"])
+        official_domain = QuoteWeightResearchService.OFFICIAL_DOMAIN_HINTS.get(
+            brand.strip().casefold()
+        )
+        domain_instruction = (
+            f"El dominio oficial conocido de esta marca es {official_domain}."
+            if official_domain else
+            "Identifica primero el dominio oficial del fabricante."
+        )
         return f"""
-Busca el peso técnico unitario en kg del producto de marca {line['brand']}
+Busca el peso técnico unitario en kg del producto de marca {brand}
 con referencia exacta {line['part_number']}. Prioriza, en este orden: página
 oficial del fabricante, catálogo o ficha técnica oficial y distribuidor
 autorizado. No uses marketplaces, snippets sin página verificable ni inventes
 datos. Distingue peso unitario, peso total y peso con empaque. Si es un producto
 configurable, puedes calcular o interpolar solo con datos publicados y debes
 explicar la fórmula. Si no hay evidencia suficiente, devuelve null.
+
+{domain_instruction}
+
+Debes ejecutar estas estrategias en orden antes de concluir que no existe peso:
+1. Buscar la referencia completa entre comillas en el dominio oficial.
+2. Separar y decodificar el ordering key o código configurable del fabricante.
+3. Buscar variantes quitando únicamente los sufijos de opciones, sin cambiar el
+   modelo base, la capacidad ni la longitud/carrera.
+4. Buscar la página oficial de la familia y su catálogo oficial.
+5. Si la fuente oficial publica pesos para dos longitudes y la referencia codifica
+   una longitud intermedia, calcular por interpolación lineal y marcar match_level
+   como family y calculation_method como interpolated. Expón la fórmula completa.
+6. Si el peso resulta de componentes publicados oficialmente, sumarlos y marcar
+   calculation_method como calculated.
+
+No confundas carga/capacidad expresada en kg o lb con el peso propio del producto.
+No respondas que no hay datos solo porque la referencia completa no tenga una
+página individual. Un resultado de familia bien sustentado es válido, pero debe
+llevar su advertencia y nunca declararse coincidencia exacta.
 
 Responde exclusivamente JSON válido con esta forma:
 {{
