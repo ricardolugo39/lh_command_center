@@ -176,6 +176,7 @@ class RFQService:
             "vendor_requests": RFQVendorRequestRepository.list_for_rfq(rfq_id),
             "vendor_messages": RFQVendorRequestRepository.list_messages(rfq_id),
             "vendor_attachments": RFQVendorRequestRepository.list_attachments(rfq_id),
+            "weight_research": RFQRepository.latest_weight_research(rfq_id),
             "related_quotes": QuoteManagementRepository.related_to_rfq(rfq_id),
         }
 

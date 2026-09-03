@@ -3776,6 +3776,36 @@ def _migration_0063_quote_weight_research(connection: Connection) -> None:
     ))
 
 
+def _migration_0064_rfq_weight_research(connection: Connection) -> None:
+    """Research weight before quote conversion and retain its evidence."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS rfq_weight_research (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rfq_item_id INTEGER NOT NULL,
+            unit_weight_kg TEXT,
+            confidence_score INTEGER NOT NULL,
+            confidence_label TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            match_level TEXT NOT NULL,
+            calculation_method TEXT NOT NULL,
+            explanation TEXT,
+            warning TEXT,
+            sources_json TEXT NOT NULL DEFAULT '[]',
+            model TEXT,
+            status TEXT NOT NULL DEFAULT 'proposed',
+            searched_by_user_id INTEGER,
+            searched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            accepted_by_user_id INTEGER,
+            accepted_at TEXT,
+            FOREIGN KEY(rfq_item_id) REFERENCES rfq_items(id) ON DELETE CASCADE,
+            FOREIGN KEY(searched_by_user_id) REFERENCES ws_users(id) ON DELETE SET NULL,
+            FOREIGN KEY(accepted_by_user_id) REFERENCES ws_users(id) ON DELETE SET NULL
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_rfq_weight_research_item
+        ON rfq_weight_research(rfq_item_id,searched_at DESC,id DESC)""",
+    ))
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3926,6 +3956,7 @@ MIGRATION_MANIFEST = (
     Migration(61, "quote_pricing_and_recipients", _migration_0061_quote_pricing_and_recipients),
     Migration(62, "vendor_rfq_response_attachments", _migration_0062_vendor_rfq_response_attachments),
     Migration(63, "quote_weight_research", _migration_0063_quote_weight_research),
+    Migration(64, "rfq_weight_research", _migration_0064_rfq_weight_research),
 )
 
 

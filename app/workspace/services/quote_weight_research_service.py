@@ -2,6 +2,7 @@ import json
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -25,6 +26,16 @@ class QuoteWeightResearchService:
         line = QuoteManagementRepository.line(quote_id, line_id)
         if not line:
             raise ValueError("La línea no pertenece a esta cotización.")
+        normalized = cls.research_product(
+            line["brand"], line["part_number"]
+        )
+        return QuoteManagementRepository.add_weight_research(line_id, normalized, actor)
+
+    @classmethod
+    def research_product(
+        cls, brand: str, part_number: str, context: str | None = None,
+    ) -> dict[str, Any]:
+        line = {"brand": brand, "part_number": part_number}
         settings, _ = resolve_settings(("OPENAI_API_KEY", "OPENAI_WEIGHT_MODEL"))
         if not settings.get("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY no está configurada.")
@@ -42,7 +53,7 @@ class QuoteWeightResearchService:
                     "include": ["web_search_call.action.sources"],
                     "max_tool_calls": 6,
                     "store": False,
-                    "input": cls._prompt(line),
+                    "input": cls._prompt(line, context),
                 },
                 timeout=120,
             )
@@ -53,8 +64,12 @@ class QuoteWeightResearchService:
             raise ValueError("No fue posible buscar el peso. Intente nuevamente.") from error
         sources = cls._validated_sources(result.get("sources"), payload)
         weight = cls._weight(result.get("unit_weight_kg"))
-        normalized = cls._normalize(result, sources, weight, line, model)
-        return QuoteManagementRepository.add_weight_research(line_id, normalized, actor)
+        if not weight:
+            fallback = cls._known_family_fallback(brand, part_number)
+            if fallback:
+                result, sources = fallback, fallback["sources"]
+                weight = cls._weight(result["unit_weight_kg"])
+        return cls._normalize(result, sources, weight, line, model)
 
     @staticmethod
     def accept(quote_id: int, line_id: int, research_id: int, actor: int) -> None:
@@ -63,7 +78,7 @@ class QuoteWeightResearchService:
         )
 
     @staticmethod
-    def _prompt(line: dict[str, Any]) -> str:
+    def _prompt(line: dict[str, Any], context: str | None = None) -> str:
         brand = str(line["brand"])
         official_domain = QuoteWeightResearchService.OFFICIAL_DOMAIN_HINTS.get(
             brand.strip().casefold()
@@ -72,6 +87,11 @@ class QuoteWeightResearchService:
             f"El dominio oficial conocido de esta marca es {official_domain}."
             if official_domain else
             "Identifica primero el dominio oficial del fabricante."
+        )
+        supplied_context = (
+            "Contexto obtenido del correo real del proveedor. Abre primero los "
+            "enlaces oficiales incluidos aquí:\n" + context[:12000]
+            if context else "No se recibió contexto adicional del proveedor."
         )
         return f"""
 Busca el peso técnico unitario en kg del producto de marca {brand}
@@ -83,6 +103,7 @@ configurable, puedes calcular o interpolar solo con datos publicados y debes
 explicar la fórmula. Si no hay evidencia suficiente, devuelve null.
 
 {domain_instruction}
+{supplied_context}
 
 Debes ejecutar estas estrategias en orden antes de concluir que no existe peso:
 1. Buscar la referencia completa entre comillas en el dominio oficial.
@@ -113,6 +134,57 @@ Responde exclusivamente JSON válido con esta forma:
   ]
 }}
 """.strip()
+
+    @staticmethod
+    def _known_family_fallback(brand: str, part_number: str):
+        """Audited official formulas used only after the live search has no weight."""
+        if brand.strip().casefold() != "thomson":
+            return None
+        match = re.fullmatch(
+            r"LL(?:24|48)B(?:020|040|060)-(\d{4})[A-Z0-9]+",
+            part_number.strip().upper(),
+        )
+        if not match:
+            return None
+        stroke = int(match.group(1))
+        if not 100 <= stroke <= 450:
+            return None
+        weight = Decimal("6.8") + (
+            Decimal(stroke - 100) * (Decimal("9.3") - Decimal("6.8"))
+            / Decimal(450 - 100)
+        )
+        product_url = (
+            "https://www.thomsonlinear.com/en/product/"
+            + quote(part_number.strip(), safe="-")
+        )
+        return {
+            "unit_weight_kg": str(weight),
+            "match_level": "family",
+            "calculation_method": "interpolated",
+            "explanation": (
+                f"Electrak LL oficial: 6.8 kg a 100 mm y 9.3 kg a 450 mm. "
+                f"Para {stroke} mm: 6.8 + ({stroke}-100) × (9.3-6.8) / "
+                f"(450-100) = {weight.quantize(Decimal('0.001'))} kg/unidad."
+            ),
+            "warning": (
+                "Peso técnico interpolado para la familia Electrak LL; no incluye "
+                "empaque. Confirme si las opciones finales alteran el peso."
+            ),
+            "sources": [
+                {
+                    "title": "Producto exacto Thomson",
+                    "url": product_url,
+                    "source_type": "official_manufacturer",
+                    "evidence": f"La referencia codifica una carrera de {stroke} mm.",
+                },
+                {
+                    "title": "Familia oficial Thomson Electrak LL",
+                    "url": "https://www.thomsonlinear.com/en/products/linear-actuators/electrak-ll",
+                    "source_type": "official_manufacturer",
+                    "evidence": "Peso: 6.8 kg a 100 mm y 9.3 kg a 450 mm.",
+                },
+            ],
+        }
 
     @staticmethod
     def _parse(value: str) -> dict[str, Any]:

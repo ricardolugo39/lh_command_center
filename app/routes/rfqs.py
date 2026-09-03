@@ -14,6 +14,7 @@ from app.workspace.services.rfq_email_service import RFQEmailService
 from app.workspace.services.quote_management_service import QuoteManagementService
 from app.workspace.services.rfq_vendor_request_service import RFQVendorRequestService
 from app.workspace.services.rfq_document_service import RFQDocumentService
+from app.workspace.services.rfq_weight_research_service import RFQWeightResearchService
 from app.workspace.repositories.rfq_vendor_request_repository import RFQVendorRequestRepository
 from app.workspace.constants.commercial_office import OFFICES
 
@@ -205,6 +206,36 @@ def vendor_response(rfq_id: int, item_id: int):
     except ValueError as exception:
         return render_template(
             "rfqs/detail.html", page=RFQService.detail(rfq_id), error=str(exception)
+        ), 400
+    return redirect(url_for("rfqs.detail", rfq_id=rfq_id))
+
+
+@rfqs_bp.post("/<int:rfq_id>/items/<int:item_id>/search-weight")
+@roles_required("administrator")
+def search_weight(rfq_id: int, item_id: int):
+    try:
+        RFQWeightResearchService.search(
+            rfq_id, item_id, g.current_user["id"]
+        )
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("rfqs.detail", rfq_id=rfq_id))
+
+
+@rfqs_bp.post("/<int:rfq_id>/items/<int:item_id>/accept-weight/<int:research_id>")
+@roles_required("administrator")
+def accept_weight(rfq_id: int, item_id: int, research_id: int):
+    try:
+        RFQWeightResearchService.accept(
+            rfq_id, item_id, research_id, g.current_user["id"]
+        )
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
         ), 400
     return redirect(url_for("rfqs.detail", rfq_id=rfq_id))
 

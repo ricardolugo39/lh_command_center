@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from app.database.transaction import connection_scope
@@ -149,6 +150,85 @@ class RFQRepository:
                 (rfq_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def get_item(rfq_id: int, item_id: int) -> dict[str, Any] | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                "SELECT * FROM rfq_items WHERE rfq_id=? AND id=?",
+                (rfq_id, item_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def add_weight_research(item_id: int, values: dict[str, Any], actor: int) -> int:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """INSERT INTO rfq_weight_research(
+                    rfq_item_id,unit_weight_kg,confidence_score,confidence_label,
+                    source_type,match_level,calculation_method,explanation,warning,
+                    sources_json,model,searched_by_user_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    item_id, values.get("unit_weight_kg"),
+                    values["confidence_score"], values["confidence_label"],
+                    values["source_type"], values["match_level"],
+                    values["calculation_method"], values.get("explanation"),
+                    values.get("warning"),
+                    json.dumps(values.get("sources", []), ensure_ascii=False),
+                    values.get("model"), actor,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    @staticmethod
+    def latest_weight_research(rfq_id: int) -> dict[int, dict[str, Any]]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT r.* FROM rfq_weight_research r
+                JOIN rfq_items i ON i.id=r.rfq_item_id
+                WHERE i.rfq_id=? AND r.id=(
+                    SELECT MAX(r2.id) FROM rfq_weight_research r2
+                    WHERE r2.rfq_item_id=r.rfq_item_id
+                )""", (rfq_id,),
+            ).fetchall()
+        result = {}
+        for row in rows:
+            item = dict(row)
+            item["sources"] = json.loads(item.pop("sources_json") or "[]")
+            result[int(item["rfq_item_id"])] = item
+        return result
+
+    @staticmethod
+    def accept_weight_research(
+        rfq_id: int, item_id: int, research_id: int, actor: int,
+    ) -> None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """SELECT r.* FROM rfq_weight_research r
+                JOIN rfq_items i ON i.id=r.rfq_item_id
+                WHERE r.id=? AND r.rfq_item_id=? AND i.rfq_id=?""",
+                (research_id, item_id, rfq_id),
+            ).fetchone()
+            if not row or not row["unit_weight_kg"]:
+                raise ValueError("El resultado de peso no es válido para esta línea.")
+            connection.execute(
+                "UPDATE rfq_items SET unit_weight_kg=? WHERE id=?",
+                (row["unit_weight_kg"], item_id),
+            )
+            # If the RFQ was already converted, keep its editable quote in sync.
+            connection.execute(
+                """UPDATE ws_quote_lines SET unit_weight_kg=?,updated_at=CURRENT_TIMESTAMP
+                WHERE source_rfq_item_id=? AND quote_id IN (
+                    SELECT id FROM ws_project_quotes
+                    WHERE originating_rfq_id=? AND issued_at IS NULL
+                )""", (row["unit_weight_kg"], item_id, rfq_id),
+            )
+            connection.execute(
+                """UPDATE rfq_weight_research SET status='accepted',
+                accepted_by_user_id=?,accepted_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (actor, research_id),
+            )
 
     @staticmethod
     def add_document(rfq_id: int, values: dict[str, Any]) -> int:

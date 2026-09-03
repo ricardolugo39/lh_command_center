@@ -11,6 +11,9 @@ from app.workspace.services.rfq_service import RFQService
 from app.workspace.services.quote_weight_research_service import (
     QuoteWeightResearchService,
 )
+from app.workspace.services.rfq_weight_research_service import (
+    RFQWeightResearchService,
+)
 
 
 @pytest.fixture
@@ -125,6 +128,59 @@ def test_weight_search_prompt_requires_official_family_fallback():
     assert "ordering key" in prompt
     assert "interpolación lineal" in prompt
     assert "carga/capacidad" in prompt
+
+
+def test_thomson_electrak_ll_uses_audited_family_fallback(monkeypatch):
+    monkeypatch.setattr(
+        "app.workspace.services.quote_weight_research_service.resolve_settings",
+        lambda names: ({"OPENAI_API_KEY": "test", "OPENAI_WEIGHT_MODEL": "test-model"}, {}),
+    )
+
+    class EmptyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"output_text": json.dumps({
+                "unit_weight_kg": None, "match_level": "none",
+                "calculation_method": "none", "explanation": None,
+                "warning": None, "sources": [],
+            })}
+
+    monkeypatch.setattr(
+        "app.workspace.services.quote_weight_research_service.requests.post",
+        lambda *args, **kwargs: EmptyResponse(),
+    )
+    result = QuoteWeightResearchService.research_product(
+        "Thomson", "LL24B020-0200LEXAMMSD",
+        "https://www.thomsonlinear.com/en/product/LL24B020-0200LEXAMMSD",
+    )
+    assert result["unit_weight_kg"] == "7.514"
+    assert result["calculation_method"] == "interpolated"
+    assert result["confidence_score"] == 85
+    assert len(result["sources"]) == 2
+
+
+def test_rfq_weight_acceptance_updates_existing_draft_quote(
+    quote_database, monkeypatch,
+):
+    rfq_id = _rfq()
+    quote_id = QuoteManagementService.create_from_rfq(rfq_id, 1)
+    item = RFQService.detail(rfq_id)["items"][0]
+    monkeypatch.setattr(
+        QuoteWeightResearchService, "research_product",
+        lambda *args, **kwargs: {
+            "unit_weight_kg": "7.514", "confidence_score": 85,
+            "confidence_label": "Media", "source_type": "official_manufacturer",
+            "match_level": "family", "calculation_method": "interpolated",
+            "explanation": "Cálculo oficial", "warning": "Sin empaque",
+            "sources": [], "model": "test",
+        },
+    )
+    research_id = RFQWeightResearchService.search(rfq_id, item["id"], 1)
+    RFQWeightResearchService.accept(rfq_id, item["id"], research_id, 1)
+    assert RFQService.detail(rfq_id)["items"][0]["unit_weight_kg"] == "7.514"
+    assert QuoteManagementRepository.lines(quote_id)[0]["unit_weight_kg"] == "7.514"
 
 
 def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):
