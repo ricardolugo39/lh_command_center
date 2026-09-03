@@ -241,6 +241,54 @@ def test_vendor_rfq_send_and_sync_tracks_real_reply(targeted_database):
     ]
 
 
+def test_vendor_reply_in_new_thread_and_pdf_are_captured(targeted_database):
+    values = _rfq_values("NEW-THREAD")
+    values["items"] = [
+        {"reference": "SBN4555", "brand": "Thomson", "quantity": "1"},
+    ]
+    rfq_id = RFQService.create(values)
+
+    class NewThreadGmail:
+        queries = []
+
+        def send(self, **message):
+            return {"message_id": "sent-1", "thread_id": "original-thread"}
+
+        def thread(self, thread_id):
+            return []
+
+        def search(self, query):
+            self.queries.append(query)
+            assert "RFQ-000001" in query
+            return [{
+                "id": "new-thread-reply", "direction": "incoming",
+                "sender": "vendor@example.com", "recipients": [], "cc": [],
+                "subject": "Quotation RFQ-000001", "body_text": "Attached",
+                "date": "2026-07-24T10:00:00", "attachments": [{
+                    "id": "pdf-1", "filename": "quotation.pdf",
+                    "mime_type": "application/pdf", "data": b"%PDF-test",
+                }],
+            }]
+
+    application = create_app(
+        {"TESTING": True, "TEST_AUTH_BYPASS": True},
+        run_migrations=False, gmail_provider=NewThreadGmail(),
+    )
+    with sqlite3.connect(targeted_database) as connection:
+        connection.execute(
+            """UPDATE quote_vendor_configs SET vendor_email='vendor@example.com'
+            WHERE brand='Thomson' COLLATE NOCASE"""
+        )
+    with application.app_context():
+        RFQVendorRequestService.send(rfq_id, 1)
+        assert RFQVendorRequestService.sync(rfq_id, 1) == 1
+    page = RFQService.detail(rfq_id)
+    assert page["vendor_requests"][0]["has_response"]
+    assert page["vendor_attachments"][0]["original_filename"] == "quotation.pdf"
+    assert any("vendor@example.com" in query for query in NewThreadGmail.queries)
+    assert any('subject:"RFQ-000001" "Thomson"' == query for query in NewThreadGmail.queries)
+
+
 class FakeOAuth:
     def __init__(self, identity):
         self.identity = identity

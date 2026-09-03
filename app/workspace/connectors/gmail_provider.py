@@ -63,13 +63,28 @@ class GmailProvider:
         return {"message_id": result["id"], "thread_id": result["threadId"]}
 
     def thread(self, thread_id: str) -> list[dict]:
-        result = self._service().users().threads().get(
+        service = self._service()
+        result = service.users().threads().get(
             userId="me", id=thread_id, format="full"
         ).execute()
-        return [self._normalize_message(item) for item in result["messages"]]
+        return [self._normalize_message(item, service) for item in result["messages"]]
+
+    def search(self, query: str) -> list[dict]:
+        """Find messages even when a vendor reply started a new Gmail thread."""
+        service = self._service()
+        result = service.users().messages().list(
+            userId="me", q=query, maxResults=50,
+        ).execute()
+        messages = []
+        for item in result.get("messages", []):
+            full = service.users().messages().get(
+                userId="me", id=item["id"], format="full",
+            ).execute()
+            messages.append(self._normalize_message(full, service))
+        return messages
 
     @staticmethod
-    def _normalize_message(message):
+    def _normalize_message(message, service=None):
         headers = {
             item["name"].casefold(): item["value"]
             for item in message["payload"].get("headers", [])
@@ -90,7 +105,34 @@ class GmailProvider:
                 ).isoformat()
                 if message.get("internalDate") else None
             ),
+            "attachments": GmailProvider._attachments(
+                message["payload"], message["id"], service
+            ),
         }
+
+    @staticmethod
+    def _attachments(part, message_id, service):
+        found = []
+        filename = part.get("filename") or ""
+        body = part.get("body", {})
+        if filename and (body.get("attachmentId") or body.get("data")):
+            data = body.get("data")
+            if not data and service:
+                result = service.users().messages().attachments().get(
+                    userId="me", messageId=message_id,
+                    id=body["attachmentId"],
+                ).execute()
+                data = result.get("data")
+            if data:
+                found.append({
+                    "id": body.get("attachmentId") or filename,
+                    "filename": filename,
+                    "mime_type": part.get("mimeType"),
+                    "data": base64.urlsafe_b64decode(data + "=="),
+                })
+        for child in part.get("parts", []):
+            found.extend(GmailProvider._attachments(child, message_id, service))
+        return found
 
     @staticmethod
     def _body(part):

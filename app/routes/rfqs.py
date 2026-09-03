@@ -1,6 +1,7 @@
 from datetime import date
+from pathlib import Path
 
-from flask import Blueprint, abort, g, redirect, render_template, request, url_for
+from flask import Blueprint, abort, g, redirect, render_template, request, send_file, url_for
 from app.auth import roles_required
 
 from app.workspace.repositories.contact_repository import (
@@ -13,6 +14,7 @@ from app.workspace.services.rfq_email_service import RFQEmailService
 from app.workspace.services.quote_management_service import QuoteManagementService
 from app.workspace.services.rfq_vendor_request_service import RFQVendorRequestService
 from app.workspace.services.rfq_document_service import RFQDocumentService
+from app.workspace.repositories.rfq_vendor_request_repository import RFQVendorRequestRepository
 from app.workspace.constants.commercial_office import OFFICES
 
 
@@ -97,6 +99,19 @@ def detail(rfq_id: int):
     except ValueError:
         abort(404)
     return render_template("rfqs/detail.html", page=page, error=None)
+
+
+@rfqs_bp.get("/<int:rfq_id>/vendor-attachments/<int:attachment_id>")
+def vendor_attachment(rfq_id: int, attachment_id: int):
+    attachment = RFQVendorRequestRepository.get_attachment(rfq_id, attachment_id)
+    if not attachment or not Path(attachment["stored_filename"]).is_file():
+        abort(404)
+    return send_file(
+        Path(attachment["stored_filename"]).resolve(),
+        mimetype=attachment.get("mime_type") or "application/octet-stream",
+        download_name=attachment["original_filename"],
+        as_attachment=False,
+    )
 
 
 @rfqs_bp.post("/<int:rfq_id>/delete")

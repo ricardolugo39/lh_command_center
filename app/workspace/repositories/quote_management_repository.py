@@ -237,6 +237,17 @@ class QuoteManagementRepository:
                 WHERE rfq_id=? AND is_active=1""",
                 (quote_id, rfq_id),
             )
+            connection.execute(
+                """INSERT INTO quote_attachment_links(
+                    quote_id,original_filename,stored_filename,mime_type,
+                    size_bytes,category,vendor_confidential
+                ) SELECT ?,a.original_filename,a.stored_filename,a.mime_type,
+                    a.size_bytes,'vendor_quote',1
+                FROM rfq_vendor_response_attachments a
+                JOIN rfq_vendor_request_messages m ON m.id=a.vendor_message_id
+                JOIN rfq_vendor_requests vr ON vr.id=m.vendor_request_id
+                WHERE vr.rfq_id=?""", (quote_id,rfq_id)
+            )
 
     @staticmethod
     def get(quote_id: int) -> dict[str, Any] | None:
@@ -263,6 +274,78 @@ class QuoteManagementRepository:
                 (quote_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def line(quote_id: int, line_id: int) -> dict[str, Any] | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                "SELECT * FROM ws_quote_lines WHERE quote_id=? AND id=?",
+                (quote_id, line_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def add_weight_research(line_id: int, values: dict[str, Any], actor: int) -> int:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """INSERT INTO quote_weight_research(
+                    quote_line_id,brand,part_number,unit_weight_kg,
+                    confidence_score,confidence_label,source_type,match_level,
+                    calculation_method,explanation,warning,sources_json,model,
+                    searched_by_user_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    line_id, values["brand"], values["part_number"],
+                    values.get("unit_weight_kg"), values["confidence_score"],
+                    values["confidence_label"], values["source_type"],
+                    values["match_level"], values["calculation_method"],
+                    values.get("explanation"), values.get("warning"),
+                    json.dumps(values.get("sources", []), ensure_ascii=False),
+                    values.get("model"), actor,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    @staticmethod
+    def latest_weight_research(quote_id: int) -> dict[int, dict[str, Any]]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT r.* FROM quote_weight_research r
+                JOIN ws_quote_lines l ON l.id=r.quote_line_id
+                WHERE l.quote_id=? AND r.id=(
+                    SELECT MAX(r2.id) FROM quote_weight_research r2
+                    WHERE r2.quote_line_id=r.quote_line_id
+                )""", (quote_id,),
+            ).fetchall()
+        result = {}
+        for row in rows:
+            item = dict(row)
+            item["sources"] = json.loads(item.pop("sources_json") or "[]")
+            result[int(item["quote_line_id"])] = item
+        return result
+
+    @staticmethod
+    def accept_weight_research(
+        quote_id: int, line_id: int, research_id: int, actor: int,
+    ) -> None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """SELECT r.* FROM quote_weight_research r
+                JOIN ws_quote_lines l ON l.id=r.quote_line_id
+                WHERE r.id=? AND r.quote_line_id=? AND l.quote_id=?""",
+                (research_id, line_id, quote_id),
+            ).fetchone()
+            if not row or not row["unit_weight_kg"]:
+                raise ValueError("El resultado de peso no es válido para esta línea.")
+            connection.execute(
+                """UPDATE ws_quote_lines SET unit_weight_kg=?,updated_at=CURRENT_TIMESTAMP
+                WHERE id=?""", (row["unit_weight_kg"], line_id),
+            )
+            connection.execute(
+                """UPDATE quote_weight_research SET status='accepted',
+                accepted_by_user_id=?,accepted_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (actor, research_id),
+            )
 
     @staticmethod
     def related_to_rfq(rfq_id: int) -> list[dict[str, Any]]:

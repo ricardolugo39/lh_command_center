@@ -3723,6 +3723,59 @@ def _migration_0061_quote_pricing_and_recipients(connection: Connection) -> None
     )
 
 
+def _migration_0062_vendor_rfq_response_attachments(connection: Connection) -> None:
+    """Keep vendor quotation files linked to the email that delivered them."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS rfq_vendor_response_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_message_id INTEGER NOT NULL,
+            provider_attachment_id TEXT,
+            original_filename TEXT NOT NULL,
+            stored_filename TEXT NOT NULL,
+            mime_type TEXT,
+            size_bytes INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(vendor_message_id) REFERENCES rfq_vendor_request_messages(id)
+                ON DELETE CASCADE,
+            UNIQUE(vendor_message_id, provider_attachment_id, original_filename)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_vendor_rfq_response_files_message
+        ON rfq_vendor_response_attachments(vendor_message_id,id)""",
+    ))
+
+
+def _migration_0063_quote_weight_research(connection: Connection) -> None:
+    """Persist auditable AI-assisted product-weight findings."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS quote_weight_research (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_line_id INTEGER NOT NULL,
+            brand TEXT NOT NULL,
+            part_number TEXT NOT NULL,
+            unit_weight_kg TEXT,
+            confidence_score INTEGER NOT NULL,
+            confidence_label TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            match_level TEXT NOT NULL,
+            calculation_method TEXT NOT NULL,
+            explanation TEXT,
+            warning TEXT,
+            sources_json TEXT NOT NULL DEFAULT '[]',
+            model TEXT,
+            status TEXT NOT NULL DEFAULT 'proposed',
+            searched_by_user_id INTEGER,
+            searched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            accepted_by_user_id INTEGER,
+            accepted_at TEXT,
+            FOREIGN KEY(quote_line_id) REFERENCES ws_quote_lines(id) ON DELETE CASCADE,
+            FOREIGN KEY(searched_by_user_id) REFERENCES ws_users(id) ON DELETE SET NULL,
+            FOREIGN KEY(accepted_by_user_id) REFERENCES ws_users(id) ON DELETE SET NULL
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_quote_weight_research_line
+        ON quote_weight_research(quote_line_id,searched_at DESC,id DESC)""",
+    ))
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -3871,6 +3924,8 @@ MIGRATION_MANIFEST = (
     Migration(59, "rfq_vendor_message", _migration_0059_rfq_vendor_message),
     Migration(60, "manual_quote_shipping", _migration_0060_manual_quote_shipping),
     Migration(61, "quote_pricing_and_recipients", _migration_0061_quote_pricing_and_recipients),
+    Migration(62, "vendor_rfq_response_attachments", _migration_0062_vendor_rfq_response_attachments),
+    Migration(63, "quote_weight_research", _migration_0063_quote_weight_research),
 )
 
 

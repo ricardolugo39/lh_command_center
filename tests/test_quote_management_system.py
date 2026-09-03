@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from decimal import Decimal
 
@@ -7,6 +8,9 @@ from app.database.migrations import upgrade
 from app.workspace.repositories.quote_management_repository import QuoteManagementRepository
 from app.workspace.services.quote_management_service import QuoteManagementService
 from app.workspace.services.rfq_service import RFQService
+from app.workspace.services.quote_weight_research_service import (
+    QuoteWeightResearchService,
+)
 
 
 @pytest.fixture
@@ -64,6 +68,53 @@ def test_direct_quote_uses_same_usd_processor_without_rfq(quote_database):
     assert page["quote"]["sales_rep_email"] == "asesor@example.com"
     assert page["lines"][0]["brand"] == "Otra Marca"
     assert page["lines"][0]["vendor_fob_unit_usd"] == "125.5"
+
+
+def test_ai_weight_search_is_scored_saved_and_explicitly_accepted(
+    quote_database, monkeypatch,
+):
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    monkeypatch.setattr(
+        "app.workspace.services.quote_weight_research_service.resolve_settings",
+        lambda names: ({"OPENAI_API_KEY": "test", "OPENAI_WEIGHT_MODEL": "test-model"}, {}),
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            result = json.dumps({
+                "unit_weight_kg": 1.234, "match_level": "exact",
+                "calculation_method": "direct", "explanation": "Ficha oficial",
+                "warning": None, "sources": [{
+                    "title": "THK SR20W", "url": "https://www.thk.com/sr20w",
+                    "source_type": "official_manufacturer", "evidence": "1.234 kg",
+                }],
+            })
+            return {
+                "output": [
+                    {"type": "web_search_call", "action": {"sources": [
+                        {"url": "https://www.thk.com/sr20w"},
+                    ]}},
+                    {"type": "message", "content": [
+                        {"type": "output_text", "text": result, "annotations": []},
+                    ]},
+                ],
+            }
+
+    monkeypatch.setattr(
+        "app.workspace.services.quote_weight_research_service.requests.post",
+        lambda *args, **kwargs: Response(),
+    )
+    research_id = QuoteWeightResearchService.search(quote_id, line["id"], 1)
+    proposed = QuoteManagementService.workspace(quote_id)["weight_research"][line["id"]]
+    assert proposed["confidence_score"] == 99
+    assert proposed["unit_weight_kg"] == "1.234"
+    assert QuoteManagementRepository.line(quote_id, line["id"])["unit_weight_kg"] is None
+    QuoteWeightResearchService.accept(quote_id, line["id"], research_id, 1)
+    assert QuoteManagementRepository.line(quote_id, line["id"])["unit_weight_kg"] == "1.234"
 
 
 def test_dhl_customs_bank_and_allocations_are_decimal_safe(quote_database):

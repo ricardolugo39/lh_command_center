@@ -1,10 +1,13 @@
 import html
 import json
 from collections import defaultdict
+from hashlib import sha256
 
 from flask import current_app
+from werkzeug.utils import secure_filename
 
 from app.database.transaction import connection_scope, transactional
+from app.storage import upload_path
 from app.workspace.repositories.rfq_repository import RFQRepository
 from app.workspace.repositories.rfq_vendor_request_repository import (
     RFQVendorRequestRepository,
@@ -182,15 +185,32 @@ class RFQVendorRequestService:
                 continue
             try:
                 messages = current_app.extensions["gmail_provider"].thread(thread_id)
+                provider = current_app.extensions["gmail_provider"]
+                if hasattr(provider, "search"):
+                    number = str(rfq["rfq_number"]).replace('"', "")
+                    recipient = str(vendor_request["recipient_email"]).strip()
+                    brand = str(vendor_request["brand"]).replace('"', "")
+                    messages.extend(provider.search(f'from:{recipient} "{number}"'))
+                    # Some vendor systems (including quotation portals) send the
+                    # answer from an alias and start a completely new thread.
+                    messages.extend(provider.search(
+                        f'subject:"{number}" "{brand}"'
+                    ))
+                messages = list({message["id"]: message for message in messages}.values())
                 has_response = False
                 for message in messages:
                     message["body_html"] = RFQVendorRequestService._safe_html(
                         message.get("body_text")
                     )
-                    RFQVendorRequestRepository.save_message(
+                    message_id = RFQVendorRequestRepository.save_message(
                         vendor_request["id"], message
                     )
-                    has_response = has_response or message.get("direction") == "incoming"
+                    incoming = message.get("direction") == "incoming"
+                    if incoming:
+                        RFQVendorRequestService._save_attachments(
+                            rfq_id, message_id, message.get("attachments") or []
+                        )
+                    has_response = has_response or incoming
                 RFQVendorRequestRepository.mark_synced(
                     vendor_request["id"], has_response
                 )
@@ -239,3 +259,26 @@ class RFQVendorRequestService:
     @staticmethod
     def _safe_html(value) -> str:
         return "<p>" + html.escape(str(value or "")).replace("\n", "<br>") + "</p>"
+
+    @staticmethod
+    def _save_attachments(rfq_id: int, message_id: int, attachments: list[dict]) -> None:
+        folder = upload_path("rfqs", str(rfq_id), "vendor-responses")
+        folder.mkdir(parents=True, exist_ok=True)
+        for attachment in attachments:
+            data = attachment.get("data")
+            if not isinstance(data, bytes) or len(data) > 15 * 1024 * 1024:
+                continue
+            original = secure_filename(attachment.get("filename") or "adjunto")
+            if not original:
+                continue
+            identity = f"{message_id}:{attachment.get('id')}:{original}".encode()
+            destination = folder / f"{sha256(identity).hexdigest()[:24]}-{original}"
+            if not destination.exists():
+                destination.write_bytes(data)
+            RFQVendorRequestRepository.save_attachment(message_id, {
+                "provider_attachment_id": attachment.get("id"),
+                "original_filename": original,
+                "stored_filename": str(destination),
+                "mime_type": attachment.get("mime_type"),
+                "size_bytes": len(data),
+            })

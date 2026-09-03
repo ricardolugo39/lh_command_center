@@ -9,6 +9,9 @@ from app.workspace.repositories.quote_management_repository import QuoteManageme
 from app.workspace.services.quote_management_service import (
     QuoteManagementService, QUOTE_STATUSES, PRODUCT_TYPES,
 )
+from app.workspace.services.quote_weight_research_service import (
+    QuoteWeightResearchService,
+)
 from app.workspace.constants.commercial_office import OFFICES
 from app.workspace.repositories.contact_repository import ActivityFormRepository
 
@@ -121,6 +124,38 @@ def workspace(quote_id: int):
     except ValueError:
         abort(404)
     return render_template("quotes/workspace.html", page=page, error=error)
+
+
+@quotes_bp.post("/<int:quote_id>/lines/<int:line_id>/search-weight")
+@roles_required("administrator")
+def search_weight(quote_id: int, line_id: int):
+    try:
+        QuoteWeightResearchService.search(
+            quote_id, line_id, g.current_user["id"]
+        )
+    except ValueError as exception:
+        return render_template(
+            "quotes/workspace.html",
+            page=QuoteManagementService.workspace(quote_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("quotes.workspace", quote_id=quote_id))
+
+
+@quotes_bp.post("/<int:quote_id>/lines/<int:line_id>/accept-weight/<int:research_id>")
+@roles_required("administrator")
+def accept_weight(quote_id: int, line_id: int, research_id: int):
+    try:
+        QuoteWeightResearchService.accept(
+            quote_id, line_id, research_id, g.current_user["id"]
+        )
+    except ValueError as exception:
+        return render_template(
+            "quotes/workspace.html",
+            page=QuoteManagementService.workspace(quote_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("quotes.workspace", quote_id=quote_id))
 
 
 @quotes_bp.post("/<int:quote_id>/revision")

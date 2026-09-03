@@ -150,6 +150,7 @@ class QuoteManagementService:
         return {
             "quote": quote,
             "lines": QuoteManagementRepository.lines(quote_id),
+            "weight_research": QuoteManagementRepository.latest_weight_research(quote_id),
             "origins": QuoteManagementRepository.origin_options(profile["id"]) if profile else [],
             "pricing_rules": QuoteManagementRepository.pricing_rules(),
             "product_types": PRODUCT_TYPES,
