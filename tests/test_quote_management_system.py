@@ -73,6 +73,22 @@ def test_direct_quote_uses_same_usd_processor_without_rfq(quote_database):
     assert page["lines"][0]["vendor_fob_unit_usd"] == "125.5"
 
 
+def test_direct_quote_creates_customer_from_typed_search_name(quote_database):
+    quote_id = QuoteManagementService.create_direct({
+        "customer_search_name": "Cliente Nuevo",
+        "sales_rep_name": "Asesor Externo",
+        "sales_rep_email": "asesor@example.com",
+        "items": [{
+            "reference": "ABC-456", "brand": "Marca",
+            "quantity": "1", "fob_unit_usd": "25",
+            "unit_weight_kg": "1", "lead_time": "2 semanas",
+            "product_type": "BRG",
+        }],
+    }, 1)
+    page = QuoteManagementService.workspace(quote_id)
+    assert page["quote"]["customer_name"] == "Cliente Nuevo"
+
+
 def test_ai_weight_search_is_scored_saved_and_explicitly_accepted(
     quote_database, monkeypatch,
 ):

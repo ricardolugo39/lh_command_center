@@ -115,6 +115,11 @@
     event.preventDefault();
     highlight();
   });
+  search.form.addEventListener("submit", () => {
+    if (!customerId.value && !newCustomerName.value) {
+      newCustomerName.value = search.value.trim();
+    }
+  });
 
   const addItem = () => {
     items.appendChild(template.content.cloneNode(true));

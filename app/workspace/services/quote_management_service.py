@@ -48,7 +48,11 @@ class QuoteManagementService:
     @transactional
     def create_direct(values: dict[str, Any], actor_user_id: int) -> int:
         customer_id = RFQService._integer(values.get("customer_id"))
-        new_name = str(values.get("new_customer_name") or "").strip()
+        new_name = str(
+            values.get("new_customer_name")
+            or values.get("customer_search_name")
+            or ""
+        ).strip()
         if not customer_id and new_name:
             existing = CustomerRepository.find_by_name(new_name)
             customer_id = (
