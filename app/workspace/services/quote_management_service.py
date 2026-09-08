@@ -262,11 +262,15 @@ class QuoteManagementService:
         missing = []
         for field, label in (
             ("customer_id", "cliente"), ("sales_rep_name", "asesor"),
-            ("sales_rep_email", "correo del asesor"), ("origin_country_code", "país de origen"),
-            ("final_dhl_zone", "zona DHL"), ("amount", "total"),
+            ("sales_rep_email", "correo del asesor"), ("amount", "total"),
         ):
             if not quote.get(field):
                 missing.append(label)
+        if quote.get("manual_shipping_usd") in (None, ""):
+            if not quote.get("origin_country_code"):
+                missing.append("país de origen")
+            if not quote.get("final_dhl_zone"):
+                missing.append("zona DHL")
         if not lines:
             missing.append("líneas")
         if missing:

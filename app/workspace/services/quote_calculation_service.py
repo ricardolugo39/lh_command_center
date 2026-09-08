@@ -69,15 +69,8 @@ class QuoteCalculationService:
     def calculate(cls, quote: dict[str, Any], lines: list[dict[str, Any]]):
         if not lines:
             raise ValueError("La cotización requiere al menos una línea.")
-        profile = QuoteManagementRepository.active_profile()
-        if not profile:
-            raise ValueError("No existe un perfil DHL activo.")
-        mapping = QuoteManagementRepository.resolve_zone(
-            profile["id"], quote.get("origin_country_code") or "",
-            quote.get("origin_service_area_code"),
-        )
-        if not mapping:
-            raise ValueError("Seleccione un país y área de origen DHL configurados.")
+        manual_shipping = quote.get("manual_shipping_usd")
+        uses_manual_shipping = manual_shipping not in (None, "")
         work = []
         for index, line in enumerate(lines, start=1):
             quantity = decimal_value(line.get("quantity"))
@@ -94,12 +87,29 @@ class QuoteCalculationService:
             work.append({**line, "quantity_d": quantity, "fob": fob, "weight": weight})
         total_fob = sum((line["fob"] for line in work), ZERO)
         total_weight = sum((line["weight"] for line in work), ZERO)
-        chargeable, calculated_shipping, final_shipping = cls.shipping(
-            profile["id"], total_weight, mapping["zone"], None
-        )
-        final_zone = mapping["zone"]
-        if quote.get("manual_shipping_usd") not in (None, ""):
-            final_shipping = money(quote["manual_shipping_usd"])
+        if uses_manual_shipping:
+            profile = None
+            mapping = None
+            chargeable = total_weight
+            calculated_shipping = None
+            final_shipping = money(manual_shipping)
+            final_zone = None
+        else:
+            profile = QuoteManagementRepository.active_profile()
+            if not profile:
+                raise ValueError("No existe un perfil DHL activo.")
+            mapping = QuoteManagementRepository.resolve_zone(
+                profile["id"], quote.get("origin_country_code") or "",
+                quote.get("origin_service_area_code"),
+            )
+            if not mapping:
+                raise ValueError(
+                    "Seleccione un país y área de origen DHL configurados."
+                )
+            chargeable, calculated_shipping, final_shipping = cls.shipping(
+                profile["id"], total_weight, mapping["zone"], None
+            )
+            final_zone = mapping["zone"]
         settings = QuoteManagementRepository.settings()
         customs_applied = total_fob > Decimal("2000") or total_weight > Decimal("50")
         customs = Decimal("300.00") if customs_applied else ZERO
@@ -153,10 +163,14 @@ class QuoteCalculationService:
                 "normalized_amount": float(selling_total),
                 "exchange_rate": 1,
                 "estimated_trm": None,
-                "calculated_dhl_zone": mapping["zone"], "final_dhl_zone": final_zone,
-                "dhl_rate_profile_id": profile["id"], "actual_weight_kg": str(total_weight),
+                "calculated_dhl_zone": mapping["zone"] if mapping else None,
+                "final_dhl_zone": final_zone,
+                "dhl_rate_profile_id": profile["id"] if profile else None,
+                "actual_weight_kg": str(total_weight),
                 "chargeable_weight_kg": str(chargeable),
-                "calculated_shipping_usd": str(calculated_shipping),
+                "calculated_shipping_usd": (
+                    str(calculated_shipping) if calculated_shipping is not None else None
+                ),
                 "final_shipping_usd": str(final_shipping), "customs_applied": int(customs_applied),
                 "customs_base_cop": None, "customs_usd": str(customs),
                 "bank_fee_usd": str(bank), "landed_cost_usd": str(landed_total),
