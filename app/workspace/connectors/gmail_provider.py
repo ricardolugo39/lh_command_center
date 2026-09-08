@@ -62,6 +62,25 @@ class GmailProvider:
         ).execute()
         return {"message_id": result["id"], "thread_id": result["threadId"]}
 
+    def reply(
+        self, *, thread_id: str, sender: str, recipients: list[str],
+        cc: list[str], subject: str, body_text: str, body_html: str,
+    ) -> dict:
+        """Send a message in an existing Gmail conversation."""
+        message = EmailMessage()
+        message["From"], message["To"], message["Subject"] = (
+            sender, ", ".join(recipients), subject,
+        )
+        if cc:
+            message["Cc"] = ", ".join(cc)
+        message.set_content(body_text)
+        message.add_alternative(body_html, subtype="html")
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        result = self._service().users().messages().send(
+            userId="me", body={"raw": raw, "threadId": thread_id}
+        ).execute()
+        return {"message_id": result["id"], "thread_id": result["threadId"]}
+
     def thread(self, thread_id: str) -> list[dict]:
         service = self._service()
         result = service.users().threads().get(

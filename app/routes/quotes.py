@@ -287,3 +287,19 @@ def outcome(quote_id: int):
     except ValueError as exception:
         return str(exception), 400
     return redirect(url_for("quotes.workspace", quote_id=quote_id))
+
+
+@quotes_bp.post("/<int:quote_id>/followup")
+@roles_required("administrator", "commercial_management")
+def followup(quote_id: int):
+    try:
+        QuoteManagementService.send_sales_followup(
+            quote_id, g.current_user["id"]
+        )
+    except ValueError as exception:
+        return render_template(
+            "quotes/workspace.html",
+            page=QuoteManagementService.workspace(quote_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("quotes.workspace", quote_id=quote_id, followup_sent=1))

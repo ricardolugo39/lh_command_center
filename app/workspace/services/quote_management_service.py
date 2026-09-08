@@ -157,6 +157,8 @@ class QuoteManagementService:
             "sales_recipients": QuoteManagementRepository.sales_recipients(),
             "attachments": QuoteManagementRepository.attachments(quote_id),
             "pdf": pdf,
+            "delivery": QuoteManagementRepository.latest_delivery(quote_id),
+            "followup_emails": QuoteManagementRepository.followup_emails(quote_id),
             "statuses": QUOTE_STATUSES,
         }
 
@@ -471,3 +473,44 @@ class QuoteManagementService:
             connection.execute(
                 "UPDATE ws_project_quotes SET quote_status=? WHERE id=?", (outcome,quote_id)
             )
+            connection.execute(
+                """UPDATE quote_followups SET status='completed',
+                completed_at=CURRENT_TIMESTAMP,
+                response_note='Cotización cerrada: ' || ?
+                WHERE quote_id=? AND status='pending'""",
+                (outcome, quote_id),
+            )
+
+    @staticmethod
+    @transactional
+    def send_sales_followup(quote_id: int, actor: int) -> None:
+        quote = QuoteManagementRepository.get(quote_id)
+        delivery = QuoteManagementRepository.latest_delivery(quote_id)
+        if not quote or not delivery or delivery.get("status") != "sent":
+            raise ValueError("La cotización todavía no ha sido enviada al asesor.")
+        if quote.get("quote_status") in {"won", "lost", "cancelled"}:
+            raise ValueError("Una cotización cerrada no requiere seguimiento.")
+        body_text = (
+            f"Hola {quote.get('sales_rep_name') or ''},\n\n"
+            f"Quisiera hacer seguimiento a la cotización "
+            f"{quote['prefix']}-{quote['quote_number']} enviada anteriormente. "
+            "¿Tienes alguna novedad del cliente o necesitas apoyo adicional?\n\n"
+            "Quedo atento.\n\nSaludos cordiales,\nRicardo Lugo"
+        )
+        body_html = "<p>" + escape(body_text).replace("\n", "<br>") + "</p>"
+        import json
+        try:
+            result = current_app.extensions["gmail_provider"].reply(
+                thread_id=delivery["provider_thread_id"],
+                sender="ricardo.lugo@lugohermanos.com",
+                recipients=[delivery["recipient_email"]],
+                cc=json.loads(delivery["cc_json"]), subject=delivery["subject"],
+                body_text=body_text, body_html=body_html,
+            )
+        except Exception as error:
+            raise ValueError(
+                "La cotización se conservó, pero Gmail no pudo enviar el seguimiento."
+            ) from error
+        QuoteManagementRepository.record_followup_email(
+            quote_id, delivery["id"], result["message_id"], actor
+        )
