@@ -345,4 +345,8 @@ def test_manual_shipping_is_the_only_freight_override(quote_database):
     result = QuoteManagementService.calculate(quote_id)
     assert Decimal(result["quote"]["calculated_shipping_usd"]) == Decimal("65.11")
     assert Decimal(result["quote"]["final_shipping_usd"]) == Decimal("25.00")
+    breakdown = QuoteManagementService.workspace(quote_id)["cost_breakdown"]
+    assert breakdown["vendor_fob"] == Decimal("40.00")
+    assert breakdown["fob_cost"] == Decimal("8.00")
+    assert breakdown["adjusted_fob"] == Decimal("48.00")
     assert result["quote"]["final_dhl_zone"] == 4

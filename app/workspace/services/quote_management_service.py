@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -147,9 +148,26 @@ class QuoteManagementService:
         pdf = QuoteManagementRepository.latest_pdf(quote_id)
         if pdf and not Path(pdf["stored_filename"]).is_file():
             pdf = None
+        lines = QuoteManagementRepository.lines(quote_id)
+        vendor_fob = sum(
+            (
+                Decimal(str(line.get("vendor_fob_unit_usd") or 0))
+                * Decimal(str(line.get("quantity") or 0))
+                for line in lines
+            ),
+            Decimal("0"),
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        fob_cost = (vendor_fob * Decimal("0.20")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         return {
             "quote": quote,
-            "lines": QuoteManagementRepository.lines(quote_id),
+            "lines": lines,
+            "cost_breakdown": {
+                "vendor_fob": vendor_fob,
+                "fob_cost": fob_cost,
+                "adjusted_fob": vendor_fob + fob_cost,
+            },
             "weight_research": QuoteManagementRepository.latest_weight_research(quote_id),
             "origins": QuoteManagementRepository.origin_options(profile["id"]) if profile else [],
             "pricing_rules": QuoteManagementRepository.pricing_rules(),
