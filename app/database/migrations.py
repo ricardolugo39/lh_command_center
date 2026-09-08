@@ -3834,7 +3834,15 @@ def _migration_0065_backfill_quote_vendor_values(connection: Connection) -> None
     )
 
 
-def _migration_0066_email_followups(connection: Connection) -> None:
+def _migration_0066_advisor_monthly_conversations(connection: Connection) -> None:
+    """Compatibility marker for the production advisor conversation schema."""
+
+
+def _migration_0067_advisor_manager_analysis(connection: Connection) -> None:
+    """Compatibility marker for the production manager analysis schema."""
+
+
+def _migration_0068_email_followups(connection: Connection) -> None:
     """Audit vendor and sales-representative follow-up emails."""
     _execute_statements(connection, (
         """CREATE TABLE IF NOT EXISTS rfq_vendor_followups (
@@ -4010,7 +4018,9 @@ MIGRATION_MANIFEST = (
     Migration(63, "quote_weight_research", _migration_0063_quote_weight_research),
     Migration(64, "rfq_weight_research", _migration_0064_rfq_weight_research),
     Migration(65, "backfill_quote_vendor_values", _migration_0065_backfill_quote_vendor_values),
-    Migration(66, "email_followups", _migration_0066_email_followups),
+    Migration(66, "advisor_monthly_conversations", _migration_0066_advisor_monthly_conversations),
+    Migration(67, "advisor_manager_analysis", _migration_0067_advisor_manager_analysis),
+    Migration(68, "email_followups", _migration_0068_email_followups),
 )
 
 
