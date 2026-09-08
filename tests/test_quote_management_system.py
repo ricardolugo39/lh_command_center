@@ -295,7 +295,7 @@ def test_sheet_product_factors_and_free_divisor(quote_database):
         [{**common, "product_type": "FREE", "pricing_override_value": "0.70"}], 1,
     )
     free = QuoteManagementService.calculate(quote_id)
-    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("104.63")
+    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("81.84")
 
 
 def test_sales_recipient_directory_is_seeded_and_extendable(quote_database):
@@ -350,6 +350,31 @@ def test_manual_shipping_is_the_only_freight_override(quote_database):
     assert breakdown["fob_cost"] == Decimal("8.00")
     assert breakdown["adjusted_fob"] == Decimal("48.00")
     assert result["quote"]["final_dhl_zone"] is None
+
+
+def test_profitability_applies_only_to_fob_not_pass_through_costs(
+    quote_database,
+):
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    QuoteManagementService.save_workspace(
+        quote_id,
+        {"manual_shipping_usd": "700"},
+        [{
+            "id": line["id"], "quantity": "1",
+            "vendor_fob_unit_usd": "139.67", "unit_weight_kg": "13",
+            "lead_time": "4-6 semanas", "product_type": "SCREW",
+        }],
+        1,
+    )
+    result = QuoteManagementService.calculate(quote_id)
+    quote = result["quote"]
+    # The RFQ fixture has quantity 2. Adjusted FOB is priced with the .65
+    # factor; shipping 700 and bank fee 30 are added afterward at exact cost.
+    assert Decimal(str(quote["amount"])) == Decimal("1245.70")
+    assert Decimal(quote["landed_cost_usd"]) == Decimal("1065.21")
+    assert Decimal(quote["profit_usd"]) == Decimal("180.49")
+    assert Decimal(result["lines"][0]["shipping"]) == Decimal("700.00")
 
 
 def test_manual_shipping_does_not_require_dhl_profile_or_origin(

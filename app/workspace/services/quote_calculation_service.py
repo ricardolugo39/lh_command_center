@@ -137,12 +137,11 @@ class QuoteCalculationService:
                 factor = PRODUCT_FACTORS.get(product_type)
                 if not factor:
                     raise ValueError(f"Seleccione el tipo de producto en la línea {position + 1}.")
-            # Exact worksheet structure: FOB carries 20%, the product
-            # component is divided by its profitability factor, freight
-            # carries 70%, and bank/customs are passed through.
+            # Profitability applies only to adjusted FOB. Freight, customs,
+            # and bank fees are pass-through costs and must not carry margin.
             selling_unit = money(
                 (decimal_value(line.get("vendor_fob_unit_usd")) * Decimal("1.2") / factor)
-                + (shipping * Decimal("1.7") + custom + bank_part) / line["quantity_d"]
+                + (shipping + custom + bank_part) / line["quantity_d"]
             )
             selling_total = money(selling_unit * line["quantity_d"])
             profit = money(selling_total - landed)
