@@ -494,7 +494,7 @@ class QuoteManagementService:
             f"Hola {quote.get('sales_rep_name') or ''},\n\n"
             f"Quisiera hacer seguimiento a la cotización "
             f"{quote['prefix']}-{quote['quote_number']} enviada anteriormente. "
-            "¿Tienes alguna novedad del cliente o necesitas apoyo adicional?\n\n"
+            "Por favor, infórmeme si necesita información adicional.\n\n"
             "Quedo atento.\n\nSaludos cordiales,\nRicardo Lugo"
         )
         body_html = "<p>" + escape(body_text).replace("\n", "<br>") + "</p>"
