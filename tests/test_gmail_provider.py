@@ -1,5 +1,5 @@
 import base64
-from email import message_from_bytes
+from email import message_from_bytes, policy
 
 from app.workspace.connectors.gmail_provider import GmailProvider
 
@@ -26,7 +26,11 @@ class _Threads:
         return _Execute({"messages": [{"payload": {"headers": [
             {"name": "Message-ID", "value": "<original@example.com>"},
             {"name": "Subject", "value": "RFQ-000007 - THK"},
-        ]}}]})
+            {"name": "From", "value": "Ricardo <sender@example.com>"},
+            {"name": "Date", "value": "Tue, 8 Sep 2026 10:00:00 -0500"},
+        ], "mimeType": "text/plain", "body": {"data": base64.urlsafe_b64encode(
+            b"Original quote details"
+        ).decode()}}}]})
 
 
 class _Users:
@@ -61,9 +65,15 @@ def test_reply_uses_original_rfc_headers_and_gmail_thread(monkeypatch):
     )
 
     body = service.user_api.message_api.sent["body"]
-    decoded = message_from_bytes(base64.urlsafe_b64decode(body["raw"]))
+    decoded = message_from_bytes(
+        base64.urlsafe_b64decode(body["raw"]), policy=policy.default
+    )
     assert body["threadId"] == "thread-1"
     assert decoded["Subject"] == "Re: RFQ-000007 - THK"
     assert decoded["In-Reply-To"] == "<original@example.com>"
     assert decoded["References"] == "<original@example.com>"
+    assert "Following up" in decoded.get_body(preferencelist=("plain",)).get_content()
+    assert "Original quote details" in decoded.get_body(
+        preferencelist=("plain",)
+    ).get_content()
     assert result == {"message_id": "reply-1", "thread_id": "thread-1"}

@@ -1,4 +1,5 @@
 import base64
+import html
 import json
 import mimetypes
 from pathlib import Path
@@ -69,8 +70,7 @@ class GmailProvider:
         """Reply to the first message so every mail client preserves the thread."""
         service = self._service()
         thread = service.users().threads().get(
-            userId="me", id=thread_id, format="metadata",
-            metadataHeaders=["Message-ID", "References", "Subject"],
+            userId="me", id=thread_id, format="full",
         ).execute()
         original = (thread.get("messages") or [{}])[0]
         headers = {
@@ -96,8 +96,25 @@ class GmailProvider:
                 f"{references} {message_id}".strip()
                 if message_id not in references else references
             )
-        message.set_content(body_text)
-        message.add_alternative(body_html, subtype="html")
+        original_body = self._body(original.get("payload", {})).strip()
+        quoted_header = (
+            f"El {headers.get('date', '')}, {headers.get('from', sender)} escribió:"
+        )
+        quoted_text = "\n".join(
+            f"> {line}" if line else ">"
+            for line in original_body.splitlines()
+        )
+        complete_text = f"{body_text}\n\n{quoted_header}\n{quoted_text}"
+        quoted_html = html.escape(original_body).replace("\n", "<br>")
+        complete_html = (
+            f"{body_html}<br><div style='color:#5f6368'>"
+            f"{html.escape(quoted_header)}</div>"
+            "<blockquote style='margin:8px 0 0 0;padding-left:12px;"
+            "border-left:1px solid #dadce0;color:#5f6368'>"
+            f"{quoted_html}</blockquote>"
+        )
+        message.set_content(complete_text)
+        message.add_alternative(complete_html, subtype="html")
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
         result = service.users().messages().send(
             userId="me", body={"raw": raw, "threadId": thread_id}
