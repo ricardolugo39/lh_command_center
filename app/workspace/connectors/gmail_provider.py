@@ -66,17 +66,40 @@ class GmailProvider:
         self, *, thread_id: str, sender: str, recipients: list[str],
         cc: list[str], subject: str, body_text: str, body_html: str,
     ) -> dict:
-        """Send a message in an existing Gmail conversation."""
+        """Reply to the first message so every mail client preserves the thread."""
+        service = self._service()
+        thread = service.users().threads().get(
+            userId="me", id=thread_id, format="metadata",
+            metadataHeaders=["Message-ID", "References", "Subject"],
+        ).execute()
+        original = (thread.get("messages") or [{}])[0]
+        headers = {
+            item.get("name", "").casefold(): item.get("value", "")
+            for item in original.get("payload", {}).get("headers", [])
+        }
+        message_id = headers.get("message-id")
+        original_subject = headers.get("subject") or subject
+        reply_subject = (
+            original_subject if original_subject.casefold().startswith("re:")
+            else f"Re: {original_subject}"
+        )
         message = EmailMessage()
         message["From"], message["To"], message["Subject"] = (
-            sender, ", ".join(recipients), subject,
+            sender, ", ".join(recipients), reply_subject,
         )
         if cc:
             message["Cc"] = ", ".join(cc)
+        if message_id:
+            message["In-Reply-To"] = message_id
+            references = headers.get("references", "").strip()
+            message["References"] = (
+                f"{references} {message_id}".strip()
+                if message_id not in references else references
+            )
         message.set_content(body_text)
         message.add_alternative(body_html, subtype="html")
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        result = self._service().users().messages().send(
+        result = service.users().messages().send(
             userId="me", body={"raw": raw, "threadId": thread_id}
         ).execute()
         return {"message_id": result["id"], "thread_id": result["threadId"]}
