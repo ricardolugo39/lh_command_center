@@ -257,6 +257,56 @@ class RFQVendorRequestService:
         return result
 
     @staticmethod
+    @transactional
+    def send_followup(rfq_id: int, actor_user_id: int) -> int:
+        rfq = RFQService.require(rfq_id)
+        pending = [
+            item for item in RFQVendorRequestRepository.list_for_rfq(rfq_id)
+            if not item["has_response"] and item.get("provider_thread_id")
+        ]
+        if not pending:
+            raise ValueError("No hay proveedores pendientes de respuesta.")
+        sent = 0
+        for item in pending:
+            body_text = (
+                "Hello,\n\nWe are following up on our pricing request below. "
+                "Could you please share your quotation and lead time?\n\n"
+                f"Reference: {rfq['rfq_number']}\n\nThank you,\nRicardo Lugo"
+            )
+            body_html = "<p>" + html.escape(body_text).replace("\n", "<br>") + "</p>"
+            try:
+                result = current_app.extensions["gmail_provider"].reply(
+                    thread_id=item["provider_thread_id"],
+                    sender="ricardo.lugo@lugohermanos.com",
+                    recipients=[item["recipient_email"]],
+                    cc=json.loads(item.get("cc_json") or "[]"),
+                    subject=item["subject"], body_text=body_text,
+                    body_html=body_html,
+                )
+            except Exception as error:
+                RFQVendorRequestRepository.mark_error(item["id"], str(error))
+                raise ValueError(
+                    f"No fue posible enviar el seguimiento a {item['brand']}."
+                ) from error
+            RFQVendorRequestRepository.record_followup(
+                item["id"], result["message_id"]
+            )
+            RFQVendorRequestRepository.save_message(item["id"], {
+                "id": result["message_id"], "direction": "outgoing",
+                "sender": "ricardo.lugo@lugohermanos.com",
+                "recipients": [item["recipient_email"]],
+                "cc": json.loads(item.get("cc_json") or "[]"),
+                "subject": item["subject"], "body_text": body_text,
+                "body_html": body_html, "date": None,
+            })
+            sent += 1
+        RFQRepository.add_history(
+            rfq_id, rfq.get("workflow_status"), rfq.get("workflow_status"),
+            actor_user_id, f"Seguimiento enviado a {sent} proveedor(es)",
+        )
+        return sent
+
+    @staticmethod
     def _safe_html(value) -> str:
         return "<p>" + html.escape(str(value or "")).replace("\n", "<br>") + "</p>"
 
