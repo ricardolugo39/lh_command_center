@@ -546,32 +546,3 @@ class QuoteManagementRepository:
                 "UPDATE quote_deliveries SET status='failed',last_error=? WHERE id=?",
                 (error, delivery_id),
             )
-
-    @staticmethod
-    def record_followup_email(
-        quote_id: int, delivery_id: int, provider_message_id: str, actor: int
-    ) -> None:
-        with connection_scope() as connection:
-            connection.execute(
-                """INSERT INTO quote_followup_emails(
-                quote_id,delivery_id,provider_message_id,sent_by_user_id)
-                VALUES (?,?,?,?)""",
-                (quote_id, delivery_id, provider_message_id, actor),
-            )
-            connection.execute(
-                """UPDATE quote_followups SET status='completed',
-                completed_at=CURRENT_TIMESTAMP,
-                response_note='Seguimiento enviado por correo'
-                WHERE quote_id=? AND status='pending'""",
-                (quote_id,),
-            )
-
-    @staticmethod
-    def followup_emails(quote_id: int) -> list[dict[str, Any]]:
-        with connection_scope() as connection:
-            rows = connection.execute(
-                """SELECT * FROM quote_followup_emails
-                WHERE quote_id=? ORDER BY sent_at DESC,id DESC""",
-                (quote_id,),
-            ).fetchall()
-        return [dict(row) for row in rows]

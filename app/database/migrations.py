@@ -3834,30 +3834,6 @@ def _migration_0065_backfill_quote_vendor_values(connection: Connection) -> None
     )
 
 
-def _migration_0066_email_followups(connection: Connection) -> None:
-    """Audit vendor and sales-representative follow-up emails."""
-    _execute_statements(connection, (
-        """CREATE TABLE IF NOT EXISTS rfq_vendor_followups (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            vendor_request_id INTEGER NOT NULL,
-            provider_message_id TEXT NOT NULL,
-            sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(vendor_request_id) REFERENCES rfq_vendor_requests(id)
-                ON DELETE CASCADE
-        )""",
-        """CREATE TABLE IF NOT EXISTS quote_followup_emails (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            quote_id INTEGER NOT NULL,
-            delivery_id INTEGER NOT NULL,
-            provider_message_id TEXT NOT NULL,
-            sent_by_user_id INTEGER,
-            sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(quote_id) REFERENCES ws_project_quotes(id) ON DELETE CASCADE,
-            FOREIGN KEY(delivery_id) REFERENCES quote_deliveries(id) ON DELETE CASCADE
-        )""",
-    ))
-
-
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4010,7 +3986,6 @@ MIGRATION_MANIFEST = (
     Migration(63, "quote_weight_research", _migration_0063_quote_weight_research),
     Migration(64, "rfq_weight_research", _migration_0064_rfq_weight_research),
     Migration(65, "backfill_quote_vendor_values", _migration_0065_backfill_quote_vendor_values),
-    Migration(66, "email_followups", _migration_0066_email_followups),
 )
 
 

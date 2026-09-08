@@ -266,21 +266,6 @@ def request_vendor_prices(rfq_id: int):
     return redirect(url_for("rfqs.detail", rfq_id=rfq_id))
 
 
-@rfqs_bp.post("/<int:rfq_id>/vendor-followup")
-@roles_required("administrator", "commercial_management")
-def vendor_followup(rfq_id: int):
-    try:
-        sent = RFQVendorRequestService.send_followup(
-            rfq_id, g.current_user["id"]
-        )
-    except ValueError as exception:
-        return render_template(
-            "rfqs/detail.html", page=RFQService.detail(rfq_id),
-            error=str(exception),
-        ), 400
-    return redirect(url_for("rfqs.detail", rfq_id=rfq_id, followup_sent=sent))
-
-
 @rfqs_bp.post("/<int:rfq_id>/test-vendor-email")
 @roles_required("administrator", "commercial_management")
 def test_vendor_email(rfq_id: int):

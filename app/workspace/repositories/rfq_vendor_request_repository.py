@@ -133,12 +133,3 @@ class RFQVendorRequestRepository:
                 """UPDATE rfq_vendor_requests SET last_error=? WHERE id=?""",
                 (error[:500], vendor_request_id),
             )
-
-    @staticmethod
-    def record_followup(vendor_request_id: int, provider_message_id: str) -> None:
-        with connection_scope() as connection:
-            connection.execute(
-                """INSERT INTO rfq_vendor_followups(
-                vendor_request_id,provider_message_id) VALUES (?,?)""",
-                (vendor_request_id, provider_message_id),
-            )
