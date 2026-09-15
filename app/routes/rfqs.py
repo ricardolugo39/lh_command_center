@@ -31,10 +31,15 @@ def index():
     office = request.args.get("office", "").strip()
     if office not in OFFICES:
         office = ""
+    quote_scope = request.args.get("quote_scope", "pending").strip()
+    if quote_scope not in {"pending", "quoted", "all"}:
+        quote_scope = "pending"
+    rfqs = RFQRepository.list_all(status, search, office, quote_scope)
     return render_template(
-        "rfqs/index.html", rfqs=RFQRepository.list_all(status, search, office),
+        "rfqs/index.html", rfqs=rfqs,
         status=status, labels=RFQService.STATUS_LABELS,
         search=search, office=office, offices=OFFICES,
+        quote_scope=quote_scope, pending_count=len(rfqs),
     )
 
 

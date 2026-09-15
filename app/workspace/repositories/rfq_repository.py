@@ -100,7 +100,7 @@ class RFQRepository:
     @staticmethod
     def list_all(
         status: str | None = None, search: str | None = None,
-        office: str | None = None,
+        office: str | None = None, quote_scope: str = "pending",
     ) -> list[dict[str, Any]]:
         clauses = []
         params: list[Any] = []
@@ -117,6 +117,16 @@ class RFQRepository:
         if office in {"Bogotá", "Cali"}:
             clauses.append(f"{sql_office_case('r.sales_rep_name')} = ?")
             params.append(office)
+        if quote_scope == "pending":
+            clauses.append(
+                "NOT EXISTS (SELECT 1 FROM ws_project_quotes q "
+                "WHERE q.originating_rfq_id=r.id)"
+            )
+        elif quote_scope == "quoted":
+            clauses.append(
+                "EXISTS (SELECT 1 FROM ws_project_quotes q "
+                "WHERE q.originating_rfq_id=r.id)"
+            )
         where = "WHERE " + " AND ".join(clauses) if clauses else ""
         with connection_scope() as connection:
             rows = connection.execute(
@@ -132,7 +142,9 @@ class RFQRepository:
                         WHERE vr.rfq_id=r.id) AS vendor_request_count,
                     (SELECT COUNT(*) FROM rfq_vendor_requests vr
                         WHERE vr.rfq_id=r.id AND vr.status='responded')
-                        AS vendor_response_count
+                        AS vendor_response_count,
+                    (SELECT COUNT(*) FROM ws_project_quotes q
+                        WHERE q.originating_rfq_id=r.id) AS quote_count
                 FROM rfqs r JOIN ws_customers c ON c.id = r.customer_id
                 JOIN ws_users u ON u.id = r.owner_user_id
                 {where}

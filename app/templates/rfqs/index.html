@@ -5,11 +5,12 @@
 {% block content %}
 {% if request.args.get('deleted') %}<div class="alert alert-success">RFQ eliminada permanentemente.</div>{% endif %}
 {% if request.args.get('sync') %}<div class="alert {{ 'alert-warning' if request.args.get('errors','0')|int else 'alert-success' }}">Se revisaron {{ request.args.get('checked','0') }} RFQ pendientes y se encontraron {{ request.args.get('responses','0') }} respuesta(s) nueva(s).{% if request.args.get('errors','0')|int %} {{ request.args.get('errors') }} RFQ no pudieron revisarse.{% endif %}</div>{% endif %}
-<div class="mb-3 text-secondary">Solicitudes de precio enviadas a THK y Thomson.</div>
+<div class="d-flex justify-content-between align-items-center mb-3"><div class="text-secondary">Solicitudes de precio enviadas a THK y Thomson.</div>{% if quote_scope == 'pending' %}<span class="badge bg-blue-lt">{{ pending_count }} pendiente(s) de cotización</span>{% endif %}</div>
 <form class="card card-body mb-3" method="get"><div class="row g-2">
-  <div class="col-md-6"><input class="form-control" name="q" value="{{ search }}" placeholder="Buscar RFQ, cliente o referencia"></div>
-  <div class="col-md-3"><select class="form-select" name="office"><option value="">Todas las sedes</option>{% for value in offices %}<option value="{{ value }}" {{ 'selected' if office == value }}>{{ value }}</option>{% endfor %}</select></div>
-  <div class="col-md-3 d-flex gap-2"><button class="btn btn-outline-primary flex-fill">Buscar</button>{% if search or office %}<a class="btn" href="{{ url_for('rfqs.index') }}">Limpiar</a>{% endif %}</div>
+  <div class="col-md-5"><input class="form-control" name="q" value="{{ search }}" placeholder="Buscar RFQ, cliente o referencia"></div>
+  <div class="col-md-2"><select class="form-select" name="office"><option value="">Todas las sedes</option>{% for value in offices %}<option value="{{ value }}" {{ 'selected' if office == value }}>{{ value }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><select class="form-select" name="quote_scope"><option value="pending" {{ 'selected' if quote_scope == 'pending' }}>Pendientes de cotización</option><option value="quoted" {{ 'selected' if quote_scope == 'quoted' }}>Con cotización</option><option value="all" {{ 'selected' if quote_scope == 'all' }}>Todos los RFQs</option></select></div>
+  <div class="col-md-2 d-flex gap-2"><button class="btn btn-outline-primary flex-fill">Buscar</button>{% if search or office or quote_scope != 'pending' %}<a class="btn" href="{{ url_for('rfqs.index') }}">Limpiar</a>{% endif %}</div>
 </div></form>
 <div class="card"><div class="table-responsive"><table class="table table-vcenter card-table">
 <thead><tr><th>Fecha</th><th>RFQ</th><th>Asesor / cliente</th><th>Productos</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead>
@@ -21,6 +22,6 @@
   <td>{{ (rfq.vendor_summary or '—').replace(',', ', ') }}</td>
   <td>{% if rfq.vendor_request_count == 0 %}<span class="badge bg-secondary-lt">Borrador</span>{% elif rfq.vendor_response_count == rfq.vendor_request_count %}<span class="badge bg-green-lt">Respuesta recibida</span>{% else %}<span class="badge bg-yellow-lt">Esperando proveedor</span>{% endif %}</td>
   <td class="text-end"><div class="d-flex justify-content-end gap-1"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('rfqs.detail',rfq_id=rfq.id) }}">Abrir</a>{% if current_user.role == 'administrator' and rfq.vendor_request_count == 0 %}<form method="post" action="{{ url_for('rfqs.delete',rfq_id=rfq.id) }}" onsubmit="return confirm('Eliminar {{ rfq.rfq_number }} permanentemente? Esta acción no se puede deshacer.')"><button class="btn btn-sm btn-outline-danger">Eliminar</button></form>{% endif %}</div></td>
-</tr>{% else %}<tr><td colspan="7" class="text-center text-secondary py-5">No hay RFQs de proveedor.</td></tr>{% endfor %}</tbody>
+</tr>{% else %}<tr><td colspan="7" class="text-center text-secondary py-5">{% if quote_scope == 'pending' %}No hay RFQs pendientes de cotización.{% elif quote_scope == 'quoted' %}No hay RFQs con cotización.{% else %}No hay RFQs de proveedor.{% endif %}</td></tr>{% endfor %}</tbody>
 </table></div></div>
 {% endblock %}

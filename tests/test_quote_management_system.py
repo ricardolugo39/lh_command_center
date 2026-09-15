@@ -6,6 +6,7 @@ import pytest
 
 from app.database.migrations import upgrade
 from app.workspace.repositories.quote_management_repository import QuoteManagementRepository
+from app.workspace.repositories.rfq_repository import RFQRepository
 from app.workspace.services.quote_management_service import QuoteManagementService
 from app.workspace.services.rfq_service import RFQService
 from app.workspace.services.quote_weight_research_service import (
@@ -28,9 +29,9 @@ def quote_database(tmp_path, monkeypatch):
     return path
 
 
-def _rfq():
+def _rfq(prequotation_number="PC-42"):
     return RFQService.create({
-        "customer_id": 1, "prequotation_number": "PC-42",
+        "customer_id": 1, "prequotation_number": prequotation_number,
         "received_at": "2026-08-03", "description": "Solicitud heredada",
         "items": [{
             "reference": "SR20W", "brand": "THK", "quantity": "2",
@@ -50,6 +51,20 @@ def test_rfq_conversion_preserves_request_and_lines(quote_database):
     assert page["lines"][0]["source_rfq_item_id"]
     assert page["lines"][0]["part_number"] == "SR20W"
     assert page["lines"][0]["quantity"] == 2
+
+
+def test_rfq_list_defaults_to_items_without_a_quote(quote_database):
+    pending_rfq_id = _rfq("PC-PENDING")
+    quoted_rfq_id = _rfq("PC-QUOTED")
+    QuoteManagementService.create_from_rfq(quoted_rfq_id, 1)
+
+    assert [row["id"] for row in RFQRepository.list_all()] == [pending_rfq_id]
+    assert [row["id"] for row in RFQRepository.list_all(quote_scope="quoted")] == [
+        quoted_rfq_id
+    ]
+    assert {row["id"] for row in RFQRepository.list_all(quote_scope="all")} == {
+        pending_rfq_id, quoted_rfq_id,
+    }
 
 
 def test_direct_quote_uses_same_usd_processor_without_rfq(quote_database):
