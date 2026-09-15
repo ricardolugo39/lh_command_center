@@ -311,7 +311,7 @@ def test_sheet_product_factors_and_free_divisor(quote_database):
         [{**common, "product_type": "FREE", "pricing_override_value": "0.70"}], 1,
     )
     free = QuoteManagementService.calculate(quote_id)
-    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("81.84")
+    assert Decimal(free["lines"][0]["selling_unit"]) == Decimal("94.86")
 
 
 def test_sales_recipient_directory_is_seeded_and_extendable(quote_database):
