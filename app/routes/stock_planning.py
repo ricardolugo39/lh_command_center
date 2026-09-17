@@ -380,6 +380,46 @@ def resolve_vendor_quote_lines_bulk(snapshot_id: int):
     ))
 
 
+@stock_planning_bp.post(
+    "/snapshots/<int:snapshot_id>/vendor-quotes/close"
+)
+@roles_required("administrator")
+def close_vendor_quote_reconciliation(snapshot_id: int):
+    try:
+        count = StockQuoteReconciliationService.close(
+            snapshot_id, str(g.current_user["email"])
+        )
+        message = (
+            "Conciliación cerrada. "
+            f"{count} cambio(s) de precio requieren actualización en el sistema."
+        )
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.vendor_quote_reconciliation",
+        snapshot_id=snapshot_id, message=message,
+    ))
+
+
+@stock_planning_bp.post(
+    "/snapshots/<int:snapshot_id>/vendor-quotes/price-updates/<int:update_id>"
+)
+@roles_required("administrator")
+def mark_vendor_price_updated(snapshot_id: int, update_id: int):
+    try:
+        updated = request.form.get("updated") == "1"
+        StockQuoteReconciliationService.mark_price_updated(
+            snapshot_id, update_id, updated, str(g.current_user["email"])
+        )
+        message = "Estado de actualización guardado."
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.vendor_quote_reconciliation",
+        snapshot_id=snapshot_id, message=message, _anchor="price-updates",
+    ))
+
+
 @stock_planning_bp.get("/replenishment/reports/<int:snapshot_id>")
 @roles_required("administrator")
 def replenishment_report(snapshot_id: int):
@@ -528,6 +568,23 @@ def export_purchase_order_confirmation_pdf(snapshot_id: int):
     return send_file(
         stream, mimetype=PDF_MIMETYPE, as_attachment=True,
         download_name=filename,
+    )
+
+
+@stock_planning_bp.get(
+    "/snapshots/<int:snapshot_id>/exports/erp-price-updates.xlsx"
+)
+@roles_required("administrator")
+def export_erp_price_updates(snapshot_id: int):
+    try:
+        stream, filename = StockPlanningExportService.erp_price_updates(snapshot_id)
+    except ValueError as exception:
+        return redirect(url_for(
+            "stock_planning.vendor_quote_reconciliation",
+            snapshot_id=snapshot_id, message=str(exception),
+        ))
+    return send_file(
+        stream, mimetype=MIMETYPE, as_attachment=True, download_name=filename
     )
 
 

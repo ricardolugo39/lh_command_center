@@ -43,7 +43,7 @@
     <a class="list-group-item list-group-item-action {% if r.quote and q.id == r.quote.id %}active{% endif %}" href="{{ url_for('stock_planning.vendor_quote_reconciliation', snapshot_id=page.snapshot.id, quote_id=q.id) }}">
       <div class="d-flex justify-content-between">
         <strong>{{ 'Bogotá' if q.branch_code == '1' else 'Cali' }} · {{ q.quote_number or q.original_filename }}</strong>
-        <span>{% if q.status == 'ready' %}Lista para confirmar{% else %}Requiere revisión{% endif %}</span>
+        <span>{% if q.status == 'confirmed' %}Confirmada{% elif q.status == 'ready' %}Lista para cerrar{% else %}Requiere revisión{% endif %}</span>
       </div>
       <div class="small {% if r.quote and q.id == r.quote.id %}text-white-50{% else %}text-secondary{% endif %}">Cargada {{ q.uploaded_at }} · Total PDF USD {{ '{:,.2f}'.format(q.quoted_total or 0) }}</div>
     </a>
@@ -66,7 +66,9 @@
       <h3 class="card-title">Comparación por referencia</h3>
       <div class="text-secondary">Toda línea con alerta requiere una decisión explícita antes de confirmar la orden.</div>
     </div>
-    {% if r.quote.status == 'ready' %}
+    {% if r.closure %}
+    <span class="badge bg-blue-lt ms-auto">Cerrada</span>
+    {% elif r.quote.status == 'ready' %}
     <span class="badge bg-green-lt ms-auto">Lista para confirmar</span>
     {% else %}
     <span class="badge bg-yellow-lt ms-auto">Requiere revisión</span>
@@ -74,16 +76,21 @@
   </div>
 
   <div class="card-body border-bottom py-3 d-flex flex-wrap gap-2 align-items-center">
-    {% if r.all_ready %}
+    {% if r.closure %}
     <a class="btn btn-success" href="{{ url_for('stock_planning.export_purchase_order_confirmation_pdf', snapshot_id=page.snapshot.id) }}">Descargar confirmación PDF</a>
-    <span class="small text-secondary">Incluye Bogotá y Cali en secciones separadas.</span>
+    <span class="small text-secondary">Cerrada por {{ r.closure.closed_by }} el {{ r.closure.closed_at }}.</span>
+    {% elif r.all_ready %}
+    <form method="post" action="{{ url_for('stock_planning.close_vendor_quote_reconciliation', snapshot_id=page.snapshot.id) }}" onsubmit="return confirm('Se cerrará la conciliación y se bloquearán sus decisiones. ¿Continuar?')">
+      <button class="btn btn-primary">Cerrar conciliación</button>
+    </form>
+    <span class="small text-secondary">Al cerrar se preparará la lista de precios para actualizar en el sistema.</span>
     {% else %}
-    <button class="btn btn-success" disabled>Descargar confirmación PDF</button>
-    <span class="small text-secondary">Se habilita cuando todas las cotizaciones estén listas para confirmar.</span>
+    <button class="btn btn-primary" disabled>Cerrar conciliación</button>
+    <span class="small text-secondary">Se habilita cuando todas las cotizaciones estén listas.</span>
     {% endif %}
   </div>
 
-  {% if r.unresolved %}
+  {% if r.unresolved and not r.closure %}
   <div class="card-body border-bottom py-3">
     <form id="bulk-resolution" method="post" action="{{ url_for('stock_planning.resolve_vendor_quote_lines_bulk', snapshot_id=page.snapshot.id) }}" class="d-flex flex-wrap gap-2 align-items-center">
       <input type="hidden" name="quote_id" value="{{ r.quote.id }}">
@@ -102,7 +109,7 @@
         {% for line in r.lines %}
         <tr id="line-{{ line.id }}">
           <td>
-            {% if line.comparison_status != 'matched' and not line.resolution and not line.excluded %}
+            {% if not r.closure and line.comparison_status != 'matched' and not line.resolution and not line.excluded %}
             <input class="form-check-input pending-line" type="checkbox" name="line_ids" value="{{ line.id }}" form="bulk-resolution" aria-label="Seleccionar {{ line.internal_sku }}">
             {% endif %}
           </td>
@@ -135,7 +142,12 @@
             {% endif %}
           </td>
           <td>
-            {% if line.comparison_status == 'matched' and not line.excluded %}
+            {% if r.closure %}
+              {% if line.excluded %}<span class="text-secondary">Excluida del pedido</span>
+              {% elif line.resolution == 'keep_platform' %}<span>Precio anterior conservado</span>
+              {% else %}<span class="text-green">Cotización aceptada</span>{% endif %}
+              {% if line.resolved_by %}<div class="small text-secondary">{{ line.resolved_by }} · {{ line.resolved_at }}</div>{% endif %}
+            {% elif line.comparison_status == 'matched' and not line.excluded %}
             <div class="d-flex gap-2 align-items-center">
               <span class="text-green">Aceptada automáticamente</span>
               <form method="post" action="{{ url_for('stock_planning.resolve_vendor_quote_line', snapshot_id=page.snapshot.id, line_id=line.id) }}">
@@ -166,6 +178,49 @@
     </table>
   </div>
 </section>
+
+{% if r.closure %}
+<section class="card mt-4" id="price-updates">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Cambios de precio para actualizar en el sistema</h3>
+      <div class="text-secondary">El precio es único por referencia, independientemente de la sede.</div>
+    </div>
+    {% if r.price_updates %}
+    <a class="btn btn-sm ms-auto" href="{{ url_for('stock_planning.export_erp_price_updates', snapshot_id=page.snapshot.id) }}">Exportar Excel</a>
+    {% endif %}
+  </div>
+  {% if r.price_updates %}
+  <div class="table-responsive">
+    <table class="table card-table table-sm align-middle">
+      <thead><tr><th>Referencia</th><th>Precio anterior</th><th>Precio nuevo</th><th>Diferencia</th><th>Estado</th><th>Acción</th></tr></thead>
+      <tbody>
+      {% for change in r.price_updates %}
+        <tr>
+          <td><strong>{{ change.internal_sku }}</strong></td>
+          <td>{% if change.previous_fob_usd is not none %}USD {{ '{:,.2f}'.format(change.previous_fob_usd) }}{% else %}Sin precio anterior{% endif %}</td>
+          <td><strong>USD {{ '{:,.2f}'.format(change.new_fob_usd) }}</strong></td>
+          <td>{% if change.previous_fob_usd is not none %}USD {{ '%+.2f'|format(change.new_fob_usd - change.previous_fob_usd) }}{% else %}—{% endif %}</td>
+          <td>
+            {% if change.updated_in_erp %}<span class="badge bg-green-lt">Actualizado en el sistema</span><div class="small text-secondary">{{ change.updated_by }} · {{ change.updated_at }}</div>
+            {% else %}<span class="badge bg-yellow-lt">Pendiente</span>{% endif %}
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('stock_planning.mark_vendor_price_updated', snapshot_id=page.snapshot.id, update_id=change.id) }}">
+              <input type="hidden" name="updated" value="{{ '0' if change.updated_in_erp else '1' }}">
+              <button class="btn btn-sm {% if not change.updated_in_erp %}btn-primary{% endif %}">{{ 'Marcar pendiente' if change.updated_in_erp else 'Marcar actualizado' }}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-secondary">No hubo cambios de precio que deban actualizarse.</div>
+  {% endif %}
+</section>
+{% endif %}
 {% endif %}
 {% endblock %}
 

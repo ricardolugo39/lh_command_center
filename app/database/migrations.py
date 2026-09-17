@@ -3990,6 +3990,39 @@ def _migration_0078_stock_quote_line_exclusions(connection: Connection) -> None:
         )
 
 
+def _migration_0079_stock_quote_reconciliation_closure(
+    connection: Connection,
+) -> None:
+    """Close reconciliations and track global ERP price updates."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS stock_planning_quote_closures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_id INTEGER NOT NULL UNIQUE,
+            closed_by TEXT NOT NULL,
+            closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
+                ON DELETE RESTRICT
+        )""",
+        """CREATE TABLE IF NOT EXISTS stock_planning_quote_erp_price_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_id INTEGER NOT NULL,
+            internal_sku TEXT NOT NULL,
+            previous_fob_usd REAL,
+            new_fob_usd REAL NOT NULL,
+            updated_in_erp INTEGER NOT NULL DEFAULT 0
+                CHECK(updated_in_erp IN (0,1)),
+            updated_by TEXT,
+            updated_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
+                ON DELETE RESTRICT,
+            UNIQUE(snapshot_id,internal_sku)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_stock_quote_erp_updates_pending
+        ON stock_planning_quote_erp_price_updates(snapshot_id,updated_in_erp)""",
+    ))
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4183,6 +4216,10 @@ MIGRATION_MANIFEST = (
     Migration(
         78, "stock_quote_line_exclusions",
         _migration_0078_stock_quote_line_exclusions,
+    ),
+    Migration(
+        79, "stock_quote_reconciliation_closure",
+        _migration_0079_stock_quote_reconciliation_closure,
     ),
 )
 

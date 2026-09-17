@@ -27,6 +27,45 @@ PDF_MIMETYPE = "application/pdf"
 
 class StockPlanningExportService:
     @classmethod
+    def erp_price_updates(cls, snapshot_id: int) -> tuple[io.BytesIO, str]:
+        page = StockPlanningRepository.snapshot_detail(snapshot_id)
+        if not page:
+            raise ValueError("El análisis no existe.")
+        with transaction(write=False) as connection:
+            closure = connection.execute(
+                """SELECT 1 FROM stock_planning_quote_closures
+                WHERE snapshot_id=?""", (snapshot_id,),
+            ).fetchone()
+            changes = connection.execute(
+                """SELECT * FROM stock_planning_quote_erp_price_updates
+                WHERE snapshot_id=? ORDER BY internal_sku""", (snapshot_id,),
+            ).fetchall()
+        if not closure:
+            raise ValueError("Cierre la conciliación antes de exportar precios.")
+        rows = [{
+            "Referencia": row["internal_sku"],
+            "Precio anterior USD": row["previous_fob_usd"],
+            "Precio nuevo USD": row["new_fob_usd"],
+            "Diferencia USD": (
+                row["new_fob_usd"] - row["previous_fob_usd"]
+                if row["previous_fob_usd"] is not None else None
+            ),
+            "Variación %": (
+                (row["new_fob_usd"] / row["previous_fob_usd"] - 1) * 100
+                if row["previous_fob_usd"] not in (None, 0) else None
+            ),
+            "Estado": (
+                "Actualizado en el sistema"
+                if row["updated_in_erp"] else "Pendiente de actualizar"
+            ),
+            "Actualizado por": row["updated_by"] or "",
+            "Fecha actualización": row["updated_at"] or "",
+        } for row in changes]
+        return cls._workbook(
+            rows, "Cambios de precio", page, "cambios-precio-sistema"
+        )
+
+    @classmethod
     def purchase_order_confirmation_pdf(
         cls, snapshot_id: int,
     ) -> tuple[io.BytesIO, str]:
@@ -54,7 +93,10 @@ class StockPlanningExportService:
             latest_quotes.setdefault(str(quote["branch_code"]), quote)
         if not latest_quotes:
             raise ValueError("Primero cargue las cotizaciones del proveedor.")
-        if any(row["status"] != "ready" for row in latest_quotes.values()):
+        if any(
+            row["status"] not in {"ready", "confirmed"}
+            for row in latest_quotes.values()
+        ):
             raise ValueError(
                 "Resuelva todas las alertas y aclaraciones antes de exportar."
             )

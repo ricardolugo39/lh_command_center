@@ -235,6 +235,14 @@ class StockQuoteReconciliationService:
                 WHERE vendor_quote_id=? ORDER BY line_number""",
                 (selected["id"],),
             ).fetchall()]
+            closure_row = connection.execute(
+                """SELECT * FROM stock_planning_quote_closures
+                WHERE snapshot_id=?""", (snapshot_id,),
+            ).fetchone()
+            price_updates = [dict(row) for row in connection.execute(
+                """SELECT * FROM stock_planning_quote_erp_price_updates
+                WHERE snapshot_id=? ORDER BY internal_sku""", (snapshot_id,),
+            ).fetchall()]
         unresolved = sum(
             row["resolution"] is None and not row.get("excluded") for row in lines
         )
@@ -245,7 +253,13 @@ class StockQuoteReconciliationService:
             "quotes": quotes, "quote": selected, "lines": lines,
             "unresolved": unresolved,
             "all_ready": bool(latest_by_branch) and all(
-                row["status"] == "ready" for row in latest_by_branch.values()
+                row["status"] in {"ready", "confirmed"}
+                for row in latest_by_branch.values()
+            ),
+            "closure": dict(closure_row) if closure_row else None,
+            "price_updates": price_updates,
+            "pending_price_updates": sum(
+                not row["updated_in_erp"] for row in price_updates
             ),
             "platform_total": sum(
                 (row["platform_unit_price"] or 0) * row["ordered_quantity"]
@@ -268,6 +282,13 @@ class StockQuoteReconciliationService:
         if resolution not in allowed:
             raise ValueError("Seleccione una resolución válida.")
         with transaction(write=True) as connection:
+            if connection.execute(
+                """SELECT 1 FROM stock_planning_quote_closures
+                WHERE snapshot_id=?""", (snapshot_id,),
+            ).fetchone():
+                raise ValueError(
+                    "La conciliación está cerrada y ya no admite cambios."
+                )
             line = connection.execute(
                 """SELECT l.*,q.snapshot_id,q.branch_code,q.id quote_id
                 FROM stock_planning_vendor_quote_lines l
@@ -340,6 +361,113 @@ class StockQuoteReconciliationService:
         for line_id in unique_ids:
             cls.resolve(snapshot_id, line_id, resolution, resolved_by)
         return quote_ids.pop(), len(unique_ids)
+
+    @classmethod
+    def close(cls, snapshot_id: int, closed_by: str) -> int:
+        with transaction(write=True) as connection:
+            existing = connection.execute(
+                """SELECT id FROM stock_planning_quote_closures
+                WHERE snapshot_id=?""", (snapshot_id,),
+            ).fetchone()
+            if existing:
+                return 0
+            latest_quotes = connection.execute(
+                """SELECT q.id,q.branch_code,q.status
+                FROM stock_planning_vendor_quotes q
+                JOIN (
+                    SELECT branch_code,MAX(id) latest_id
+                    FROM stock_planning_vendor_quotes
+                    WHERE snapshot_id=? GROUP BY branch_code
+                ) latest ON latest.latest_id=q.id""",
+                (snapshot_id,),
+            ).fetchall()
+            if not latest_quotes:
+                raise ValueError("No hay cotizaciones para cerrar.")
+            if any(row["status"] != "ready" for row in latest_quotes):
+                raise ValueError(
+                    "Resuelva todas las alertas y aclaraciones antes de cerrar."
+                )
+            quote_ids = [int(row["id"]) for row in latest_quotes]
+            placeholders = ",".join("?" for _ in quote_ids)
+            lines = connection.execute(
+                f"""SELECT l.*,q.branch_code
+                FROM stock_planning_vendor_quote_lines l
+                JOIN stock_planning_vendor_quotes q ON q.id=l.vendor_quote_id
+                WHERE q.id IN ({placeholders}) AND l.excluded=0""",
+                quote_ids,
+            ).fetchall()
+
+            prices_by_sku: dict[str, list[float]] = {}
+            previous_by_sku: dict[str, list[float]] = {}
+            for line in lines:
+                selected_price = (
+                    line["quoted_unit_price"]
+                    if line["resolution"] == "accept_quote"
+                    else line["platform_unit_price"]
+                )
+                if selected_price is None:
+                    raise ValueError(
+                        f"{line['internal_sku']} no tiene un precio final válido."
+                    )
+                prices_by_sku.setdefault(line["internal_sku"], []).append(
+                    float(selected_price)
+                )
+                if line["platform_unit_price"] is not None:
+                    previous_by_sku.setdefault(line["internal_sku"], []).append(
+                        float(line["platform_unit_price"])
+                    )
+            conflicts = [
+                sku for sku, prices in prices_by_sku.items()
+                if max(prices) - min(prices) > .005
+            ]
+            if conflicts:
+                sample = ", ".join(sorted(conflicts)[:5])
+                raise ValueError(
+                    "El precio debe ser único. Bogotá y Cali tienen precios "
+                    f"finales distintos para: {sample}."
+                )
+
+            change_count = 0
+            for sku, prices in prices_by_sku.items():
+                new_price = prices[0]
+                previous_prices = previous_by_sku.get(sku, [])
+                previous_price = previous_prices[0] if previous_prices else None
+                if previous_price is None or abs(new_price - previous_price) > .005:
+                    connection.execute(
+                        """INSERT INTO stock_planning_quote_erp_price_updates (
+                            snapshot_id,internal_sku,previous_fob_usd,new_fob_usd
+                        ) VALUES (?,?,?,?)""",
+                        (snapshot_id, sku, previous_price, new_price),
+                    )
+                    change_count += 1
+            connection.execute(
+                """INSERT INTO stock_planning_quote_closures (
+                    snapshot_id,closed_by
+                ) VALUES (?,?)""", (snapshot_id, closed_by),
+            )
+            connection.execute(
+                f"""UPDATE stock_planning_vendor_quotes SET status='confirmed'
+                WHERE id IN ({placeholders})""", quote_ids,
+            )
+            return change_count
+
+    @staticmethod
+    def mark_price_updated(
+        snapshot_id: int, update_id: int, updated: bool, updated_by: str,
+    ) -> None:
+        with transaction(write=True) as connection:
+            cursor = connection.execute(
+                """UPDATE stock_planning_quote_erp_price_updates
+                SET updated_in_erp=?,updated_by=?,updated_at=(
+                    CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END
+                ) WHERE id=? AND snapshot_id=?""",
+                (
+                    int(updated), updated_by if updated else None,
+                    int(updated), update_id, snapshot_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("El cambio de precio no existe.")
 
     @staticmethod
     def _refresh_status(connection, quote_id: int) -> None:
