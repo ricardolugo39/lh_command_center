@@ -128,22 +128,7 @@ class StockPlanningDecisionService:
                 FROM stock_planning_snapshot_fob_prices WHERE snapshot_id=?""",
                 (snapshot_id,),
             ).fetchall()
-            accepted_rows = connection.execute(
-                """SELECT h.internal_sku,h.branch_code,h.accepted_fob_usd
-                FROM stock_planning_quote_price_history h
-                JOIN (
-                    SELECT internal_sku,branch_code,MAX(id) latest_id
-                    FROM stock_planning_quote_price_history
-                    WHERE snapshot_id=? GROUP BY internal_sku,branch_code
-                ) latest ON latest.latest_id=h.id""",
-                (snapshot_id,),
-            ).fetchall()
         prices = {row["internal_sku"]: float(row["fob_usd"]) for row in price_rows}
-        accepted_prices = {
-            (row["internal_sku"], str(row["branch_code"])):
-                float(row["accepted_fob_usd"])
-            for row in accepted_rows
-        }
         for row in forecast["rows"]:
             key = cls.purchase_key(row["sku"], row["branch"])
             decision = decisions.get(("purchase", key))
@@ -152,15 +137,7 @@ class StockPlanningDecisionService:
                 decision["approved_quantity"] if decision
                 else row["recommended_order"]
             )
-            row["original_fob_usd"] = prices.get(row["sku"])
-            row["fob_usd"] = accepted_prices.get(
-                (row["sku"], str(row["branch"])), row["original_fob_usd"]
-            )
-            row["fob_source"] = (
-                "vendor_quote"
-                if (row["sku"], str(row["branch"])) in accepted_prices
-                else "erp"
-            )
+            row["fob_usd"] = prices.get(row["sku"])
             row["total_fob_usd"] = (
                 float(row["final_quantity"]) * row["fob_usd"]
                 if row["fob_usd"] is not None else None

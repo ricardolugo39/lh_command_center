@@ -15,9 +15,6 @@ from app.workspace.stock_planning.forecasting import StockForecastEngine
 from app.workspace.stock_planning.decisions import StockPlanningDecisionService
 from app.workspace.stock_planning.exports import MIMETYPE, StockPlanningExportService
 from app.workspace.stock_planning.replenishment import StockReplenishmentService
-from app.workspace.stock_planning.reconciliation import (
-    StockQuoteReconciliationService,
-)
 
 
 stock_planning_bp = Blueprint(
@@ -297,64 +294,7 @@ def snapshot(snapshot_id: int):
         if page["inputs"] else None
     )
     page["message"] = request.args.get("message")
-    page["reconciliation"] = StockQuoteReconciliationService.detail(snapshot_id)
     return render_template("stock_planning/snapshot.html", page=page)
-
-
-@stock_planning_bp.get("/snapshots/<int:snapshot_id>/vendor-quotes")
-@roles_required("administrator")
-def vendor_quote_reconciliation(snapshot_id: int):
-    page = StockPlanningRepository.snapshot_detail(snapshot_id)
-    if not page:
-        abort(404)
-    quote_id = request.args.get("quote_id", type=int)
-    page["reconciliation"] = StockQuoteReconciliationService.detail(
-        snapshot_id, quote_id
-    )
-    page["message"] = request.args.get("message")
-    return render_template("stock_planning/quote_reconciliation.html", page=page)
-
-
-@stock_planning_bp.post("/snapshots/<int:snapshot_id>/vendor-quotes")
-@roles_required("administrator")
-def upload_vendor_quote(snapshot_id: int):
-    uploaded = request.files.get("quote_pdf")
-    try:
-        if not uploaded or not uploaded.filename:
-            raise ValueError("Seleccione el PDF de la cotización.")
-        quote_id = StockQuoteReconciliationService.upload(
-            snapshot_id, request.form.get("branch_code", ""),
-            uploaded.filename, uploaded.read(), str(g.current_user["email"]),
-        )
-        message = "Cotización cargada y comparada con el pedido."
-    except ValueError as exception:
-        quote_id = None
-        message = str(exception)
-    return redirect(url_for(
-        "stock_planning.vendor_quote_reconciliation",
-        snapshot_id=snapshot_id, quote_id=quote_id, message=message,
-    ))
-
-
-@stock_planning_bp.post(
-    "/snapshots/<int:snapshot_id>/vendor-quotes/lines/<int:line_id>"
-)
-@roles_required("administrator")
-def resolve_vendor_quote_line(snapshot_id: int, line_id: int):
-    try:
-        quote_id = StockQuoteReconciliationService.resolve(
-            snapshot_id, line_id, request.form.get("resolution", ""),
-            str(g.current_user["email"]), request.form.get("note", ""),
-        )
-        message = "Resolución guardada."
-    except ValueError as exception:
-        quote_id = request.form.get("quote_id", type=int)
-        message = str(exception)
-    return redirect(url_for(
-        "stock_planning.vendor_quote_reconciliation",
-        snapshot_id=snapshot_id, quote_id=quote_id, message=message,
-        _anchor=f"line-{line_id}",
-    ))
 
 
 @stock_planning_bp.get("/replenishment/reports/<int:snapshot_id>")

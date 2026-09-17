@@ -3866,83 +3866,6 @@ def _migration_0068_email_followups(connection: Connection) -> None:
     ))
 
 
-def _migration_0069_stock_quote_reconciliation(connection: Connection) -> None:
-    """Store vendor quote evidence and auditable line-by-line resolutions."""
-    _execute_statements(connection, (
-        """CREATE TABLE IF NOT EXISTS stock_planning_vendor_quotes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER NOT NULL,
-            branch_code TEXT NOT NULL,
-            quote_number TEXT,
-            quote_date TEXT,
-            expires_at TEXT,
-            currency_code TEXT NOT NULL DEFAULT 'USD',
-            quoted_total REAL,
-            original_filename TEXT NOT NULL,
-            stored_file_path TEXT NOT NULL,
-            file_hash TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'review' CHECK(
-                status IN ('review','ready','confirmed')
-            ),
-            uploaded_by TEXT NOT NULL,
-            uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
-                ON DELETE RESTRICT,
-            UNIQUE(snapshot_id,branch_code,file_hash)
-        )""",
-        """CREATE TABLE IF NOT EXISTS stock_planning_vendor_quote_lines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            vendor_quote_id INTEGER NOT NULL,
-            line_number INTEGER NOT NULL,
-            internal_sku TEXT NOT NULL,
-            vendor_sku TEXT,
-            ordered_quantity REAL NOT NULL,
-            quoted_quantity REAL NOT NULL,
-            platform_unit_price REAL,
-            quoted_unit_price REAL NOT NULL,
-            quoted_line_total REAL,
-            calculated_line_total REAL NOT NULL,
-            variance_amount REAL,
-            variance_percent REAL,
-            comparison_status TEXT NOT NULL CHECK(comparison_status IN (
-                'matched','price_change','quantity_mismatch',
-                'possible_substitution','line_total_error'
-            )),
-            resolution TEXT CHECK(resolution IS NULL OR resolution IN (
-                'accept_quote','keep_platform','request_clarification'
-            )),
-            resolution_note TEXT,
-            resolved_by TEXT,
-            resolved_at TEXT,
-            raw_text TEXT,
-            FOREIGN KEY(vendor_quote_id)
-                REFERENCES stock_planning_vendor_quotes(id) ON DELETE CASCADE,
-            UNIQUE(vendor_quote_id,line_number)
-        )""",
-        """CREATE INDEX IF NOT EXISTS idx_stock_quote_lines_quote
-        ON stock_planning_vendor_quote_lines(vendor_quote_id,comparison_status)""",
-        """CREATE TABLE IF NOT EXISTS stock_planning_quote_price_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER NOT NULL,
-            vendor_quote_id INTEGER NOT NULL,
-            quote_line_id INTEGER NOT NULL,
-            branch_code TEXT NOT NULL,
-            internal_sku TEXT NOT NULL,
-            previous_fob_usd REAL,
-            accepted_fob_usd REAL NOT NULL,
-            accepted_by TEXT NOT NULL,
-            accepted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(snapshot_id) REFERENCES stock_planning_snapshots(id)
-                ON DELETE RESTRICT,
-            FOREIGN KEY(vendor_quote_id)
-                REFERENCES stock_planning_vendor_quotes(id) ON DELETE RESTRICT,
-            FOREIGN KEY(quote_line_id)
-                REFERENCES stock_planning_vendor_quote_lines(id) ON DELETE RESTRICT,
-            UNIQUE(quote_line_id)
-        )""",
-    ))
-
-
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4098,10 +4021,6 @@ MIGRATION_MANIFEST = (
     Migration(66, "advisor_monthly_conversations", _migration_0066_advisor_monthly_conversations),
     Migration(67, "advisor_manager_analysis", _migration_0067_advisor_manager_analysis),
     Migration(68, "email_followups", _migration_0068_email_followups),
-    Migration(
-        69, "stock_quote_reconciliation",
-        _migration_0069_stock_quote_reconciliation,
-    ),
 )
 
 
