@@ -20,11 +20,111 @@ from app.workspace.stock_planning.replenishment import StockReplenishmentService
 from app.workspace.stock_planning.reconciliation import (
     StockQuoteReconciliationService,
 )
+from app.workspace.stock_planning.pricing import BrandPricingService
 
 
 stock_planning_bp = Blueprint(
     "stock_planning", __name__, url_prefix="/stock-planning"
 )
+
+
+@stock_planning_bp.get("/brands/thk/pricing")
+@roles_required("administrator")
+def thk_pricing():
+    scenario_id = request.args.get("scenario_id", type=int)
+    page = BrandPricingService.overview("THK")
+    if scenario_id is None and page["scenarios"]:
+        scenario_id = page["scenarios"][0]["id"]
+    page["detail"] = (
+        BrandPricingService.detail(scenario_id) if scenario_id else None
+    )
+    page["message"] = request.args.get("message")
+    return render_template("stock_planning/brand_pricing.html", page=page)
+
+
+@stock_planning_bp.post("/brands/thk/pricing")
+@roles_required("administrator")
+def create_thk_pricing():
+    try:
+        scenario_id = BrandPricingService.create(
+            "THK", request.form.get("scenario_name", ""),
+            float(request.form.get("trm", "0")), str(g.current_user["email"]),
+        )
+        message = "Análisis THK creado con las reglas inferidas."
+    except (TypeError, ValueError) as exception:
+        scenario_id = None
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thk_pricing", scenario_id=scenario_id, message=message,
+    ))
+
+
+@stock_planning_bp.post("/brands/thk/pricing/<int:scenario_id>/settings")
+@roles_required("administrator")
+def update_thk_pricing_settings(scenario_id: int):
+    try:
+        BrandPricingService.update_settings(
+            scenario_id, float(request.form.get("trm", "0")),
+            float(request.form.get("rail_increment_percent", "0")),
+            int(request.form.get("rounding_increment", "100")),
+            str(g.current_user["email"]),
+        )
+        message = "Parámetros actualizados; las aprobaciones anteriores se reiniciaron."
+    except (TypeError, ValueError) as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thk_pricing", scenario_id=scenario_id, message=message,
+    ))
+
+
+@stock_planning_bp.post(
+    "/brands/thk/pricing/<int:scenario_id>/rules/<int:rule_id>"
+)
+@roles_required("administrator")
+def update_thk_pricing_rule(scenario_id: int, rule_id: int):
+    try:
+        BrandPricingService.update_rule(
+            scenario_id, rule_id,
+            float(request.form.get("gross_margin_percent", "0")),
+            str(g.current_user["email"]),
+        )
+        message = "Margen actualizado; las aprobaciones anteriores se reiniciaron."
+    except (TypeError, ValueError) as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thk_pricing", scenario_id=scenario_id,
+        message=message, _anchor="rules",
+    ))
+
+
+@stock_planning_bp.post("/brands/thk/pricing/<int:scenario_id>/approve")
+@roles_required("administrator")
+def approve_thk_pricing_lines(scenario_id: int):
+    try:
+        count = BrandPricingService.approve_many(
+            scenario_id, request.form.getlist("skus"),
+            str(g.current_user["email"]),
+        )
+        message = f"{count} precio(s) aprobados."
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thk_pricing", scenario_id=scenario_id,
+        message=message, _anchor="results",
+    ))
+
+
+@stock_planning_bp.post("/brands/thk/pricing/<int:scenario_id>/close")
+@roles_required("administrator")
+def close_thk_pricing(scenario_id: int):
+    try:
+        count = BrandPricingService.close(scenario_id)
+        message = f"Versión cerrada con {count} precio(s) aprobados."
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thk_pricing", scenario_id=scenario_id, message=message,
+    ))
 
 
 def _profile_id() -> int | None:
@@ -582,6 +682,23 @@ def export_erp_price_updates(snapshot_id: int):
         return redirect(url_for(
             "stock_planning.vendor_quote_reconciliation",
             snapshot_id=snapshot_id, message=str(exception),
+        ))
+    return send_file(
+        stream, mimetype=MIMETYPE, as_attachment=True, download_name=filename
+    )
+
+
+@stock_planning_bp.get(
+    "/brands/thk/pricing/<int:scenario_id>/export-it.xlsx"
+)
+@roles_required("administrator")
+def export_thk_pricing_it(scenario_id: int):
+    try:
+        stream, filename = StockPlanningExportService.brand_pricing_it(scenario_id)
+    except ValueError as exception:
+        return redirect(url_for(
+            "stock_planning.thk_pricing",
+            scenario_id=scenario_id, message=str(exception),
         ))
     return send_file(
         stream, mimetype=MIMETYPE, as_attachment=True, download_name=filename

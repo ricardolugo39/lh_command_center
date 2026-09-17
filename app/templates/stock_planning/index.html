@@ -12,6 +12,10 @@
 </div>
 
 <section class="card mb-4">
+  <div class="card-body"><div class="row align-items-center g-3"><div class="col"><div class="h3 mb-1">Gestión de marca y precios THK</div><div class="text-secondary">Simule precios finales con TRM, márgenes por línea y reglas para rieles; apruebe una versión y expórtela para IT.</div></div><div class="col-auto"><a class="btn btn-primary" href="{{ url_for('stock_planning.thk_pricing') }}">Abrir precios THK</a></div></div></div>
+</section>
+
+<section class="card mb-4">
   <div class="card-header"><div><h3 class="card-title">Reabastecimiento de Cali</h3><div class="text-secondary small">Análisis por marca · ejecución automática cada 15 días con cobertura predeterminada de 90 días</div></div>{% if page.replenishment.unread_count %}<span class="badge bg-red-lt ms-auto">{{ page.replenishment.unread_count }} alerta(s)</span>{% endif %}</div>
   <div class="card-body border-bottom"><form method="post" action="{{ url_for('stock_planning.run_replenishment') }}" class="row g-3 align-items-end">
     <input type="hidden" name="profile_id" value="{{ page.selected_profile_id or '' }}">

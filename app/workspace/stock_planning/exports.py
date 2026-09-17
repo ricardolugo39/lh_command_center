@@ -27,6 +27,52 @@ PDF_MIMETYPE = "application/pdf"
 
 class StockPlanningExportService:
     @classmethod
+    def brand_pricing_it(cls, scenario_id: int) -> tuple[io.BytesIO, str]:
+        with transaction(write=False) as connection:
+            scenario = connection.execute(
+                """SELECT s.*,v.vendor_name FROM brand_pricing_scenarios s
+                JOIN stock_planning_vendor_profiles v
+                    ON v.id=s.vendor_profile_id WHERE s.id=?""",
+                (scenario_id,),
+            ).fetchone()
+            if not scenario:
+                raise ValueError("El análisis de precios no existe.")
+            if scenario["status"] not in {"approved", "exported"}:
+                raise ValueError("Cierre la versión antes de exportarla para IT.")
+            decisions = connection.execute(
+                """SELECT internal_sku,approved_price_cop
+                FROM brand_pricing_line_decisions
+                WHERE scenario_id=? AND decision_status='approved'
+                ORDER BY internal_sku""", (scenario_id,),
+            ).fetchall()
+        if not decisions:
+            raise ValueError("No hay precios aprobados para exportar.")
+        stream = io.BytesIO()
+        frame = pd.DataFrame([{
+            "Marca": scenario["vendor_name"],
+            "Referencia": row["internal_sku"],
+            "Precio nuevo aprobado": row["approved_price_cop"],
+        } for row in decisions])
+        with pd.ExcelWriter(stream, engine="openpyxl") as writer:
+            frame.to_excel(writer, index=False, sheet_name="Precios aprobados")
+            sheet = writer.book["Precios aprobados"]
+            sheet.freeze_panes = "A2"
+            sheet.auto_filter.ref = f"A1:C{len(frame) + 1}"
+            for cell in sheet[1]:
+                cell.font = copy(cell.font)
+                cell.font = __import__("openpyxl").styles.Font(
+                    bold=True, color="FFFFFF"
+                )
+                cell.fill = __import__("openpyxl").styles.PatternFill(
+                    "solid", fgColor="206BC4"
+                )
+            sheet.column_dimensions["A"].width = 16
+            sheet.column_dimensions["B"].width = 32
+            sheet.column_dimensions["C"].width = 24
+        stream.seek(0)
+        return stream, f"precios-it-{scenario['vendor_name']}-{scenario_id}.xlsx"
+
+    @classmethod
     def erp_price_updates(cls, snapshot_id: int) -> tuple[io.BytesIO, str]:
         page = StockPlanningRepository.snapshot_detail(snapshot_id)
         if not page:

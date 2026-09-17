@@ -4023,6 +4023,62 @@ def _migration_0079_stock_quote_reconciliation_closure(
     ))
 
 
+def _migration_0080_brand_pricing_analysis(connection: Connection) -> None:
+    """Versioned brand pricing scenarios, rules, and approved line prices."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS brand_pricing_scenarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_profile_id INTEGER NOT NULL,
+            scenario_name TEXT NOT NULL,
+            source_snapshot_id INTEGER NOT NULL,
+            trm REAL NOT NULL CHECK(trm > 0),
+            import_factor REAL NOT NULL DEFAULT 1.2 CHECK(import_factor > 0),
+            rail_increment_percent REAL NOT NULL DEFAULT 17,
+            rounding_increment INTEGER NOT NULL DEFAULT 100
+                CHECK(rounding_increment IN (1,100,1000,5000)),
+            status TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft','approved','exported')),
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(vendor_profile_id)
+                REFERENCES stock_planning_vendor_profiles(id) ON DELETE RESTRICT,
+            FOREIGN KEY(source_snapshot_id)
+                REFERENCES stock_planning_snapshots(id) ON DELETE RESTRICT
+        )""",
+        """CREATE TABLE IF NOT EXISTS brand_pricing_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scenario_id INTEGER NOT NULL,
+            product_type TEXT NOT NULL,
+            series TEXT NOT NULL,
+            gross_margin_percent REAL NOT NULL
+                CHECK(gross_margin_percent >= 0 AND gross_margin_percent < 100),
+            rule_source TEXT NOT NULL DEFAULT 'inferred',
+            updated_by TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(scenario_id)
+                REFERENCES brand_pricing_scenarios(id) ON DELETE CASCADE,
+            UNIQUE(scenario_id,product_type,series)
+        )""",
+        """CREATE TABLE IF NOT EXISTS brand_pricing_line_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scenario_id INTEGER NOT NULL,
+            internal_sku TEXT NOT NULL,
+            approved_price_cop REAL NOT NULL CHECK(approved_price_cop >= 0),
+            calculated_price_cop REAL NOT NULL CHECK(calculated_price_cop >= 0),
+            decision_status TEXT NOT NULL DEFAULT 'approved'
+                CHECK(decision_status IN ('approved','excluded')),
+            decided_by TEXT NOT NULL,
+            decided_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(scenario_id)
+                REFERENCES brand_pricing_scenarios(id) ON DELETE CASCADE,
+            UNIQUE(scenario_id,internal_sku)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_brand_pricing_scenarios_vendor
+        ON brand_pricing_scenarios(vendor_profile_id,created_at DESC)""",
+    ))
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4220,6 +4276,10 @@ MIGRATION_MANIFEST = (
     Migration(
         79, "stock_quote_reconciliation_closure",
         _migration_0079_stock_quote_reconciliation_closure,
+    ),
+    Migration(
+        80, "brand_pricing_analysis",
+        _migration_0080_brand_pricing_analysis,
     ),
 )
 

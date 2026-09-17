@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Precios THK{% endblock %}
+{% block page_title %}THK · Análisis de precios finales{% endblock %}
+{% block page_actions %}
+<div class="col-auto ms-auto"><a class="btn" href="{{ url_for('stock_planning.index') }}">Volver a inventario</a></div>
+{% endblock %}
+{% block content %}
+{% if page.message %}<div class="alert alert-info">{{ page.message }}</div>{% endif %}
+
+<section class="card mb-4">
+  <div class="card-header"><div><h3 class="card-title">Nueva simulación</h3><div class="text-secondary">Crear una versión no modifica el ERP ni otros análisis.</div></div></div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('stock_planning.create_thk_pricing') }}" class="row g-3 align-items-end">
+      <div class="col-md-5"><label class="form-label">Nombre</label><input class="form-control" name="scenario_name" value="Precios THK" required></div>
+      <div class="col-md-3"><label class="form-label">TRM</label><input class="form-control" type="number" min="1" step="0.01" name="trm" value="3800" required></div>
+      <div class="col-md-4"><button class="btn btn-primary w-100">Crear simulación</button></div>
+    </form>
+  </div>
+</section>
+
+{% if page.scenarios %}
+<section class="card mb-4">
+  <div class="card-header"><h3 class="card-title">Versiones guardadas</h3></div>
+  <div class="list-group list-group-flush">
+    {% for scenario in page.scenarios %}
+    <a class="list-group-item list-group-item-action {% if page.detail and page.detail.scenario.id == scenario.id %}active{% endif %}" href="{{ url_for('stock_planning.thk_pricing', scenario_id=scenario.id) }}">
+      <div class="d-flex justify-content-between"><strong>{{ scenario.scenario_name }}</strong><span>{{ 'Cerrada' if scenario.status != 'draft' else 'Borrador' }}</span></div>
+      <div class="small {% if page.detail and page.detail.scenario.id == scenario.id %}text-white-50{% else %}text-secondary{% endif %}">TRM {{ '{:,.2f}'.format(scenario.trm) }} · {{ scenario.approved_count }} aprobadas · {{ scenario.created_at }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if page.detail %}
+{% set d = page.detail %}
+{% set s = d.scenario %}
+<div class="row row-cards mb-4">
+  <div class="col-md-2"><div class="card"><div class="card-body"><div class="text-secondary">Referencias</div><div class="h2">{{ d.summary.total }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body"><div class="text-secondary">Con Lista 1</div><div class="h2">{{ d.summary.with_list_price }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body"><div class="text-secondary">Sin Lista 1</div><div class="h2">{{ d.summary.missing_list_price }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body"><div class="text-secondary">Calculables</div><div class="h2">{{ d.summary.calculable }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body"><div class="text-secondary">Cambio ≥20%</div><div class="h2">{{ d.summary.large_changes }}</div></div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body"><div class="text-secondary">Aprobadas</div><div class="h2">{{ d.summary.approved }}</div></div></div></div>
+</div>
+
+<section class="card mb-4">
+  <div class="card-header"><div><h3 class="card-title">Parámetros de la simulación</h3><div class="text-secondary">Fuente: {{ s.snapshot_key }} · corte {{ s.as_of_date }}</div></div><span class="badge {% if s.status == 'draft' %}bg-yellow-lt{% else %}bg-green-lt{% endif %} ms-auto">{{ 'Borrador' if s.status == 'draft' else 'Versión cerrada' }}</span></div>
+  <div class="card-body">
+    {% if s.status == 'draft' %}
+    <form method="post" action="{{ url_for('stock_planning.update_thk_pricing_settings', scenario_id=s.id) }}" class="row g-3 align-items-end">
+      <div class="col-md-3"><label class="form-label">TRM</label><input class="form-control" type="number" min="1" step="0.01" name="trm" value="{{ s.trm }}" required></div>
+      <div class="col-md-3"><label class="form-label">Factor de importación</label><input class="form-control" value="1,20" disabled><div class="small text-secondary">Fijo para THK.</div></div>
+      <div class="col-md-3"><label class="form-label">Incremento rieles 1 y 2 m (%)</label><input class="form-control" type="number" min="0" max="200" step="0.1" name="rail_increment_percent" value="{{ s.rail_increment_percent }}" required></div>
+      <div class="col-md-2"><label class="form-label">Redondear a</label><select class="form-select" name="rounding_increment">{% for value,label in [(1,'Sin redondeo'),(100,'$100'),(1000,'$1.000'),(5000,'$5.000')] %}<option value="{{ value }}" {% if s.rounding_increment == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div class="col-md-1"><button class="btn btn-primary">Aplicar</button></div>
+    </form>
+    <div class="small text-secondary mt-3">Cambiar parámetros o márgenes reinicia las aprobaciones de esta versión.</div>
+    {% else %}
+    <div class="row"><div class="col-md-3"><div class="text-secondary">TRM</div><strong>{{ '{:,.2f}'.format(s.trm) }}</strong></div><div class="col-md-3"><div class="text-secondary">Factor</div><strong>1,20</strong></div><div class="col-md-3"><div class="text-secondary">Incremento rieles</div><strong>{{ s.rail_increment_percent }}%</strong></div><div class="col-md-3"><a class="btn btn-success" href="{{ url_for('stock_planning.export_thk_pricing_it', scenario_id=s.id) }}">Exportar para IT</a></div></div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card mb-4" id="rules">
+  <div class="card-header"><div><h3 class="card-title">Márgenes brutos por tipo y serie</h3><div class="text-secondary">Valores iniciales inferidos de los precios actuales.</div></div></div>
+  <div class="table-responsive"><table class="table card-table table-sm"><thead><tr><th>Tipo</th><th>Serie</th><th>Margen bruto</th><th>Origen</th><th></th></tr></thead><tbody>
+  {% for rule in d.rules %}<tr><td>{{ rule.product_type|title }}</td><td>{{ rule.series }}</td><td>{% if s.status == 'draft' %}<form method="post" action="{{ url_for('stock_planning.update_thk_pricing_rule', scenario_id=s.id, rule_id=rule.id) }}" class="d-flex gap-2"><div class="input-group input-group-sm" style="max-width:150px"><input class="form-control" type="number" min="0" max="99.9" step="0.1" name="gross_margin_percent" value="{{ rule.gross_margin_percent }}"><span class="input-group-text">%</span></div><button class="btn btn-sm">Guardar</button></form>{% else %}<strong>{{ rule.gross_margin_percent }}%</strong>{% endif %}</td><td>{{ 'Modificado' if rule.rule_source == 'manual' else 'Inferido' }}</td><td></td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+
+<section class="card" id="results">
+  <div class="card-header"><div><h3 class="card-title">Resultados por referencia</h3><div class="text-secondary">Precio = FOB ajustado × 1,20 × TRM ÷ (1 − margen bruto).</div></div></div>
+  <div class="card-body border-bottom py-3"><div class="row g-2"><div class="col-md-5"><input id="price-search" class="form-control" placeholder="Buscar referencia o descripción"></div><div class="col-md-3"><select id="type-filter" class="form-select"><option value="">Todos los tipos</option>{% for type in ['BLOQUE','RIEL','RODAMIENTO','CHUMACERA','GRASA','OTRO'] %}<option>{{ type }}</option>{% endfor %}</select></div>{% if s.status == 'draft' %}<div class="col-md-4"><button type="button" class="btn" id="select-visible">Seleccionar visibles</button></div>{% endif %}</div></div>
+  <form method="post" action="{{ url_for('stock_planning.approve_thk_pricing_lines', scenario_id=s.id) }}">
+    {% if s.status == 'draft' %}<div class="card-body border-bottom py-2"><button class="btn btn-primary">Aprobar referencias seleccionadas</button></div>{% endif %}
+    <div class="table-responsive" style="max-height:680px"><table class="table card-table table-sm table-vcenter"><thead class="sticky-top bg-white"><tr><th></th><th>Referencia</th><th>Clasificación</th><th>FOB</th><th>Lista 1 actual</th><th>Margen</th><th>Precio calculado</th><th>Variación</th><th>Estado</th></tr></thead><tbody>
+    {% for line in d.lines %}
+      <tr class="price-row" data-search="{{ (line.internal_sku ~ ' ' ~ (line.product_name or ''))|lower }}" data-type="{{ line.product_type }}">
+        <td>{% if s.status == 'draft' and line.calculated_price_cop is not none %}<input class="form-check-input price-check" type="checkbox" name="skus" value="{{ line.internal_sku }}">{% endif %}</td>
+        <td><strong>{{ line.internal_sku }}</strong><div class="small text-secondary">{{ line.product_name or '' }}</div></td>
+        <td>{{ line.product_type|title }} · {{ line.series }}{% if line.length_mm %}<div class="small text-secondary">{{ line.length_mm / 1000 }} m{% if line.rail_increment_applied %} · +{{ line.rail_increment_applied }}%{% endif %}</div>{% endif %}</td>
+        <td>{% if line.fob_usd is not none %}USD {{ '{:,.2f}'.format(line.fob_usd) }}{% else %}<span class="text-red">Sin FOB</span>{% endif %}{% if line.adjusted_fob_usd != line.fob_usd %}<div class="small text-secondary">Ajustado: {{ '{:,.2f}'.format(line.adjusted_fob_usd) }}</div>{% endif %}</td>
+        <td>{% if line.list_price_cop is not none %}COP {{ '{:,.0f}'.format(line.list_price_cop) }}{% else %}<span class="badge bg-yellow-lt">Sin precio</span>{% endif %}</td>
+        <td>{{ line.gross_margin_percent }}%</td>
+        <td>{% if line.calculated_price_cop is not none %}<strong>COP {{ '{:,.0f}'.format(line.calculated_price_cop) }}</strong>{% else %}—{% endif %}</td>
+        <td>{% if line.variance_percent is not none %}<span class="{% if line.variance_percent > 0 %}text-red{% else %}text-green{% endif %}">{{ '%+.1f'|format(line.variance_percent) }}%</span><div class="small text-secondary">COP {{ '{:+,.0f}'.format(line.variance_amount) }}</div>{% else %}—{% endif %}</td>
+        <td>{% if line.decision %}<span class="badge bg-green-lt">Aprobado</span>{% elif line.calculated_price_cop is none %}<span class="badge bg-red-lt">No calculable</span>{% elif line.variance_percent is not none and line.variance_percent|abs >= 20 %}<span class="badge bg-red-lt">Cambio importante</span>{% else %}<span class="badge bg-secondary-lt">Pendiente</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  </form>
+  {% if s.status == 'draft' and d.summary.approved %}<div class="card-footer"><form method="post" action="{{ url_for('stock_planning.close_thk_pricing', scenario_id=s.id) }}" onsubmit="return confirm('Esta versión quedará bloqueada y lista para exportar a IT. ¿Continuar?')"><button class="btn btn-success">Cerrar versión con {{ d.summary.approved }} precios aprobados</button></form></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+const search = document.getElementById('price-search');
+const typeFilter = document.getElementById('type-filter');
+function filterPrices() {
+  const term = (search?.value || '').toLowerCase();
+  const type = typeFilter?.value || '';
+  document.querySelectorAll('.price-row').forEach(function (row) {
+    row.hidden = !row.dataset.search.includes(term) || (type && row.dataset.type !== type);
+  });
+}
+search?.addEventListener('input', filterPrices);
+typeFilter?.addEventListener('change', filterPrices);
+document.getElementById('select-visible')?.addEventListener('click', function () {
+  document.querySelectorAll('.price-row:not([hidden]) .price-check').forEach(function (box) { box.checked = true; });
+});
+</script>
+{% endblock %}
