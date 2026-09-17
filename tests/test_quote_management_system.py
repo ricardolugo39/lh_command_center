@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytest
 
+from app import create_app
 from app.database.migrations import upgrade
 from app.workspace.repositories.quote_management_repository import QuoteManagementRepository
 from app.workspace.repositories.rfq_repository import RFQRepository
@@ -406,6 +407,49 @@ def test_profitability_applies_only_to_fob_not_pass_through_costs(
     assert Decimal(quote["landed_cost_usd"]) == Decimal("1065.21")
     assert Decimal(quote["profit_usd"]) == Decimal("180.49")
     assert Decimal(result["lines"][0]["shipping"]) == Decimal("700.00")
+
+
+def test_btk_free_divisor_prices_product_then_adds_pass_through_costs(
+    quote_database,
+):
+    quote_id = QuoteManagementService.create_from_rfq(_rfq(), 1)
+    line = QuoteManagementRepository.lines(quote_id)[0]
+    with sqlite3.connect(quote_database) as connection:
+        connection.execute(
+            "UPDATE ws_quote_lines SET quantity=4 WHERE id=?", (line["id"],)
+        )
+    QuoteManagementService.save_workspace(
+        quote_id,
+        {"manual_shipping_usd": "267.37"},
+        [{
+            "id": line["id"], "vendor_fob_unit_usd": "331",
+            "unit_weight_kg": "1", "lead_time": "4-6 semanas",
+            "product_type": "FREE", "pricing_override_value": "0.70",
+        }],
+        1,
+    )
+    result = QuoteManagementService.calculate(quote_id)
+    quote = result["quote"]
+    assert Decimal(result["lines"][0]["selling_unit"]) == Decimal("641.77")
+    assert Decimal(str(quote["amount"])) == Decimal("2567.08")
+    assert Decimal(quote["landed_cost_usd"]) == Decimal("1886.17")
+    assert Decimal(quote["profit_usd"]) == Decimal("680.91")
+    assert Decimal(quote["margin_percent"]) == Decimal("26.52")
+    assert Decimal(quote["roi_percent"]) == Decimal("36.10")
+    page = QuoteManagementService.workspace(quote_id)
+    assert page["cost_breakdown"]["vendor_fob"] == Decimal("1324.00")
+    assert page["cost_breakdown"]["fob_cost"] == Decimal("264.80")
+    assert page["cost_breakdown"]["adjusted_fob"] == Decimal("1588.80")
+    assert page["cost_breakdown"]["product_margin_percent"] == Decimal("30.00")
+    application = create_app({
+        "TESTING": True, "TEST_AUTH_BYPASS": True,
+    }, run_migrations=False)
+    response = application.test_client().get(f"/quotes/{quote_id}")
+    assert response.status_code == 200
+    assert b"Margen producto" in response.data
+    assert b"Margen real operaci" in response.data
+    assert b"USD 641.77" in response.data
+    assert b"USD 2567.08" in response.data
 
 
 def test_manual_shipping_does_not_require_dhl_profile_or_origin(

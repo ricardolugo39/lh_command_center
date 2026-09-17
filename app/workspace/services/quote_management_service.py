@@ -18,7 +18,10 @@ from app.workspace.repositories.quote_management_repository import (
     QuoteManagementRepository,
 )
 from app.workspace.repositories.rfq_repository import RFQRepository
-from app.workspace.services.quote_calculation_service import QuoteCalculationService
+from app.workspace.services.quote_calculation_service import (
+    PRODUCT_FACTORS,
+    QuoteCalculationService,
+)
 from app.workspace.services.rfq_service import RFQService
 from app.workspace.repositories.customer_repository import CustomerRepository
 from app.workspace.repositories.contact_repository import ActivityFormRepository
@@ -164,6 +167,32 @@ class QuoteManagementService:
         fob_cost = (vendor_fob * Decimal("0.20")).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
+        product_sales = Decimal("0")
+        for line in lines:
+            product_type = str(line.get("product_type") or "").upper()
+            divisor = (
+                Decimal(str(line.get("pricing_override_value") or 0))
+                if product_type == "FREE"
+                else PRODUCT_FACTORS.get(product_type, Decimal("0"))
+            )
+            line_fob = (
+                Decimal(str(line.get("vendor_fob_unit_usd") or 0))
+                * Decimal(str(line.get("quantity") or 0))
+            )
+            line["pricing_divisor"] = divisor if divisor else None
+            line["product_margin_percent"] = (
+                ((Decimal("1") - divisor) * 100).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                if divisor else None
+            )
+            if divisor:
+                product_sales += line_fob * Decimal("1.20") / divisor
+        product_margin = (
+            ((product_sales - (vendor_fob + fob_cost)) / product_sales * 100)
+            .quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if product_sales else None
+        )
         return {
             "quote": quote,
             "lines": lines,
@@ -171,6 +200,7 @@ class QuoteManagementService:
                 "vendor_fob": vendor_fob,
                 "fob_cost": fob_cost,
                 "adjusted_fob": vendor_fob + fob_cost,
+                "product_margin_percent": product_margin,
             },
             "weight_research": QuoteManagementRepository.latest_weight_research(quote_id),
             "origins": QuoteManagementRepository.origin_options(profile["id"]) if profile else [],
