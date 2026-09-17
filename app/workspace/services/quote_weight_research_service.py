@@ -138,7 +138,31 @@ Responde exclusivamente JSON válido con esta forma:
     @staticmethod
     def _known_family_fallback(brand: str, part_number: str):
         """Audited official formulas used only after the live search has no weight."""
-        if brand.strip().casefold() != "thomson":
+        normalized_brand = brand.strip().casefold()
+        normalized_part = re.sub(r"[^A-Z0-9]", "", part_number.upper())
+        if normalized_brand == "thk" and re.fullmatch(
+            r"SSR20XW1SS(?:GK)?", normalized_part
+        ):
+            weight = Decimal("0.55") * Decimal("0.45359237")
+            return {
+                "unit_weight_kg": str(weight),
+                "match_level": "exact",
+                "calculation_method": "calculated",
+                "explanation": (
+                    "La tienda oficial THK identifica SSR20XW1SS como un bloque "
+                    "SSR20XW con sellos SS y publica 0.55 lb por unidad. "
+                    f"Conversión: 0.55 × 0.45359237 = "
+                    f"{weight.quantize(Decimal('0.001'))} kg/unidad."
+                ),
+                "warning": "Peso del bloque individual; no incluye riel ni empaque.",
+                "sources": [{
+                    "title": "THK SSR20XW1SS block",
+                    "url": "https://store-na.thk.com/Product/ssr20xw1ss-block",
+                    "source_type": "official_manufacturer",
+                    "evidence": "Unit Weight: 0.55 lb; Dust Protection Seal: SS.",
+                }],
+            }
+        if normalized_brand != "thomson":
             return None
         match = re.fullmatch(
             r"LL(?:24|48)B(?:020|040|060)-(\d{4})[A-Z0-9]+",

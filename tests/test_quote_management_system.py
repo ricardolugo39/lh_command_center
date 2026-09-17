@@ -193,6 +193,38 @@ def test_thomson_electrak_ll_uses_audited_family_fallback(monkeypatch):
     assert len(result["sources"]) == 2
 
 
+def test_thk_ssr20xw1ss_uses_official_block_weight_fallback(monkeypatch):
+    monkeypatch.setattr(
+        "app.workspace.services.quote_weight_research_service.resolve_settings",
+        lambda names: ({"OPENAI_API_KEY": "test", "OPENAI_WEIGHT_MODEL": "test-model"}, {}),
+    )
+
+    class EmptyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"output_text": json.dumps({
+                "unit_weight_kg": None, "match_level": "none",
+                "calculation_method": "none", "explanation": None,
+                "warning": None, "sources": [],
+            })}
+
+    monkeypatch.setattr(
+        "app.workspace.services.quote_weight_research_service.requests.post",
+        lambda *args, **kwargs: EmptyResponse(),
+    )
+    result = QuoteWeightResearchService.research_product(
+        "THK", "SSR 20 XW1SS",
+    )
+    assert result["unit_weight_kg"] == "0.249"
+    assert result["match_level"] == "exact"
+    assert result["calculation_method"] == "calculated"
+    assert result["confidence_score"] == 91
+    assert result["sources"][0]["url"].endswith("ssr20xw1ss-block")
+    assert "no incluye riel" in result["warning"]
+
+
 def test_rfq_weight_acceptance_updates_existing_draft_quote(
     quote_database, monkeypatch,
 ):
