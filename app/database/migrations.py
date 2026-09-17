@@ -3866,7 +3866,39 @@ def _migration_0068_email_followups(connection: Connection) -> None:
     ))
 
 
-def _migration_0069_stock_quote_reconciliation(connection: Connection) -> None:
+def _migration_0069_stock_forecast_lab(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0070_stock_forecast_segment_policy(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0071_global_weekly_forecast_lab(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0072_global_forecast_inventory_metrics(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0073_global_forecast_service_frontier(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0074_global_forecast_frontier_cost_source(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0075_global_forecast_portfolio_frontier(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0076_vendor_purchase_order_drafts(connection: Connection) -> None:
+    """Compatibility marker for an already-applied production migration."""
+
+
+def _migration_0077_stock_quote_reconciliation(connection: Connection) -> None:
     """Store vendor quote evidence and auditable line-by-line resolutions."""
     _execute_statements(connection, (
         """CREATE TABLE IF NOT EXISTS stock_planning_vendor_quotes (
@@ -4099,8 +4131,39 @@ MIGRATION_MANIFEST = (
     Migration(67, "advisor_manager_analysis", _migration_0067_advisor_manager_analysis),
     Migration(68, "email_followups", _migration_0068_email_followups),
     Migration(
-        69, "stock_quote_reconciliation",
-        _migration_0069_stock_quote_reconciliation,
+        69, "stock_forecast_lab", _migration_0069_stock_forecast_lab,
+    ),
+    Migration(
+        70, "stock_forecast_segment_policy",
+        _migration_0070_stock_forecast_segment_policy,
+    ),
+    Migration(
+        71, "global_weekly_forecast_lab",
+        _migration_0071_global_weekly_forecast_lab,
+    ),
+    Migration(
+        72, "global_forecast_inventory_metrics",
+        _migration_0072_global_forecast_inventory_metrics,
+    ),
+    Migration(
+        73, "global_forecast_service_frontier",
+        _migration_0073_global_forecast_service_frontier,
+    ),
+    Migration(
+        74, "global_forecast_frontier_cost_source",
+        _migration_0074_global_forecast_frontier_cost_source,
+    ),
+    Migration(
+        75, "global_forecast_portfolio_frontier",
+        _migration_0075_global_forecast_portfolio_frontier,
+    ),
+    Migration(
+        76, "vendor_purchase_order_drafts",
+        _migration_0076_vendor_purchase_order_drafts,
+    ),
+    Migration(
+        77, "stock_quote_reconciliation",
+        _migration_0077_stock_quote_reconciliation,
     ),
 )
 
