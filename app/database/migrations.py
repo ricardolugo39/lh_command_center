@@ -3866,7 +3866,11 @@ def _migration_0068_email_followups(connection: Connection) -> None:
     ))
 
 
-def _migration_0069_stock_quote_reconciliation(connection: Connection) -> None:
+def _migration_0069_stock_forecast_lab(connection: Connection) -> None:
+    """Compatibility marker for the production forecast laboratory schema."""
+
+
+def _migration_0070_stock_quote_reconciliation(connection: Connection) -> None:
     """Store vendor quote evidence and auditable line-by-line resolutions."""
     _execute_statements(connection, (
         """CREATE TABLE IF NOT EXISTS stock_planning_vendor_quotes (
@@ -4099,8 +4103,11 @@ MIGRATION_MANIFEST = (
     Migration(67, "advisor_manager_analysis", _migration_0067_advisor_manager_analysis),
     Migration(68, "email_followups", _migration_0068_email_followups),
     Migration(
-        69, "stock_quote_reconciliation",
-        _migration_0069_stock_quote_reconciliation,
+        69, "stock_forecast_lab", _migration_0069_stock_forecast_lab,
+    ),
+    Migration(
+        70, "stock_quote_reconciliation",
+        _migration_0070_stock_quote_reconciliation,
     ),
 )
 
