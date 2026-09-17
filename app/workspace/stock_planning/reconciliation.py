@@ -297,6 +297,34 @@ class StockQuoteReconciliationService:
             cls._refresh_status(connection, int(line["quote_id"]))
             return int(line["quote_id"])
 
+    @classmethod
+    def resolve_many(
+        cls, snapshot_id: int, quote_line_ids: list[int], resolution: str,
+        resolved_by: str,
+    ) -> tuple[int, int]:
+        unique_ids = list(dict.fromkeys(quote_line_ids))
+        if not unique_ids:
+            raise ValueError("Seleccione al menos una línea pendiente.")
+
+        placeholders = ",".join("?" for _ in unique_ids)
+        with transaction() as connection:
+            rows = connection.execute(
+                f"""SELECT l.id,q.id quote_id
+                FROM stock_planning_vendor_quote_lines l
+                JOIN stock_planning_vendor_quotes q ON q.id=l.vendor_quote_id
+                WHERE q.snapshot_id=? AND l.id IN ({placeholders})""",
+                (snapshot_id, *unique_ids),
+            ).fetchall()
+        if len(rows) != len(unique_ids):
+            raise ValueError("Una de las líneas seleccionadas ya no está disponible.")
+        quote_ids = {int(row["quote_id"]) for row in rows}
+        if len(quote_ids) != 1:
+            raise ValueError("Seleccione líneas de una sola cotización.")
+
+        for line_id in unique_ids:
+            cls.resolve(snapshot_id, line_id, resolution, resolved_by)
+        return quote_ids.pop(), len(unique_ids)
+
     @staticmethod
     def _refresh_status(connection, quote_id: int) -> None:
         unresolved = connection.execute(

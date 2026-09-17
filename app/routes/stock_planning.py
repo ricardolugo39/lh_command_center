@@ -357,6 +357,27 @@ def resolve_vendor_quote_line(snapshot_id: int, line_id: int):
     ))
 
 
+@stock_planning_bp.post(
+    "/snapshots/<int:snapshot_id>/vendor-quotes/lines/bulk"
+)
+@roles_required("administrator")
+def resolve_vendor_quote_lines_bulk(snapshot_id: int):
+    quote_id = request.form.get("quote_id", type=int)
+    try:
+        line_ids = [int(value) for value in request.form.getlist("line_ids")]
+        quote_id, count = StockQuoteReconciliationService.resolve_many(
+            snapshot_id, line_ids, request.form.get("resolution", ""),
+            str(g.current_user["email"]),
+        )
+        message = f"{count} línea(s) aceptadas en grupo."
+    except (TypeError, ValueError) as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.vendor_quote_reconciliation",
+        snapshot_id=snapshot_id, quote_id=quote_id, message=message,
+    ))
+
+
 @stock_planning_bp.get("/replenishment/reports/<int:snapshot_id>")
 @roles_required("administrator")
 def replenishment_report(snapshot_id: int):
