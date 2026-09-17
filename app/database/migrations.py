@@ -3874,11 +3874,7 @@ def _migration_0070_stock_forecast_segment_policy(connection: Connection) -> Non
     """Compatibility marker for the production forecast segment policy."""
 
 
-def _migration_0071_global_weekly_forecast_lab(connection: Connection) -> None:
-    """Compatibility marker for the production weekly forecast lab."""
-
-
-def _migration_0072_stock_quote_reconciliation(connection: Connection) -> None:
+def _migration_0071_stock_quote_reconciliation(connection: Connection) -> None:
     """Store vendor quote evidence and auditable line-by-line resolutions."""
     _execute_statements(connection, (
         """CREATE TABLE IF NOT EXISTS stock_planning_vendor_quotes (
@@ -4118,12 +4114,8 @@ MIGRATION_MANIFEST = (
         _migration_0070_stock_forecast_segment_policy,
     ),
     Migration(
-        71, "global_weekly_forecast_lab",
-        _migration_0071_global_weekly_forecast_lab,
-    ),
-    Migration(
-        72, "stock_quote_reconciliation",
-        _migration_0072_stock_quote_reconciliation,
+        71, "stock_quote_reconciliation",
+        _migration_0071_stock_quote_reconciliation,
     ),
 )
 
