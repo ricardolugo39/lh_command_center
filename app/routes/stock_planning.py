@@ -13,7 +13,9 @@ from app.workspace.stock_planning.repository import StockPlanningRepository
 from app.workspace.stock_planning.service import StockPlanningFoundationService
 from app.workspace.stock_planning.forecasting import StockForecastEngine
 from app.workspace.stock_planning.decisions import StockPlanningDecisionService
-from app.workspace.stock_planning.exports import MIMETYPE, StockPlanningExportService
+from app.workspace.stock_planning.exports import (
+    MIMETYPE, PDF_MIMETYPE, StockPlanningExportService,
+)
 from app.workspace.stock_planning.replenishment import StockReplenishmentService
 from app.workspace.stock_planning.reconciliation import (
     StockQuoteReconciliationService,
@@ -507,6 +509,26 @@ def export_purchase_order(snapshot_id: int):
             "stock_planning.snapshot", snapshot_id=snapshot_id, message=str(exception)
         ))
     return send_file(stream, mimetype=MIMETYPE, as_attachment=True, download_name=filename)
+
+
+@stock_planning_bp.get(
+    "/snapshots/<int:snapshot_id>/exports/purchase-order-confirmation.pdf"
+)
+@roles_required("administrator")
+def export_purchase_order_confirmation_pdf(snapshot_id: int):
+    try:
+        stream, filename = StockPlanningExportService.purchase_order_confirmation_pdf(
+            snapshot_id
+        )
+    except ValueError as exception:
+        return redirect(url_for(
+            "stock_planning.vendor_quote_reconciliation",
+            snapshot_id=snapshot_id, message=str(exception),
+        ))
+    return send_file(
+        stream, mimetype=PDF_MIMETYPE, as_attachment=True,
+        download_name=filename,
+    )
 
 
 @stock_planning_bp.get("/snapshots/<int:snapshot_id>/exports/transfers.xlsx")

@@ -138,11 +138,32 @@ class StockPlanningDecisionService:
                 ) latest ON latest.latest_id=h.id""",
                 (snapshot_id,),
             ).fetchall()
+            excluded_rows = connection.execute(
+                """SELECT l.internal_sku,q.branch_code
+                FROM stock_planning_vendor_quote_lines l
+                JOIN stock_planning_vendor_quotes q ON q.id=l.vendor_quote_id
+                JOIN (
+                    SELECT l2.internal_sku,q2.branch_code,MAX(q2.id) latest_quote_id
+                    FROM stock_planning_vendor_quote_lines l2
+                    JOIN stock_planning_vendor_quotes q2
+                        ON q2.id=l2.vendor_quote_id
+                    WHERE q2.snapshot_id=?
+                    GROUP BY l2.internal_sku,q2.branch_code
+                ) latest ON latest.internal_sku=l.internal_sku
+                    AND latest.branch_code=q.branch_code
+                    AND latest.latest_quote_id=q.id
+                WHERE l.excluded=1""",
+                (snapshot_id,),
+            ).fetchall()
         prices = {row["internal_sku"]: float(row["fob_usd"]) for row in price_rows}
         accepted_prices = {
             (row["internal_sku"], str(row["branch_code"])):
                 float(row["accepted_fob_usd"])
             for row in accepted_rows
+        }
+        excluded = {
+            (row["internal_sku"], str(row["branch_code"]))
+            for row in excluded_rows
         }
         for row in forecast["rows"]:
             key = cls.purchase_key(row["sku"], row["branch"])
@@ -152,6 +173,11 @@ class StockPlanningDecisionService:
                 decision["approved_quantity"] if decision
                 else row["recommended_order"]
             )
+            row["excluded_from_vendor_order"] = (
+                row["sku"], str(row["branch"])
+            ) in excluded
+            if row["excluded_from_vendor_order"]:
+                row["final_quantity"] = 0
             row["original_fob_usd"] = prices.get(row["sku"])
             row["fob_usd"] = accepted_prices.get(
                 (row["sku"], str(row["branch"])), row["original_fob_usd"]

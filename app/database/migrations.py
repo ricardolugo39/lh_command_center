@@ -3975,6 +3975,21 @@ def _migration_0077_stock_quote_reconciliation(connection: Connection) -> None:
     ))
 
 
+def _migration_0078_stock_quote_line_exclusions(connection: Connection) -> None:
+    """Keep excluded vendor-quote lines as auditable order decisions."""
+    columns = {
+        row[1] for row in connection.execute(
+            "PRAGMA table_info(stock_planning_vendor_quote_lines)"
+        ).fetchall()
+    }
+    if "excluded" not in columns:
+        connection.execute(
+            """ALTER TABLE stock_planning_vendor_quote_lines
+            ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0
+            CHECK(excluded IN (0,1))"""
+        )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4164,6 +4179,10 @@ MIGRATION_MANIFEST = (
     Migration(
         77, "stock_quote_reconciliation",
         _migration_0077_stock_quote_reconciliation,
+    ),
+    Migration(
+        78, "stock_quote_line_exclusions",
+        _migration_0078_stock_quote_line_exclusions,
     ),
 )
 

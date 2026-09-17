@@ -235,10 +235,18 @@ class StockQuoteReconciliationService:
                 WHERE vendor_quote_id=? ORDER BY line_number""",
                 (selected["id"],),
             ).fetchall()]
-        unresolved = sum(row["resolution"] is None for row in lines)
+        unresolved = sum(
+            row["resolution"] is None and not row.get("excluded") for row in lines
+        )
+        latest_by_branch = {}
+        for quote in quotes:
+            latest_by_branch.setdefault(str(quote["branch_code"]), quote)
         return {
             "quotes": quotes, "quote": selected, "lines": lines,
             "unresolved": unresolved,
+            "all_ready": bool(latest_by_branch) and all(
+                row["status"] == "ready" for row in latest_by_branch.values()
+            ),
             "platform_total": sum(
                 (row["platform_unit_price"] or 0) * row["ordered_quantity"]
                 for row in lines
@@ -253,7 +261,10 @@ class StockQuoteReconciliationService:
         cls, snapshot_id: int, quote_line_id: int, resolution: str,
         resolved_by: str, note: str = "",
     ) -> int:
-        allowed = {"accept_quote", "keep_platform", "request_clarification"}
+        allowed = {
+            "accept_quote", "keep_platform", "request_clarification",
+            "exclude_order",
+        }
         if resolution not in allowed:
             raise ValueError("Seleccione una resolución válida.")
         with transaction(write=True) as connection:
@@ -266,11 +277,16 @@ class StockQuoteReconciliationService:
             ).fetchone()
             if not line:
                 raise ValueError("La línea de conciliación no existe.")
+            excluded = resolution == "exclude_order"
+            stored_resolution = None if excluded else resolution
             connection.execute(
                 """UPDATE stock_planning_vendor_quote_lines
-                SET resolution=?,resolution_note=?,resolved_by=?,
+                SET resolution=?,excluded=?,resolution_note=?,resolved_by=?,
                     resolved_at=CURRENT_TIMESTAMP WHERE id=?""",
-                (resolution, note or None, resolved_by, quote_line_id),
+                (
+                    stored_resolution, int(excluded), note or None,
+                    resolved_by, quote_line_id,
+                ),
             )
             if resolution == "accept_quote":
                 connection.execute(
@@ -329,7 +345,8 @@ class StockQuoteReconciliationService:
     def _refresh_status(connection, quote_id: int) -> None:
         unresolved = connection.execute(
             """SELECT COUNT(*) FROM stock_planning_vendor_quote_lines
-            WHERE vendor_quote_id=? AND resolution IS NULL""", (quote_id,),
+            WHERE vendor_quote_id=? AND resolution IS NULL AND excluded=0""",
+            (quote_id,),
         ).fetchone()[0]
         clarification = connection.execute(
             """SELECT COUNT(*) FROM stock_planning_vendor_quote_lines

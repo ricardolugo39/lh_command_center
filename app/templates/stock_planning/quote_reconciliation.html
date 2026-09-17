@@ -73,6 +73,16 @@
     {% endif %}
   </div>
 
+  <div class="card-body border-bottom py-3 d-flex flex-wrap gap-2 align-items-center">
+    {% if r.all_ready %}
+    <a class="btn btn-success" href="{{ url_for('stock_planning.export_purchase_order_confirmation_pdf', snapshot_id=page.snapshot.id) }}">Descargar confirmación PDF</a>
+    <span class="small text-secondary">Incluye Bogotá y Cali en secciones separadas.</span>
+    {% else %}
+    <button class="btn btn-success" disabled>Descargar confirmación PDF</button>
+    <span class="small text-secondary">Se habilita cuando todas las cotizaciones estén listas para confirmar.</span>
+    {% endif %}
+  </div>
+
   {% if r.unresolved %}
   <div class="card-body border-bottom py-3">
     <form id="bulk-resolution" method="post" action="{{ url_for('stock_planning.resolve_vendor_quote_lines_bulk', snapshot_id=page.snapshot.id) }}" class="d-flex flex-wrap gap-2 align-items-center">
@@ -92,7 +102,7 @@
         {% for line in r.lines %}
         <tr id="line-{{ line.id }}">
           <td>
-            {% if line.comparison_status != 'matched' and not line.resolution %}
+            {% if line.comparison_status != 'matched' and not line.resolution and not line.excluded %}
             <input class="form-check-input pending-line" type="checkbox" name="line_ids" value="{{ line.id }}" form="bulk-resolution" aria-label="Seleccionar {{ line.internal_sku }}">
             {% endif %}
           </td>
@@ -105,7 +115,10 @@
           <td><strong>USD {{ '{:,.2f}'.format(line.quoted_unit_price) }}</strong></td>
           <td>{% if line.variance_amount is not none %}<span class="{% if line.variance_amount > 0 %}text-red{% elif line.variance_amount < 0 %}text-green{% endif %}">{{ '%+.2f'|format(line.variance_percent) }}%</span>{% else %}—{% endif %}</td>
           <td>
-            {% if line.comparison_status == 'matched' %}
+            {% if line.excluded %}
+            <span class="badge bg-secondary-lt">Excluida del pedido</span>
+            <div class="small text-secondary mt-1">No se incluirá en cantidades, totales ni exportaciones.</div>
+            {% elif line.comparison_status == 'matched' %}
             <span class="badge bg-green-lt">Coincide</span>
             {% elif line.comparison_status == 'price_change' %}
             <span class="badge bg-yellow-lt">Cambio de precio</span>
@@ -122,8 +135,15 @@
             {% endif %}
           </td>
           <td>
-            {% if line.comparison_status == 'matched' %}
-            <span class="text-green">Aceptada automáticamente</span>
+            {% if line.comparison_status == 'matched' and not line.excluded %}
+            <div class="d-flex gap-2 align-items-center">
+              <span class="text-green">Aceptada automáticamente</span>
+              <form method="post" action="{{ url_for('stock_planning.resolve_vendor_quote_line', snapshot_id=page.snapshot.id, line_id=line.id) }}">
+                <input type="hidden" name="quote_id" value="{{ r.quote.id }}">
+                <input type="hidden" name="resolution" value="exclude_order">
+                <button class="btn btn-sm btn-outline-secondary">Excluir del pedido</button>
+              </form>
+            </div>
             {% else %}
             <form method="post" action="{{ url_for('stock_planning.resolve_vendor_quote_line', snapshot_id=page.snapshot.id, line_id=line.id) }}" class="d-flex gap-1">
               <input type="hidden" name="quote_id" value="{{ r.quote.id }}">
@@ -132,6 +152,7 @@
                 <option value="accept_quote" {% if line.resolution == 'accept_quote' %}selected{% endif %}>Aceptar cotización</option>
                 <option value="keep_platform" {% if line.resolution == 'keep_platform' %}selected{% endif %}>Conservar precio anterior</option>
                 <option value="request_clarification" {% if line.resolution == 'request_clarification' %}selected{% endif %}>Pedir aclaración</option>
+                <option value="exclude_order" {% if line.excluded %}selected{% endif %}>Excluir del pedido</option>
               </select>
               <button class="btn btn-sm">Guardar</button>
             </form>
