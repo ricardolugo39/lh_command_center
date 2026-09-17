@@ -126,7 +126,23 @@ class BrandPricingService:
                     WHERE scenario_id=?""", (scenario_id,),
                 ).fetchall()
             }
-        lines = cls._calculate(dict(scenario), rules, products, decisions)
+            accepted_quotes = [dict(row) for row in connection.execute(
+                """SELECT h.internal_sku,h.branch_code,h.accepted_fob_usd,
+                    h.accepted_at
+                FROM stock_planning_quote_price_history h
+                JOIN (
+                    SELECT internal_sku,branch_code,MAX(id) latest_id
+                    FROM stock_planning_quote_price_history
+                    WHERE snapshot_id=? GROUP BY internal_sku,branch_code
+                ) latest ON latest.latest_id=h.id""",
+                (scenario["source_snapshot_id"],),
+            ).fetchall()]
+        quote_prices: dict[str, list[dict[str, Any]]] = {}
+        for row in accepted_quotes:
+            quote_prices.setdefault(row["internal_sku"], []).append(row)
+        lines = cls._calculate(
+            dict(scenario), rules, products, decisions, quote_prices
+        )
         eligible = [line for line in lines if line["calculated_price_cop"] is not None]
         return {
             "scenario": dict(scenario), "rules": rules, "lines": lines,
@@ -191,7 +207,10 @@ class BrandPricingService:
     @classmethod
     def approve_many(
         cls, scenario_id: int, skus: list[str], decided_by: str,
+        price_choice: str = "calculated",
     ) -> int:
+        if price_choice not in {"calculated", "current"}:
+            raise ValueError("Seleccione una decisión de precio válida.")
         selected = {sku.strip() for sku in skus if sku.strip()}
         if not selected:
             raise ValueError("Seleccione al menos una referencia.")
@@ -201,7 +220,11 @@ class BrandPricingService:
         lines = [
             line for line in detail["lines"]
             if line["internal_sku"] in selected
-            and line["calculated_price_cop"] is not None
+            and (
+                line["calculated_price_cop"] is not None
+                if price_choice == "calculated"
+                else line["list_price_cop"] is not None
+            )
         ]
         if len(lines) != len(selected):
             raise ValueError("Alguna referencia seleccionada no puede calcularse.")
@@ -209,18 +232,24 @@ class BrandPricingService:
             connection.executemany(
                 """INSERT INTO brand_pricing_line_decisions (
                     scenario_id,internal_sku,approved_price_cop,
-                    calculated_price_cop,decision_status,decided_by
-                ) VALUES (?,?,?,?, 'approved', ?)
+                    calculated_price_cop,decision_status,decided_by,price_choice
+                ) VALUES (?,?,?,?, 'approved', ?,?)
                 ON CONFLICT(scenario_id,internal_sku) DO UPDATE SET
                     approved_price_cop=excluded.approved_price_cop,
                     calculated_price_cop=excluded.calculated_price_cop,
                     decision_status='approved',decided_by=excluded.decided_by,
-                    decided_at=CURRENT_TIMESTAMP""",
+                    decided_at=CURRENT_TIMESTAMP,
+                    price_choice=excluded.price_choice""",
                 [
                     (
                         scenario_id, line["internal_sku"],
-                        line["calculated_price_cop"], line["calculated_price_cop"],
-                        decided_by,
+                        (
+                            line["calculated_price_cop"]
+                            if price_choice == "calculated"
+                            else line["list_price_cop"]
+                        ),
+                        line["calculated_price_cop"] or 0,
+                        decided_by, price_choice,
                     )
                     for line in lines
                 ],
@@ -229,21 +258,26 @@ class BrandPricingService:
 
     @classmethod
     def close(cls, scenario_id: int) -> int:
+        detail = cls.detail(scenario_id)
+        valid_skus = [
+            line["internal_sku"] for line in detail["lines"] if line["decision"]
+        ]
+        if not valid_skus:
+            raise ValueError("Apruebe al menos una referencia antes de cerrar.")
         with transaction(write=True) as connection:
             cls._require_draft(connection, scenario_id)
-            count = connection.execute(
-                """SELECT COUNT(*) FROM brand_pricing_line_decisions
-                WHERE scenario_id=? AND decision_status='approved'""",
-                (scenario_id,),
-            ).fetchone()[0]
-            if not count:
-                raise ValueError("Apruebe al menos una referencia antes de cerrar.")
+            placeholders = ",".join("?" for _ in valid_skus)
+            connection.execute(
+                f"""DELETE FROM brand_pricing_line_decisions
+                WHERE scenario_id=? AND internal_sku NOT IN ({placeholders})""",
+                (scenario_id, *valid_skus),
+            )
             connection.execute(
                 """UPDATE brand_pricing_scenarios
                 SET status='approved',updated_at=CURRENT_TIMESTAMP WHERE id=?""",
                 (scenario_id,),
             )
-        return int(count)
+        return len(valid_skus)
 
     @staticmethod
     def _require_draft(connection, scenario_id: int) -> None:
@@ -257,7 +291,7 @@ class BrandPricingService:
             raise ValueError("El análisis está cerrado y es de solo lectura.")
 
     @classmethod
-    def _calculate(cls, scenario, rules, products, decisions):
+    def _calculate(cls, scenario, rules, products, decisions, quote_prices):
         rule_map = {
             (row["product_type"], row["series"]):
                 float(row["gross_margin_percent"])
@@ -267,8 +301,16 @@ class BrandPricingService:
         for product in products:
             product_type, series = cls._classification(product)
             length, rail_key = cls._rail_identity(product["internal_sku"])
-            if product_type == "RIEL" and length == 3000 and product.get("fob_usd"):
-                rail_bases[rail_key] = float(product["fob_usd"])
+            quote_rows = quote_prices.get(product["internal_sku"], [])
+            quote_values = [float(row["accepted_fob_usd"]) for row in quote_rows]
+            quote_base = (
+                quote_values[-1]
+                if quote_values and max(quote_values) - min(quote_values) <= .005
+                else None
+            )
+            base_fob = quote_base or product.get("fob_usd")
+            if product_type == "RIEL" and length == 3000 and base_fob:
+                rail_bases[rail_key] = float(base_fob)
 
         lines = []
         for product in products:
@@ -277,7 +319,23 @@ class BrandPricingService:
                 (product_type, series),
                 rule_map.get((product_type, "GENERAL"), rule_map.get(("OTRO", "GENERAL"))),
             )
-            fob = float(product["fob_usd"]) if product.get("fob_usd") is not None else None
+            erp_fob = (
+                float(product["fob_usd"])
+                if product.get("fob_usd") is not None else None
+            )
+            quote_rows = quote_prices.get(product["internal_sku"], [])
+            quoted_values = [float(row["accepted_fob_usd"]) for row in quote_rows]
+            quote_conflict = bool(quoted_values) and (
+                max(quoted_values) - min(quoted_values) > .005
+            )
+            quote_fob = quoted_values[-1] if quoted_values and not quote_conflict else None
+            quote_accepted_at = max(
+                (str(row["accepted_at"]) for row in quote_rows), default=None
+            )
+            fob = (
+                None if quote_conflict
+                else quote_fob if quote_fob is not None else erp_fob
+            )
             adjusted_fob = fob
             length, rail_key = cls._rail_identity(product["internal_sku"])
             rail_increment_applied = 0.0
@@ -300,14 +358,33 @@ class BrandPricingService:
             )
             variance = calculated - current if calculated is not None and current else None
             variance_percent = variance / current * 100 if variance is not None else None
+            decision = decisions.get(product["internal_sku"])
+            if (
+                decision and quote_accepted_at
+                and str(decision["decided_at"]) < quote_accepted_at
+            ):
+                decision = None
             lines.append({
                 **product, "product_type": product_type, "series": series,
                 "length_mm": length, "gross_margin_percent": margin,
+                "erp_fob_usd": erp_fob, "quote_fob_usd": quote_fob,
+                "quote_fob_conflict": quote_conflict,
+                "quote_accepted_at": quote_accepted_at,
+                "effective_fob_source": (
+                    "vendor_quote" if quote_fob is not None else "erp"
+                ),
                 "adjusted_fob_usd": adjusted_fob,
                 "rail_increment_applied": rail_increment_applied,
                 "list_price_cop": current, "calculated_price_cop": calculated,
                 "variance_amount": variance, "variance_percent": variance_percent,
-                "decision": decisions.get(product["internal_sku"]),
+                "current_sales_factor": (
+                    current / erp_fob if current is not None and erp_fob else None
+                ),
+                "proposed_sales_factor": (
+                    calculated / adjusted_fob
+                    if calculated is not None and adjusted_fob else None
+                ),
+                "decision": decision,
             })
         return lines
 

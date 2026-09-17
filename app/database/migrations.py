@@ -4079,6 +4079,21 @@ def _migration_0080_brand_pricing_analysis(connection: Connection) -> None:
     ))
 
 
+def _migration_0081_brand_pricing_decision_choice(connection: Connection) -> None:
+    """Distinguish calculated prices from decisions to keep the current list."""
+    columns = {
+        row[1] for row in connection.execute(
+            "PRAGMA table_info(brand_pricing_line_decisions)"
+        ).fetchall()
+    }
+    if "price_choice" not in columns:
+        connection.execute(
+            """ALTER TABLE brand_pricing_line_decisions
+            ADD COLUMN price_choice TEXT NOT NULL DEFAULT 'calculated'
+            CHECK(price_choice IN ('calculated','current'))"""
+        )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4280,6 +4295,10 @@ MIGRATION_MANIFEST = (
     Migration(
         80, "brand_pricing_analysis",
         _migration_0080_brand_pricing_analysis,
+    ),
+    Migration(
+        81, "brand_pricing_decision_choice",
+        _migration_0081_brand_pricing_decision_choice,
     ),
 )
 

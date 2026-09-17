@@ -43,6 +43,7 @@ class StockPlanningExportService:
                 """SELECT internal_sku,approved_price_cop
                 FROM brand_pricing_line_decisions
                 WHERE scenario_id=? AND decision_status='approved'
+                  AND price_choice='calculated'
                 ORDER BY internal_sku""", (scenario_id,),
             ).fetchall()
         if not decisions:

@@ -104,8 +104,13 @@ def approve_thk_pricing_lines(scenario_id: int):
         count = BrandPricingService.approve_many(
             scenario_id, request.form.getlist("skus"),
             str(g.current_user["email"]),
+            request.form.get("price_choice", "calculated"),
         )
-        message = f"{count} precio(s) aprobados."
+        message = (
+            f"{count} referencia(s) conservarán el precio actual."
+            if request.form.get("price_choice") == "current"
+            else f"{count} precio(s) propuestos aprobados."
+        )
     except ValueError as exception:
         message = str(exception)
     return redirect(url_for(

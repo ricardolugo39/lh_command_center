@@ -71,21 +71,23 @@
 
 <section class="card" id="results">
   <div class="card-header"><div><h3 class="card-title">Resultados por referencia</h3><div class="text-secondary">Precio = FOB ajustado × 1,20 × TRM ÷ (1 − margen bruto).</div></div></div>
-  <div class="card-body border-bottom py-3"><div class="row g-2"><div class="col-md-5"><input id="price-search" class="form-control" placeholder="Buscar referencia o descripción"></div><div class="col-md-3"><select id="type-filter" class="form-select"><option value="">Todos los tipos</option>{% for type in ['BLOQUE','RIEL','RODAMIENTO','CHUMACERA','GRASA','OTRO'] %}<option>{{ type }}</option>{% endfor %}</select></div>{% if s.status == 'draft' %}<div class="col-md-4"><button type="button" class="btn" id="select-visible">Seleccionar visibles</button></div>{% endif %}</div></div>
+  <div class="card-body border-bottom py-3"><div class="row g-2"><div class="col-md-4"><input id="price-search" class="form-control" placeholder="Buscar referencia o descripción"></div><div class="col-md-3"><select id="type-filter" class="form-select"><option value="">Todos los tipos</option>{% for type in ['BLOQUE','RIEL','RODAMIENTO','CHUMACERA','GRASA','OTRO'] %}<option>{{ type }}</option>{% endfor %}</select></div><div class="col-md-3"><select id="state-filter" class="form-select"><option value="">Todos los estados</option><option value="pending">Pendiente</option><option value="important">Cambio importante</option><option value="approved">Propuesta aprobada</option><option value="kept">Precio actual conservado</option><option value="missing">Sin Precio Lista</option><option value="uncalculable">No calculable</option></select></div>{% if s.status == 'draft' %}<div class="col-md-2"><button type="button" class="btn w-100" id="select-visible">Seleccionar visibles</button></div>{% endif %}</div></div>
   <form method="post" action="{{ url_for('stock_planning.approve_thk_pricing_lines', scenario_id=s.id) }}">
-    {% if s.status == 'draft' %}<div class="card-body border-bottom py-2"><button class="btn btn-primary">Aprobar referencias seleccionadas</button></div>{% endif %}
-    <div class="table-responsive" style="max-height:680px"><table class="table card-table table-sm table-vcenter"><thead class="sticky-top bg-white"><tr><th></th><th>Referencia</th><th>Clasificación</th><th>FOB</th><th>Lista 1 actual</th><th>Margen</th><th>Precio calculado</th><th>Variación</th><th>Estado</th></tr></thead><tbody>
+    {% if s.status == 'draft' %}<div class="card-body border-bottom py-2 d-flex flex-wrap gap-2"><button class="btn btn-primary" name="price_choice" value="calculated">Aprobar propuesta seleccionada</button><button class="btn" name="price_choice" value="current">Rechazar propuesta y conservar precio actual</button></div>{% endif %}
+    <div class="table-responsive" style="max-height:680px"><table class="table card-table table-sm table-vcenter"><thead class="sticky-top bg-white"><tr><th></th><th>Referencia</th><th>Clasificación</th><th>FOB ERP / cotización</th><th>Lista 1 actual</th><th>Margen</th><th>Precio calculado</th><th>Factor de venta</th><th>Variación</th><th>Estado</th></tr></thead><tbody>
     {% for line in d.lines %}
-      <tr class="price-row" data-search="{{ (line.internal_sku ~ ' ' ~ (line.product_name or ''))|lower }}" data-type="{{ line.product_type }}">
-        <td>{% if s.status == 'draft' and line.calculated_price_cop is not none %}<input class="form-check-input price-check" type="checkbox" name="skus" value="{{ line.internal_sku }}">{% endif %}</td>
+      {% if line.decision and line.decision.price_choice == 'current' %}{% set line_state = 'kept' %}{% elif line.decision %}{% set line_state = 'approved' %}{% elif line.calculated_price_cop is none %}{% set line_state = 'uncalculable' %}{% elif line.list_price_cop is none %}{% set line_state = 'missing' %}{% elif line.variance_percent is not none and line.variance_percent|abs >= 20 %}{% set line_state = 'important' %}{% else %}{% set line_state = 'pending' %}{% endif %}
+      <tr class="price-row" data-search="{{ (line.internal_sku ~ ' ' ~ (line.product_name or ''))|lower }}" data-type="{{ line.product_type }}" data-state="{{ line_state }}">
+        <td>{% if s.status == 'draft' and (line.calculated_price_cop is not none or line.list_price_cop is not none) %}<input class="form-check-input price-check" type="checkbox" name="skus" value="{{ line.internal_sku }}">{% endif %}</td>
         <td><strong>{{ line.internal_sku }}</strong><div class="small text-secondary">{{ line.product_name or '' }}</div></td>
         <td>{{ line.product_type|title }} · {{ line.series }}{% if line.length_mm %}<div class="small text-secondary">{{ line.length_mm / 1000 }} m{% if line.rail_increment_applied %} · +{{ line.rail_increment_applied }}%{% endif %}</div>{% endif %}</td>
-        <td>{% if line.fob_usd is not none %}USD {{ '{:,.2f}'.format(line.fob_usd) }}{% else %}<span class="text-red">Sin FOB</span>{% endif %}{% if line.adjusted_fob_usd != line.fob_usd %}<div class="small text-secondary">Ajustado: {{ '{:,.2f}'.format(line.adjusted_fob_usd) }}</div>{% endif %}</td>
+        <td>{% if line.erp_fob_usd is not none %}<div>ERP: USD {{ '{:,.2f}'.format(line.erp_fob_usd) }}</div>{% else %}<span class="text-red">ERP sin FOB</span>{% endif %}{% if line.quote_fob_conflict %}<div class="small text-red">Cotización con precios distintos por sede</div>{% elif line.quote_fob_usd is not none %}<div class="small text-green">Cotizado: USD {{ '{:,.2f}'.format(line.quote_fob_usd) }}</div>{% endif %}{% if line.adjusted_fob_usd is not none and line.adjusted_fob_usd != line.erp_fob_usd and line.product_type == 'RIEL' %}<div class="small text-secondary">FOB ajustado: {{ '{:,.2f}'.format(line.adjusted_fob_usd) }}</div>{% endif %}</td>
         <td>{% if line.list_price_cop is not none %}COP {{ '{:,.0f}'.format(line.list_price_cop) }}{% else %}<span class="badge bg-yellow-lt">Sin precio</span>{% endif %}</td>
         <td>{{ line.gross_margin_percent }}%</td>
         <td>{% if line.calculated_price_cop is not none %}<strong>COP {{ '{:,.0f}'.format(line.calculated_price_cop) }}</strong>{% else %}—{% endif %}</td>
+        <td>{% if line.current_sales_factor is not none %}<div>Actual: {{ '{:,.0f}'.format(line.current_sales_factor) }}</div>{% endif %}{% if line.proposed_sales_factor is not none %}<div class="small text-primary">Propuesto: {{ '{:,.0f}'.format(line.proposed_sales_factor) }}</div>{% else %}—{% endif %}</td>
         <td>{% if line.variance_percent is not none %}<span class="{% if line.variance_percent > 0 %}text-red{% else %}text-green{% endif %}">{{ '%+.1f'|format(line.variance_percent) }}%</span><div class="small text-secondary">COP {{ '{:+,.0f}'.format(line.variance_amount) }}</div>{% else %}—{% endif %}</td>
-        <td>{% if line.decision %}<span class="badge bg-green-lt">Aprobado</span>{% elif line.calculated_price_cop is none %}<span class="badge bg-red-lt">No calculable</span>{% elif line.variance_percent is not none and line.variance_percent|abs >= 20 %}<span class="badge bg-red-lt">Cambio importante</span>{% else %}<span class="badge bg-secondary-lt">Pendiente</span>{% endif %}</td>
+        <td>{% if line.decision and line.decision.price_choice == 'current' %}<span class="badge bg-blue-lt">Precio actual conservado</span>{% elif line.decision %}<span class="badge bg-green-lt">Propuesta aprobada</span>{% elif line.calculated_price_cop is none %}<span class="badge bg-red-lt">No calculable</span>{% elif line.list_price_cop is none %}<span class="badge bg-yellow-lt">Sin Precio Lista</span>{% elif line.variance_percent is not none and line.variance_percent|abs >= 20 %}<span class="badge bg-red-lt">Cambio importante</span>{% else %}<span class="badge bg-secondary-lt">Pendiente</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody></table></div>
@@ -100,15 +102,18 @@
 <script>
 const search = document.getElementById('price-search');
 const typeFilter = document.getElementById('type-filter');
+const stateFilter = document.getElementById('state-filter');
 function filterPrices() {
   const term = (search?.value || '').toLowerCase();
   const type = typeFilter?.value || '';
+  const state = stateFilter?.value || '';
   document.querySelectorAll('.price-row').forEach(function (row) {
-    row.hidden = !row.dataset.search.includes(term) || (type && row.dataset.type !== type);
+    row.hidden = !row.dataset.search.includes(term) || (type && row.dataset.type !== type) || (state && row.dataset.state !== state);
   });
 }
 search?.addEventListener('input', filterPrices);
 typeFilter?.addEventListener('change', filterPrices);
+stateFilter?.addEventListener('change', filterPrices);
 document.getElementById('select-visible')?.addEventListener('click', function () {
   document.querySelectorAll('.price-row:not([hidden]) .price-check').forEach(function (box) { box.checked = true; });
 });
