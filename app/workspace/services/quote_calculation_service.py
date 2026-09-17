@@ -13,7 +13,6 @@ PRODUCT_FACTORS = {
     "BLOCK": Decimal("0.55"), "BRG": Decimal("0.75"),
     "RAIL": Decimal("0.60"), "REDUCER": Decimal("0.75"),
 }
-DHL_SHIPPING_MULTIPLIER = Decimal("1.4")
 
 
 def money(value: Any) -> Decimal:
@@ -94,7 +93,6 @@ class QuoteCalculationService:
             chargeable = total_weight
             calculated_shipping = None
             final_shipping = money(manual_shipping)
-            shipping_multiplier = Decimal("1")
             final_zone = None
         else:
             profile = QuoteManagementRepository.active_profile()
@@ -111,7 +109,6 @@ class QuoteCalculationService:
             chargeable, calculated_shipping, final_shipping = cls.shipping(
                 profile["id"], total_weight, mapping["zone"], None
             )
-            shipping_multiplier = DHL_SHIPPING_MULTIPLIER
             final_zone = mapping["zone"]
         settings = QuoteManagementRepository.settings()
         customs_applied = total_fob > Decimal("2000") or total_weight > Decimal("50")
@@ -140,12 +137,11 @@ class QuoteCalculationService:
                 factor = PRODUCT_FACTORS.get(product_type)
                 if not factor:
                     raise ValueError(f"Seleccione el tipo de producto en la línea {position + 1}.")
-            # Profitability applies only to adjusted FOB. Calculated DHL
-            # freight has its own commercial factor; other costs pass through.
+            # Profitability applies only to adjusted FOB. Freight, customs,
+            # and bank fees are pass-through costs and must not carry margin.
             selling_unit = money(
                 (decimal_value(line.get("vendor_fob_unit_usd")) * Decimal("1.2") / factor)
-                + (shipping * shipping_multiplier + custom + bank_part)
-                / line["quantity_d"]
+                + (shipping + custom + bank_part) / line["quantity_d"]
             )
             selling_total = money(selling_unit * line["quantity_d"])
             profit = money(selling_total - landed)
