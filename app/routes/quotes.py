@@ -12,6 +12,9 @@ from app.workspace.services.quote_management_service import (
 from app.workspace.services.quote_weight_research_service import (
     QuoteWeightResearchService,
 )
+from app.workspace.services.vendor_purchase_order_service import (
+    VendorPurchaseOrderService,
+)
 from app.workspace.constants.commercial_office import OFFICES
 from app.workspace.repositories.contact_repository import ActivityFormRepository
 
@@ -287,6 +290,38 @@ def outcome(quote_id: int):
     except ValueError as exception:
         return str(exception), 400
     return redirect(url_for("quotes.workspace", quote_id=quote_id))
+
+
+@quotes_bp.post("/<int:quote_id>/vendor-po-draft")
+@roles_required("administrator")
+def vendor_po_draft(quote_id: int):
+    try:
+        VendorPurchaseOrderService.create_draft(
+            quote_id,
+            request.form.get("vendor_request_id", type=int),
+            g.current_user["id"],
+        )
+    except (TypeError, ValueError) as exception:
+        return render_template(
+            "quotes/workspace.html",
+            page=QuoteManagementService.workspace(quote_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("quotes.workspace", quote_id=quote_id, po_draft=1))
+
+
+@quotes_bp.post("/<int:quote_id>/vendor-po-confirm-sent")
+@roles_required("administrator")
+def vendor_po_confirm_sent(quote_id: int):
+    try:
+        VendorPurchaseOrderService.confirm_sent(quote_id, g.current_user["id"])
+    except ValueError as exception:
+        return render_template(
+            "quotes/workspace.html",
+            page=QuoteManagementService.workspace(quote_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("quotes.workspace", quote_id=quote_id, po_sent=1))
 
 
 @quotes_bp.post("/<int:quote_id>/followup")

@@ -42,6 +42,37 @@ class RFQVendorRequestRepository:
         return dict(row) if row else None
 
     @staticmethod
+    def get_for_rfq(rfq_id: int, vendor_request_id: int) -> dict[str, Any] | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                "SELECT * FROM rfq_vendor_requests WHERE rfq_id=? AND id=?",
+                (rfq_id, vendor_request_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def latest_incoming(vendor_request_id: int) -> dict[str, Any] | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """SELECT * FROM rfq_vendor_request_messages
+                WHERE vendor_request_id=? AND direction='incoming'
+                ORDER BY message_at DESC,id DESC LIMIT 1""",
+                (vendor_request_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def list_request_attachments(vendor_request_id: int) -> list[dict[str, Any]]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT a.* FROM rfq_vendor_response_attachments a
+                JOIN rfq_vendor_request_messages m ON m.id=a.vendor_message_id
+                WHERE m.vendor_request_id=? ORDER BY a.created_at,a.id""",
+                (vendor_request_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @staticmethod
     def save_message(vendor_request_id: int, message: dict[str, Any]) -> int:
         with connection_scope() as connection:
             connection.execute(

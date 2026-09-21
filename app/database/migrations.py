@@ -3895,7 +3895,31 @@ def _migration_0075_global_forecast_portfolio_frontier(connection: Connection) -
 
 
 def _migration_0076_vendor_purchase_order_drafts(connection: Connection) -> None:
-    """Compatibility marker for an already-applied production migration."""
+    """Track editable Gmail drafts used to issue ERP purchase orders."""
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS vendor_purchase_order_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_id INTEGER NOT NULL,
+            rfq_id INTEGER NOT NULL,
+            vendor_request_id INTEGER NOT NULL,
+            recipient_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body_text TEXT NOT NULL,
+            provider_draft_id TEXT NOT NULL,
+            provider_message_id TEXT,
+            provider_thread_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft','sent')),
+            prepared_by_user_id INTEGER NOT NULL,
+            confirmed_by_user_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            confirmed_at TEXT,
+            FOREIGN KEY(quote_id) REFERENCES ws_project_quotes(id) ON DELETE CASCADE,
+            FOREIGN KEY(rfq_id) REFERENCES rfqs(id) ON DELETE CASCADE,
+            FOREIGN KEY(vendor_request_id) REFERENCES rfq_vendor_requests(id)
+                ON DELETE RESTRICT
+        )"""
+    )
 
 
 def _migration_0077_stock_quote_reconciliation(connection: Connection) -> None:

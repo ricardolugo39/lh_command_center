@@ -18,6 +18,9 @@ from app.workspace.repositories.quote_management_repository import (
     QuoteManagementRepository,
 )
 from app.workspace.repositories.rfq_repository import RFQRepository
+from app.workspace.repositories.rfq_vendor_request_repository import (
+    RFQVendorRequestRepository,
+)
 from app.workspace.services.quote_calculation_service import (
     PRODUCT_FACTORS,
     QuoteCalculationService,
@@ -193,6 +196,13 @@ class QuoteManagementService:
             .quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             if product_sales else None
         )
+        vendor_requests = (
+            RFQVendorRequestRepository.list_for_rfq(quote["originating_rfq_id"])
+            if quote.get("originating_rfq_id") else []
+        )
+        from app.workspace.services.vendor_purchase_order_service import (
+            VendorPurchaseOrderService,
+        )
         return {
             "quote": quote,
             "lines": lines,
@@ -212,6 +222,8 @@ class QuoteManagementService:
             "delivery": QuoteManagementRepository.latest_delivery(quote_id),
             "followup_emails": QuoteManagementRepository.followup_emails(quote_id),
             "statuses": QUOTE_STATUSES,
+            "vendor_requests": vendor_requests,
+            "purchase_order_draft": VendorPurchaseOrderService.latest(quote_id),
         }
 
     @staticmethod

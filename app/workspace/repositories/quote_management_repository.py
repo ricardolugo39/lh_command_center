@@ -7,6 +7,29 @@ from app.workspace.constants.commercial_office import sql_office_case
 
 class QuoteManagementRepository:
     @staticmethod
+    def record_won_from_purchase_order(quote_id: int, actor: int) -> None:
+        with connection_scope() as connection:
+            connection.execute(
+                """INSERT INTO quote_outcomes(
+                quote_id,outcome,outcome_date,comments,recorded_by_user_id
+                ) VALUES (?,'won',DATE('now'),'PO enviada al proveedor',?)
+                ON CONFLICT(quote_id) DO UPDATE SET outcome='won',
+                outcome_date=excluded.outcome_date,comments=excluded.comments,
+                recorded_by_user_id=excluded.recorded_by_user_id""",
+                (quote_id, actor),
+            )
+            connection.execute(
+                "UPDATE ws_project_quotes SET quote_status='won' WHERE id=?",
+                (quote_id,),
+            )
+            connection.execute(
+                """UPDATE quote_followups SET status='completed',
+                completed_at=CURRENT_TIMESTAMP,response_note='Cotización cerrada: won'
+                WHERE quote_id=? AND status='pending'""",
+                (quote_id,),
+            )
+
+    @staticmethod
     def delete_draft(quote_id: int) -> None:
         with connection_scope() as connection:
             cursor = connection.execute(

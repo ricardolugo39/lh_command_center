@@ -121,6 +121,52 @@ class GmailProvider:
         ).execute()
         return {"message_id": result["id"], "thread_id": result["threadId"]}
 
+    def create_reply_draft(
+        self, *, thread_id: str, sender: str, recipients: list[str],
+        cc: list[str], subject: str, body_text: str, body_html: str,
+        attachments: list[dict] | None = None,
+    ) -> dict:
+        """Create an editable Gmail draft inside an existing vendor thread."""
+        service = self._service()
+        thread = service.users().threads().get(
+            userId="me", id=thread_id, format="full",
+        ).execute()
+        original = (thread.get("messages") or [{}])[-1]
+        headers = {
+            item.get("name", "").casefold(): item.get("value", "")
+            for item in original.get("payload", {}).get("headers", [])
+        }
+        message = EmailMessage()
+        message["From"], message["To"], message["Subject"] = (
+            sender, ", ".join(recipients), subject,
+        )
+        if cc:
+            message["Cc"] = ", ".join(cc)
+        message_id = headers.get("message-id")
+        if message_id:
+            message["In-Reply-To"] = message_id
+            message["References"] = message_id
+        message.set_content(body_text)
+        message.add_alternative(body_html, subtype="html")
+        for attachment in attachments or []:
+            path = Path(attachment["path"])
+            mime = attachment.get("mime_type") or mimetypes.guess_type(path.name)[0]
+            maintype, subtype = (mime or "application/octet-stream").split("/", 1)
+            message.add_attachment(
+                path.read_bytes(), maintype=maintype, subtype=subtype,
+                filename=attachment.get("filename") or path.name,
+            )
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        result = service.users().drafts().create(
+            userId="me", body={"message": {"raw": raw, "threadId": thread_id}},
+        ).execute()
+        draft_message = result.get("message") or {}
+        return {
+            "draft_id": result["id"],
+            "message_id": draft_message.get("id"),
+            "thread_id": draft_message.get("threadId") or thread_id,
+        }
+
     def thread(self, thread_id: str) -> list[dict]:
         service = self._service()
         result = service.users().threads().get(
