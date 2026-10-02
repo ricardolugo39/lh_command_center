@@ -808,6 +808,50 @@ def test_purchase_confirmation_excel_has_requested_columns_and_totals(monkeypatc
     assert sheet["F8"].value == "=SUM(F6:F7)"
 
 
+def test_purchase_confirmation_pdf_uses_vendor_quoted_price(monkeypatch):
+    from pypdf import PdfReader
+
+    page = {
+        "snapshot": {
+            "vendor_name": "THK", "snapshot_key": "SP-TEST",
+            "as_of_date": "2025-07-15",
+        },
+        "products": [{"internal_sku": "HSR 20THK", "vendor_sku": "HSR20"}],
+    }
+    forecast = {"rows": [{
+        "sku": "HSR 20THK", "branch": "1", "final_quantity": 3,
+        "fob_usd": 12.5, "fob_source": "erp",
+    }]}
+    monkeypatch.setattr(
+        StockPlanningExportService, "_data", lambda _: (page, forecast)
+    )
+    monkeypatch.setattr(
+        StockPlanningExportService, "_ready_vendor_quotes",
+        staticmethod(lambda _: {"1": {
+            "branch_code": "1", "quote_number": "Q-100",
+            "status": "confirmed",
+        }}),
+    )
+    monkeypatch.setattr(
+        StockPlanningExportService, "_latest_quoted_prices",
+        staticmethod(lambda _: {("HSR 20THK", "1"): 13.25}),
+    )
+    monkeypatch.setattr(
+        StockPlanningExportService, "_latest_vendor_codes",
+        staticmethod(lambda _: {("HSR 20THK", "1"): "HSR20"}),
+    )
+
+    stream, filename = StockPlanningExportService.purchase_order_confirmation_pdf(1)
+    text = "\n".join(
+        page.extract_text() or "" for page in PdfReader(stream).pages
+    )
+
+    assert filename == "confirmacion-pedido-SP-TEST.pdf"
+    assert "13.25" in text
+    assert "39.75" in text
+    assert "12.50" not in text
+
+
 def test_replenishment_uncovered_export_is_shareable(monkeypatch):
     from openpyxl import load_workbook
 

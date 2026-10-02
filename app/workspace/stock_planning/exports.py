@@ -118,23 +118,8 @@ class StockPlanningExportService:
     ) -> tuple[io.BytesIO, str]:
         page, forecast = cls._data(snapshot_id)
         latest_quotes = cls._ready_vendor_quotes(snapshot_id)
-        with transaction(write=False) as connection:
-            vendor_codes = connection.execute(
-                """SELECT l.internal_sku,q.branch_code,l.vendor_sku
-                FROM stock_planning_vendor_quote_lines l
-                JOIN stock_planning_vendor_quotes q ON q.id=l.vendor_quote_id
-                JOIN (
-                    SELECT branch_code,MAX(id) latest_id
-                    FROM stock_planning_vendor_quotes
-                    WHERE snapshot_id=? GROUP BY branch_code
-                ) latest ON latest.latest_id=q.id""",
-                (snapshot_id,),
-            ).fetchall()
-
-        quoted_codes = {
-            (row["internal_sku"], str(row["branch_code"])): row["vendor_sku"]
-            for row in vendor_codes if row["vendor_sku"]
-        }
+        quoted_prices = cls._latest_quoted_prices(snapshot_id)
+        quoted_codes = cls._latest_vendor_codes(snapshot_id)
         product_codes = {
             item["internal_sku"]: item.get("vendor_sku") or item["internal_sku"]
             for item in page["products"]
@@ -144,7 +129,12 @@ class StockPlanningExportService:
             branch = str(item["branch"])
             if branch not in rows_by_branch or item["final_quantity"] <= 0:
                 continue
-            price = item.get("fob_usd")
+            price = quoted_prices.get((item["sku"], branch))
+            if price is None:
+                raise ValueError(
+                    f"La referencia {item['sku']} no tiene un precio FOB en la "
+                    "última cotización cargada para su sede."
+                )
             rows_by_branch[branch].append({
                 "vendor_sku": quoted_codes.get(
                     (item["sku"], branch), product_codes.get(item["sku"], item["sku"])
@@ -399,6 +389,25 @@ class StockPlanningExportService:
                 )
             prices[key] = price
         return prices
+
+    @staticmethod
+    def _latest_vendor_codes(snapshot_id: int) -> dict[tuple[str, str], str]:
+        with transaction(write=False) as connection:
+            rows = connection.execute(
+                """SELECT l.internal_sku,q.branch_code,l.vendor_sku
+                FROM stock_planning_vendor_quote_lines l
+                JOIN stock_planning_vendor_quotes q ON q.id=l.vendor_quote_id
+                JOIN (
+                    SELECT branch_code,MAX(id) latest_id
+                    FROM stock_planning_vendor_quotes
+                    WHERE snapshot_id=? GROUP BY branch_code
+                ) latest ON latest.latest_id=q.id""",
+                (snapshot_id,),
+            ).fetchall()
+        return {
+            (row["internal_sku"], str(row["branch_code"])): row["vendor_sku"]
+            for row in rows if row["vendor_sku"]
+        }
 
     @classmethod
     def replenishment_uncovered(cls, snapshot_id: int) -> tuple[io.BytesIO, str]:
