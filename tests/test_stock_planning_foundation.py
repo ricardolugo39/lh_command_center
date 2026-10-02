@@ -775,7 +775,7 @@ def test_purchase_confirmation_excel_has_requested_columns_and_totals(monkeypatc
         {"sku": "HSR 20THK", "branch": "1", "final_quantity": 3,
          "fob_usd": 12.5, "fob_source": "vendor_quote"},
         {"sku": "SHS 25THK", "branch": "50", "final_quantity": 2,
-         "fob_usd": 20.0, "fob_source": "vendor_quote"},
+         "fob_usd": 20.0, "fob_source": "erp"},
     ]}
     monkeypatch.setattr(
         StockPlanningExportService, "_data", lambda _: (page, forecast)

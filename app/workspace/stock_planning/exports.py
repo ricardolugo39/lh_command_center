@@ -280,10 +280,9 @@ class StockPlanningExportService:
             if quantity <= 0:
                 continue
             unit_price = item.get("fob_usd")
-            if unit_price is None or item.get("fob_source") != "vendor_quote":
+            if unit_price is None:
                 raise ValueError(
-                    f"La referencia {item['sku']} no tiene un precio FOB "
-                    "cotizado por el proveedor."
+                    f"La referencia {item['sku']} no tiene un precio FOB final."
                 )
             rows.append({
                 "Referencia LH": item["sku"],
