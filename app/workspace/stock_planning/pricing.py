@@ -20,6 +20,8 @@ DEFAULT_RULES = (
     ("RODAMIENTO", "GENERAL", 58.0),
     ("CHUMACERA", "GENERAL", 44.0),
     ("GRASA", "GENERAL", 59.0),
+    ("TUERCA DE BOLAS", "GENERAL", 58.0),
+    ("TORNILLO DE BOLAS", "GENERAL", 58.0),
     ("OTRO", "GENERAL", 58.0),
 )
 
@@ -92,7 +94,7 @@ class BrandPricingService:
 
     @classmethod
     def detail(cls, scenario_id: int) -> dict[str, Any]:
-        with transaction(write=False) as connection:
+        with transaction(write=True) as connection:
             scenario = connection.execute(
                 """SELECT s.*,v.vendor_name,v.profile_code,ss.snapshot_key,
                     ss.as_of_date
@@ -104,11 +106,6 @@ class BrandPricingService:
             ).fetchone()
             if not scenario:
                 raise ValueError("El análisis de precios no existe.")
-            rules = [dict(row) for row in connection.execute(
-                """SELECT * FROM brand_pricing_rules
-                WHERE scenario_id=? ORDER BY product_type,series""",
-                (scenario_id,),
-            ).fetchall()]
             products = [dict(row) for row in connection.execute(
                 """SELECT p.internal_sku,p.vendor_sku,p.product_name,
                     f.fob_usd,f.lista1_cop
@@ -118,6 +115,15 @@ class BrandPricingService:
                    AND f.internal_sku=p.internal_sku
                 WHERE p.snapshot_id=? ORDER BY p.internal_sku""",
                 (scenario["source_snapshot_id"],),
+            ).fetchall()]
+            if scenario["status"] == "draft":
+                cls._ensure_ball_screw_rules(
+                    connection, scenario_id, products, scenario["created_by"]
+                )
+            rules = [dict(row) for row in connection.execute(
+                """SELECT * FROM brand_pricing_rules
+                WHERE scenario_id=? ORDER BY product_type,series""",
+                (scenario_id,),
             ).fetchall()]
             decisions = {
                 row["internal_sku"]: dict(row)
@@ -394,7 +400,11 @@ class BrandPricingService:
         name = str(product.get("product_name") or "").upper()
         match = re.match(r"([A-Z]+)", sku)
         series = match.group(1) if match else "OTRO"
-        if "RIEL" in name:
+        if "TUERCA" in name and "BOLA" in name:
+            product_type = "TUERCA DE BOLAS"
+        elif ("TORNILLO" in name or "HUSILLO" in name) and "BOLA" in name:
+            product_type = "TORNILLO DE BOLAS"
+        elif "RIEL" in name:
             product_type = "RIEL"
         elif "CHUMACERA" in name or re.match(r"^(BK|BF|FK|FF)\s?\d", sku):
             product_type = "CHUMACERA"
@@ -407,6 +417,37 @@ class BrandPricingService:
         else:
             product_type = "OTRO"
         return product_type, series
+
+    @classmethod
+    def _ensure_ball_screw_rules(
+        cls, connection, scenario_id: int, products: list[dict[str, Any]],
+        updated_by: str,
+    ) -> None:
+        """Add rules for ball-screw families found in an existing snapshot."""
+        supported_types = {"TUERCA DE BOLAS", "TORNILLO DE BOLAS"}
+        discovered = {
+            cls._classification(product)
+            for product in products
+            if cls._classification(product)[0] in supported_types
+        }
+        general_margins = {
+            product_type: margin
+            for product_type, series, margin in DEFAULT_RULES
+            if series == "GENERAL"
+        }
+        rows = [
+            (scenario_id, product_type, series,
+             general_margins[product_type], "inferred", updated_by)
+            for product_type, series in discovered
+        ]
+        if rows:
+            connection.executemany(
+                """INSERT OR IGNORE INTO brand_pricing_rules (
+                    scenario_id,product_type,series,gross_margin_percent,
+                    rule_source,updated_by
+                ) VALUES (?,?,?,?,?,?)""",
+                rows,
+            )
 
     @staticmethod
     def _rail_identity(sku: str) -> tuple[int | None, str]:

@@ -16,6 +16,17 @@ def test_thk_product_classification_uses_description_and_series():
     }) == ("CHUMACERA", "BK")
 
 
+def test_thk_ball_screw_products_use_distinct_types_and_sku_series():
+    assert BrandPricingService._classification({
+        "internal_sku": "BNK 1510-3THK",
+        "product_name": "TUERCA DE BOLAS",
+    }) == ("TUERCA DE BOLAS", "BNK")
+    assert BrandPricingService._classification({
+        "internal_sku": "SBN 1605-600LTHK",
+        "product_name": "TORNILLO DE BOLAS",
+    }) == ("TORNILLO DE BOLAS", "SBN")
+
+
 def test_rail_identity_matches_equivalent_lengths():
     one_meter = BrandPricingService._rail_identity("HSR 20-1000LTHK")
     three_meter = BrandPricingService._rail_identity("HSR 20-3000LTHK")

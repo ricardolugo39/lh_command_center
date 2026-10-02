@@ -117,13 +117,8 @@ class StockPlanningExportService:
         cls, snapshot_id: int,
     ) -> tuple[io.BytesIO, str]:
         page, forecast = cls._data(snapshot_id)
+        latest_quotes = cls._ready_vendor_quotes(snapshot_id)
         with transaction(write=False) as connection:
-            quotes = [dict(row) for row in connection.execute(
-                """SELECT id,branch_code,quote_number,status
-                FROM stock_planning_vendor_quotes
-                WHERE snapshot_id=? ORDER BY id DESC""",
-                (snapshot_id,),
-            ).fetchall()]
             vendor_codes = connection.execute(
                 """SELECT l.internal_sku,q.branch_code,l.vendor_sku
                 FROM stock_planning_vendor_quote_lines l
@@ -135,18 +130,6 @@ class StockPlanningExportService:
                 ) latest ON latest.latest_id=q.id""",
                 (snapshot_id,),
             ).fetchall()
-        latest_quotes = {}
-        for quote in quotes:
-            latest_quotes.setdefault(str(quote["branch_code"]), quote)
-        if not latest_quotes:
-            raise ValueError("Primero cargue las cotizaciones del proveedor.")
-        if any(
-            row["status"] not in {"ready", "confirmed"}
-            for row in latest_quotes.values()
-        ):
-            raise ValueError(
-                "Resuelva todas las alertas y aclaraciones antes de exportar."
-            )
 
         quoted_codes = {
             (row["internal_sku"], str(row["branch_code"])): row["vendor_sku"]
@@ -282,6 +265,109 @@ class StockPlanningExportService:
         document.build(story, onFirstPage=footer, onLaterPages=footer)
         stream.seek(0)
         return stream, f"confirmacion-pedido-{page['snapshot']['snapshot_key']}.pdf"
+
+    @classmethod
+    def purchase_order_confirmation_xlsx(
+        cls, snapshot_id: int,
+    ) -> tuple[io.BytesIO, str]:
+        page, forecast = cls._data(snapshot_id)
+        cls._ready_vendor_quotes(snapshot_id)
+        rows = []
+        for item in forecast["rows"]:
+            if str(item["branch"]) not in {"1", "50"}:
+                continue
+            quantity = int(item["final_quantity"])
+            if quantity <= 0:
+                continue
+            unit_price = item.get("fob_usd")
+            if unit_price is None or item.get("fob_source") != "vendor_quote":
+                raise ValueError(
+                    f"La referencia {item['sku']} no tiene un precio FOB "
+                    "cotizado por el proveedor."
+                )
+            rows.append({
+                "Referencia LH": item["sku"],
+                "Marca": page["snapshot"]["vendor_name"],
+                "Precio FOB unitario USD": unit_price,
+                "Cantidad": quantity,
+                "Total FOB USD": quantity * float(unit_price),
+            })
+        if not rows:
+            raise ValueError("No hay líneas confirmadas para exportar.")
+
+        stream = io.BytesIO()
+        frame = pd.DataFrame(rows)
+        sheet_name = "Confirmación de pedido"
+        with pd.ExcelWriter(stream, engine="openpyxl") as writer:
+            frame.to_excel(writer, index=False, sheet_name=sheet_name, startrow=4)
+            sheet = writer.book[sheet_name]
+            sheet["A1"] = "Confirmación de orden de compra"
+            sheet["A2"] = f"Proveedor: {page['snapshot']['vendor_name']}"
+            sheet["A3"] = (
+                f"Pedido: {page['snapshot']['snapshot_key']} · "
+                f"Fecha de corte: {page['snapshot']['as_of_date']}"
+            )
+            sheet["A1"].font = __import__("openpyxl").styles.Font(
+                bold=True, size=16, color="1F2937"
+            )
+            sheet.freeze_panes = "A6"
+            last_data_row = 5 + len(frame)
+            total_row = last_data_row + 1
+            sheet.auto_filter.ref = f"A5:E{last_data_row}"
+            for cell in sheet[5]:
+                cell.font = __import__("openpyxl").styles.Font(
+                    bold=True, color="FFFFFF"
+                )
+                cell.fill = __import__("openpyxl").styles.PatternFill(
+                    "solid", fgColor="1F4E78"
+                )
+                cell.alignment = __import__("openpyxl").styles.Alignment(
+                    horizontal="center", vertical="center"
+                )
+            sheet.cell(total_row, 1, "TOTAL")
+            sheet.cell(total_row, 4, f"=SUM(D6:D{last_data_row})")
+            sheet.cell(total_row, 5, f"=SUM(E6:E{last_data_row})")
+            for cell in sheet[total_row]:
+                cell.font = __import__("openpyxl").styles.Font(bold=True)
+                cell.fill = __import__("openpyxl").styles.PatternFill(
+                    "solid", fgColor="D9EAF7"
+                )
+            for row_number in range(6, total_row + 1):
+                sheet.cell(row_number, 3).number_format = 'USD #,##0.00'
+                sheet.cell(row_number, 4).number_format = '#,##0'
+                sheet.cell(row_number, 5).number_format = 'USD #,##0.00'
+            for column, width in {
+                "A": 32, "B": 20, "C": 25, "D": 14, "E": 22,
+            }.items():
+                sheet.column_dimensions[column].width = width
+        stream.seek(0)
+        return (
+            stream,
+            f"confirmacion-pedido-{page['snapshot']['snapshot_key']}.xlsx",
+        )
+
+    @staticmethod
+    def _ready_vendor_quotes(snapshot_id: int) -> dict[str, dict[str, Any]]:
+        with transaction(write=False) as connection:
+            quotes = [dict(row) for row in connection.execute(
+                """SELECT id,branch_code,quote_number,status
+                FROM stock_planning_vendor_quotes
+                WHERE snapshot_id=? ORDER BY id DESC""",
+                (snapshot_id,),
+            ).fetchall()]
+        latest_quotes: dict[str, dict[str, Any]] = {}
+        for quote in quotes:
+            latest_quotes.setdefault(str(quote["branch_code"]), quote)
+        if not latest_quotes:
+            raise ValueError("Primero cargue las cotizaciones del proveedor.")
+        if any(
+            row["status"] not in {"ready", "confirmed"}
+            for row in latest_quotes.values()
+        ):
+            raise ValueError(
+                "Resuelva todas las alertas y aclaraciones antes de exportar."
+            )
+        return latest_quotes
 
     @classmethod
     def replenishment_uncovered(cls, snapshot_id: int) -> tuple[io.BytesIO, str]:

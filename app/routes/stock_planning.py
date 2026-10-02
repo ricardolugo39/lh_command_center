@@ -677,6 +677,26 @@ def export_purchase_order_confirmation_pdf(snapshot_id: int):
 
 
 @stock_planning_bp.get(
+    "/snapshots/<int:snapshot_id>/exports/purchase-order-confirmation.xlsx"
+)
+@roles_required("administrator")
+def export_purchase_order_confirmation_xlsx(snapshot_id: int):
+    try:
+        stream, filename = StockPlanningExportService.purchase_order_confirmation_xlsx(
+            snapshot_id
+        )
+    except ValueError as exception:
+        return redirect(url_for(
+            "stock_planning.vendor_quote_reconciliation",
+            snapshot_id=snapshot_id, message=str(exception),
+        ))
+    return send_file(
+        stream, mimetype=MIMETYPE, as_attachment=True,
+        download_name=filename,
+    )
+
+
+@stock_planning_bp.get(
     "/snapshots/<int:snapshot_id>/exports/erp-price-updates.xlsx"
 )
 @roles_required("administrator")

@@ -764,6 +764,43 @@ def test_excel_exports_include_branch_and_approved_quantities(monkeypatch):
     assert removed.isdisjoint(cell.value for cell in bogota_sheet[5])
 
 
+def test_purchase_confirmation_excel_has_requested_columns_and_totals(monkeypatch):
+    from openpyxl import load_workbook
+
+    page = {"snapshot": {
+        "vendor_name": "THK", "snapshot_key": "SP-TEST",
+        "as_of_date": "2025-07-15",
+    }}
+    forecast = {"rows": [
+        {"sku": "HSR 20THK", "branch": "1", "final_quantity": 3,
+         "fob_usd": 12.5, "fob_source": "vendor_quote"},
+        {"sku": "SHS 25THK", "branch": "50", "final_quantity": 2,
+         "fob_usd": 20.0, "fob_source": "vendor_quote"},
+    ]}
+    monkeypatch.setattr(
+        StockPlanningExportService, "_data", lambda _: (page, forecast)
+    )
+    monkeypatch.setattr(
+        StockPlanningExportService, "_ready_vendor_quotes",
+        staticmethod(lambda _: {"1": {"status": "confirmed"}}),
+    )
+
+    stream, filename = StockPlanningExportService.purchase_order_confirmation_xlsx(1)
+    sheet = load_workbook(io.BytesIO(stream.read()), data_only=False).active
+
+    assert filename == "confirmacion-pedido-SP-TEST.xlsx"
+    assert [cell.value for cell in sheet[5]] == [
+        "Referencia LH", "Marca", "Precio FOB unitario USD",
+        "Cantidad", "Total FOB USD",
+    ]
+    assert [cell.value for cell in sheet[6]] == [
+        "HSR 20THK", "THK", 12.5, 3, 37.5,
+    ]
+    assert sheet["A8"].value == "TOTAL"
+    assert sheet["D8"].value == "=SUM(D6:D7)"
+    assert sheet["E8"].value == "=SUM(E6:E7)"
+
+
 def test_replenishment_uncovered_export_is_shareable(monkeypatch):
     from openpyxl import load_workbook
 

@@ -78,6 +78,7 @@
   <div class="card-body border-bottom py-3 d-flex flex-wrap gap-2 align-items-center">
     {% if r.closure %}
     <a class="btn btn-success" href="{{ url_for('stock_planning.export_purchase_order_confirmation_pdf', snapshot_id=page.snapshot.id) }}">Descargar confirmación PDF</a>
+    <a class="btn btn-success" href="{{ url_for('stock_planning.export_purchase_order_confirmation_xlsx', snapshot_id=page.snapshot.id) }}">Descargar confirmación Excel</a>
     <span class="small text-secondary">Cerrada por {{ r.closure.closed_by }} el {{ r.closure.closed_at }}.</span>
     {% elif r.all_ready %}
     <form method="post" action="{{ url_for('stock_planning.close_vendor_quote_reconciliation', snapshot_id=page.snapshot.id) }}" onsubmit="return confirm('Se cerrará la conciliación y se bloquearán sus decisiones. ¿Continuar?')">
