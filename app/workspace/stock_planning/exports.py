@@ -290,6 +290,7 @@ class StockPlanningExportService:
             rows.append({
                 "Referencia LH": item["sku"],
                 "Marca": page["snapshot"]["vendor_name"],
+                "Sede": cls._branch(branch),
                 "Precio FOB unitario USD": unit_price,
                 "Cantidad": quantity,
                 "Total FOB USD": quantity * float(unit_price),
@@ -315,7 +316,7 @@ class StockPlanningExportService:
             sheet.freeze_panes = "A6"
             last_data_row = 5 + len(frame)
             total_row = last_data_row + 1
-            sheet.auto_filter.ref = f"A5:E{last_data_row}"
+            sheet.auto_filter.ref = f"A5:F{last_data_row}"
             for cell in sheet[5]:
                 cell.font = __import__("openpyxl").styles.Font(
                     bold=True, color="FFFFFF"
@@ -327,19 +328,19 @@ class StockPlanningExportService:
                     horizontal="center", vertical="center"
                 )
             sheet.cell(total_row, 1, "TOTAL")
-            sheet.cell(total_row, 4, f"=SUM(D6:D{last_data_row})")
             sheet.cell(total_row, 5, f"=SUM(E6:E{last_data_row})")
+            sheet.cell(total_row, 6, f"=SUM(F6:F{last_data_row})")
             for cell in sheet[total_row]:
                 cell.font = __import__("openpyxl").styles.Font(bold=True)
                 cell.fill = __import__("openpyxl").styles.PatternFill(
                     "solid", fgColor="D9EAF7"
                 )
             for row_number in range(6, total_row + 1):
-                sheet.cell(row_number, 3).number_format = 'USD #,##0.00'
-                sheet.cell(row_number, 4).number_format = '#,##0'
-                sheet.cell(row_number, 5).number_format = 'USD #,##0.00'
+                sheet.cell(row_number, 4).number_format = 'USD #,##0.00'
+                sheet.cell(row_number, 5).number_format = '#,##0'
+                sheet.cell(row_number, 6).number_format = 'USD #,##0.00'
             for column, width in {
-                "A": 32, "B": 20, "C": 25, "D": 14, "E": 22,
+                "A": 32, "B": 20, "C": 14, "D": 25, "E": 14, "F": 22,
             }.items():
                 sheet.column_dimensions[column].width = width
         stream.seek(0)

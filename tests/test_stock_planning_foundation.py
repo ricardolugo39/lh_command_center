@@ -797,15 +797,15 @@ def test_purchase_confirmation_excel_has_requested_columns_and_totals(monkeypatc
 
     assert filename == "confirmacion-pedido-SP-TEST.xlsx"
     assert [cell.value for cell in sheet[5]] == [
-        "Referencia LH", "Marca", "Precio FOB unitario USD",
+        "Referencia LH", "Marca", "Sede", "Precio FOB unitario USD",
         "Cantidad", "Total FOB USD",
     ]
     assert [cell.value for cell in sheet[6]] == [
-        "HSR 20THK", "THK", 13.25, 3, 39.75,
+        "HSR 20THK", "THK", "Bogotá", 13.25, 3, 39.75,
     ]
     assert sheet["A8"].value == "TOTAL"
-    assert sheet["D8"].value == "=SUM(D6:D7)"
     assert sheet["E8"].value == "=SUM(E6:E7)"
+    assert sheet["F8"].value == "=SUM(F6:F7)"
 
 
 def test_replenishment_uncovered_export_is_shareable(monkeypatch):
