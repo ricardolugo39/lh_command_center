@@ -272,17 +272,20 @@ class StockPlanningExportService:
     ) -> tuple[io.BytesIO, str]:
         page, forecast = cls._data(snapshot_id)
         cls._ready_vendor_quotes(snapshot_id)
+        quoted_prices = cls._latest_quoted_prices(snapshot_id)
         rows = []
         for item in forecast["rows"]:
-            if str(item["branch"]) not in {"1", "50"}:
+            branch = str(item["branch"])
+            if branch not in {"1", "50"}:
                 continue
             quantity = int(item["final_quantity"])
             if quantity <= 0:
                 continue
-            unit_price = item.get("fob_usd")
+            unit_price = quoted_prices.get((item["sku"], branch))
             if unit_price is None:
                 raise ValueError(
-                    f"La referencia {item['sku']} no tiene un precio FOB final."
+                    f"La referencia {item['sku']} no tiene un precio FOB en la "
+                    "última cotización cargada para su sede."
                 )
             rows.append({
                 "Referencia LH": item["sku"],
@@ -367,6 +370,34 @@ class StockPlanningExportService:
                 "Resuelva todas las alertas y aclaraciones antes de exportar."
             )
         return latest_quotes
+
+    @staticmethod
+    def _latest_quoted_prices(snapshot_id: int) -> dict[tuple[str, str], float]:
+        with transaction(write=False) as connection:
+            quote_rows = connection.execute(
+                """SELECT l.internal_sku,q.branch_code,l.quoted_unit_price
+                FROM stock_planning_vendor_quote_lines l
+                JOIN stock_planning_vendor_quotes q ON q.id=l.vendor_quote_id
+                JOIN (
+                    SELECT branch_code,MAX(id) latest_id
+                    FROM stock_planning_vendor_quotes
+                    WHERE snapshot_id=? GROUP BY branch_code
+                ) latest ON latest.latest_id=q.id
+                WHERE l.excluded=0""",
+                (snapshot_id,),
+            ).fetchall()
+        prices: dict[tuple[str, str], float] = {}
+        for row in quote_rows:
+            if row["quoted_unit_price"] is None:
+                continue
+            key = (row["internal_sku"], str(row["branch_code"]))
+            price = float(row["quoted_unit_price"])
+            if key in prices and abs(prices[key] - price) > .005:
+                raise ValueError(
+                    f"La cotización contiene precios distintos para {key[0]}."
+                )
+            prices[key] = price
+        return prices
 
     @classmethod
     def replenishment_uncovered(cls, snapshot_id: int) -> tuple[io.BytesIO, str]:

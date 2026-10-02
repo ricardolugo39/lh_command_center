@@ -784,6 +784,13 @@ def test_purchase_confirmation_excel_has_requested_columns_and_totals(monkeypatc
         StockPlanningExportService, "_ready_vendor_quotes",
         staticmethod(lambda _: {"1": {"status": "confirmed"}}),
     )
+    monkeypatch.setattr(
+        StockPlanningExportService, "_latest_quoted_prices",
+        staticmethod(lambda _: {
+            ("HSR 20THK", "1"): 13.25,
+            ("SHS 25THK", "50"): 21.5,
+        }),
+    )
 
     stream, filename = StockPlanningExportService.purchase_order_confirmation_xlsx(1)
     sheet = load_workbook(io.BytesIO(stream.read()), data_only=False).active
@@ -794,7 +801,7 @@ def test_purchase_confirmation_excel_has_requested_columns_and_totals(monkeypatc
         "Cantidad", "Total FOB USD",
     ]
     assert [cell.value for cell in sheet[6]] == [
-        "HSR 20THK", "THK", 12.5, 3, 37.5,
+        "HSR 20THK", "THK", 13.25, 3, 39.75,
     ]
     assert sheet["A8"].value == "TOTAL"
     assert sheet["D8"].value == "=SUM(D6:D7)"
