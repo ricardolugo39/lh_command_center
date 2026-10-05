@@ -4195,6 +4195,19 @@ def _migration_0086_activity_capture_quality_fields(connection: Connection) -> N
     _add_column(connection, "ws_activities", "engineering_participants", "TEXT")
 
 
+def _migration_0087_remove_pending_activity_pilot_users(
+    connection: Connection,
+) -> None:
+    """Remove two confirmed exclusions from the activity-capture pilot."""
+    connection.execute(
+        """DELETE FROM user_module_permissions
+        WHERE module_key='activities' AND user_id IN (
+            SELECT id FROM ws_users
+            WHERE display_name IN ('Diana María Velásquez','Sandra Patricia Aponte')
+        )"""
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4420,6 +4433,10 @@ MIGRATION_MANIFEST = (
     Migration(
         86, "activity_capture_quality_fields",
         _migration_0086_activity_capture_quality_fields,
+    ),
+    Migration(
+        87, "remove_pending_activity_pilot_users",
+        _migration_0087_remove_pending_activity_pilot_users,
     ),
 )
 
