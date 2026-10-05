@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.database.transaction import connection_scope, transactional
+from app.workspace.constants.commercial_office import office_for_sales_rep
 
 
 class ActivityTrainingRepository:
@@ -50,12 +51,31 @@ class ActivityTrainingRepository:
         with connection_scope() as connection:
             rows = connection.execute(
                 """SELECT u.id,u.display_name,u.email,u.office,u.role,
+                    u.erp_sales_rep_name,
                     c.started_at,c.completed_at,c.attempt_count,c.training_version
                 FROM ws_users u
+                INNER JOIN user_module_permissions p
+                  ON p.user_id=u.id AND p.module_key='activities'
+                    AND p.is_enabled=1
                 LEFT JOIN activity_training_completions c
                   ON c.user_id=u.id AND c.training_key=?
                 WHERE u.is_active=1 AND u.role='advisor'
-                ORDER BY c.completed_at IS NULL, u.office, u.display_name""",
+                ORDER BY c.completed_at IS NULL, u.display_name""",
                 (cls.TRAINING_KEY,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        report = []
+        for row in rows:
+            item = dict(row)
+            item["office"] = office_for_sales_rep(
+                item.get("erp_sales_rep_name") or item.get("display_name")
+            )
+            item["can_login"] = bool(item.get("email"))
+            report.append(item)
+        return sorted(
+            report,
+            key=lambda item: (
+                item["completed_at"] is None,
+                item["office"],
+                item["display_name"],
+            ),
+        )

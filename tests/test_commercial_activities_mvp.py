@@ -5,6 +5,9 @@ import pytest
 from app import create_app
 from app.database.migrations import upgrade
 from app.workspace.repositories.activity_repository import ActivityRepository
+from app.workspace.repositories.activity_training_repository import (
+    ActivityTrainingRepository,
+)
 from app.workspace.services.commercial_activity_service import (
     CommercialActivityService,
 )
@@ -257,3 +260,34 @@ def test_training_cannot_be_completed_without_finishing_steps(activity_database)
     })
 
     assert response.status_code == 400
+
+
+def test_training_report_only_lists_enabled_advisors_with_canonical_office(
+    activity_database,
+):
+    with sqlite3.connect(activity_database) as connection:
+        connection.execute(
+            """INSERT INTO ws_users (
+                id,display_name,email,email_normalized,role,is_active,
+                office,erp_sales_rep_name,module_access_mode
+            ) VALUES (30,'Diana María Velásquez',NULL,NULL,'advisor',1,
+                'Bogotá','Diana Maria Velasquez C','limited')"""
+        )
+        connection.execute(
+            """INSERT INTO ws_users (
+                id,display_name,email,email_normalized,role,is_active,
+                office,erp_sales_rep_name,module_access_mode
+            ) VALUES (31,'Asesor sin acceso','otro@lugohermanos.com',
+                'otro@lugohermanos.com','advisor',1,'Bogotá',
+                'Asesor sin acceso','limited')"""
+        )
+        connection.execute(
+            """INSERT INTO user_module_permissions(user_id,module_key)
+            VALUES (30,'activities')"""
+        )
+
+    rows = ActivityTrainingRepository.report()
+
+    assert [row["display_name"] for row in rows] == ["Diana María Velásquez"]
+    assert rows[0]["office"] == "Cali"
+    assert rows[0]["can_login"] is False
