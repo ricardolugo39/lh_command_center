@@ -104,6 +104,10 @@ class RFQRepository:
     ) -> list[dict[str, Any]]:
         clauses = []
         params: list[Any] = []
+        if quote_scope == "archived":
+            clauses.append("r.workflow_status = 'cancelled'")
+        elif not status:
+            clauses.append("COALESCE(r.workflow_status, 'draft') <> 'cancelled'")
         if status:
             clauses.append("r.workflow_status = ?")
             params.append(status)

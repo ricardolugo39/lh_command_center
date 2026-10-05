@@ -32,7 +32,7 @@ def index():
     if office not in OFFICES:
         office = ""
     quote_scope = request.args.get("quote_scope", "pending").strip()
-    if quote_scope not in {"pending", "quoted", "all"}:
+    if quote_scope not in {"pending", "quoted", "all", "archived"}:
         quote_scope = "pending"
     rfqs = RFQRepository.list_all(status, search, office, quote_scope)
     return render_template(
@@ -132,6 +132,24 @@ def delete(rfq_id: int):
             error=str(exception),
         ), 400
     return redirect(url_for("rfqs.index", deleted=1))
+
+
+@rfqs_bp.post("/<int:rfq_id>/archive")
+@roles_required("administrator", "commercial_management")
+def archive(rfq_id: int):
+    try:
+        RFQService.conclude(
+            rfq_id,
+            outcome="cancelled",
+            reason="Retirada de la lista principal porque ya no es necesaria.",
+            concluded_by_user_id=g.current_user["id"],
+        )
+    except ValueError as exception:
+        return render_template(
+            "rfqs/detail.html", page=RFQService.detail(rfq_id),
+            error=str(exception),
+        ), 400
+    return redirect(url_for("rfqs.index", archived=1))
 
 
 @rfqs_bp.post("/<int:rfq_id>/advance")
