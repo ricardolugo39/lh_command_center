@@ -28,13 +28,14 @@
 </head>
 
 <body>
+{% set limited_access = current_user is defined and current_user and current_user.module_access_mode == 'limited' %}
 <div class="page">
 
     <aside class="navbar navbar-vertical navbar-expand-lg ccc-sidebar" id="ccc-sidebar">
         <div class="container-fluid">
 
             <h1 class="navbar-brand navbar-brand-autodark">
-                <a href="{{ url_for('home.home') }}">
+                <a href="{{ url_for('activities.index') if limited_access else url_for('home.home') }}">
                     <span class="ccc-brand-mark">CC</span><span class="ccc-nav-label">Commercial Command Center</span>
                 </a>
             </h1>
@@ -58,7 +59,7 @@
             >
                 <ul class="navbar-nav pt-lg-3">
 
-                    <li class="nav-item">
+                    {% if not limited_access %}<li class="nav-item">
                         <a
                             class="nav-link
                             {% if request.endpoint == 'home.home' %}
@@ -71,40 +72,47 @@
                                 Inicio
                             </span>
                         </a>
-                    </li>
+                    </li>{% endif %}
 
-                    <li class="nav-item">
+                    {% if not limited_access %}<li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'workspace.project_list' %}active{% endif %}"
                            href="{{ url_for('workspace.project_list') }}">
                             <span class="ccc-nav-icon" aria-hidden="true">◇</span>
                             <span class="nav-link-title">Oportunidades</span>
                         </a>
-                    </li>
+                    </li>{% endif %}
 
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'home.activities' %}active{% endif %}" href="{{ url_for('home.activities') }}">
+                        <a class="nav-link {% if request.blueprint == 'activities' %}active{% endif %}" href="{{ url_for('activities.index') }}">
                             <span class="ccc-nav-icon" aria-hidden="true">✓</span>
-                            <span class="nav-link-title">Actividades</span>
+                            <span class="nav-link-title">Registrar actividad</span>
                         </a>
                     </li>
 
-                    <li class="nav-item">
+                    {% if not limited_access %}<li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'home.activities' %}active{% endif %}" href="{{ url_for('home.activities') }}">
+                            <span class="ccc-nav-icon" aria-hidden="true">≡</span>
+                            <span class="nav-link-title">Historial de actividades</span>
+                        </a>
+                    </li>{% endif %}
+
+                    {% if not limited_access %}<li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'workspace.customer_list' %}active{% endif %}"
                            href="{{ url_for('workspace.customer_list') }}">
                             <span class="ccc-nav-icon" aria-hidden="true">◎</span>
                             <span class="nav-link-title">Cuentas</span>
                         </a>
-                    </li>
+                    </li>{% endif %}
 
-                    <li class="nav-item">
+                    {% if not limited_access %}<li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'workspace.company_sales_dashboard' %}active{% endif %}"
                            href="{{ url_for('workspace.company_sales_dashboard') }}">
                             <span class="ccc-nav-icon" aria-hidden="true">▦</span>
                             <span class="nav-link-title">Equipo</span>
                         </a>
-                    </li>
+                    </li>{% endif %}
 
-                    {% set tools_active = request.blueprint in ('ask', 'rfqs', 'quotes', 'stock_planning', 'integrations', 'imports', 'purchase_history') or request.endpoint in ('workspace.initiative_list', 'workspace.visit_integration', 'workspace.visit_data_quality') %}
+                    {% if not limited_access %}{% set tools_active = request.blueprint in ('ask', 'rfqs', 'quotes', 'stock_planning', 'integrations', 'imports', 'purchase_history') or request.endpoint in ('workspace.initiative_list', 'workspace.visit_integration', 'workspace.visit_data_quality') %}
                     <li class="nav-item ccc-tools-item">
                         <details class="ccc-tools" {% if tools_active %}open{% endif %}>
                             <summary class="nav-link {% if tools_active %}active{% endif %}">
@@ -121,7 +129,7 @@
                                 <a href="{{ url_for('purchase_history.purchase_history') }}">Historial de compras</a>
                             </div>
                         </details>
-                    </li>
+                    </li>{% endif %}
 
                 </ul>
             </div>

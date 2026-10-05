@@ -28,17 +28,28 @@ def init_auth(application: Flask, provider: Any | None = None) -> None:
     @application.before_request
     def load_and_protect():
         g.current_user = None
+        user_id = None
         if application.testing and application.config.get("TEST_AUTH_BYPASS"):
             user_id = application.config.get("TEST_AUTH_USER_ID")
-            g.current_user = (
+            user = (
                 UserRepository.get(user_id) if user_id
                 else UserRepository.first_active()
             )
-            return None
-        user_id = session.get("user_id")
-        if user_id:
+            if user:
+                user = dict(user)
+                user["enabled_modules"] = UserRepository.enabled_modules(
+                    int(user["id"])
+                )
+                g.current_user = user
+        else:
+            user_id = session.get("user_id")
+        if not g.current_user and user_id:
             user = UserRepository.get(int(user_id))
             if user and user["is_active"]:
+                user = dict(user)
+                user["enabled_modules"] = UserRepository.enabled_modules(
+                    int(user["id"])
+                )
                 g.current_user = user
         if (
             request.blueprint == "auth"
@@ -48,6 +59,16 @@ def init_auth(application: Flask, provider: Any | None = None) -> None:
             return None
         if not g.current_user:
             return redirect(url_for("auth.login", next=request.full_path))
+        if (
+            g.current_user.get("module_access_mode") == "limited"
+            and request.endpoint not in {
+                "static", "home.healthcheck", "auth.logout",
+            }
+            and request.blueprint != "activities"
+        ):
+            if request.endpoint == "home.home":
+                return redirect(url_for("activities.index"))
+            abort(403)
         return None
 
     application.context_processor(
@@ -66,6 +87,28 @@ def roles_required(*roles: str):
                 return function(*args, **kwargs)
             user = getattr(g, "current_user", None)
             if not user or user["role"] not in roles:
+                abort(403)
+            return function(*args, **kwargs)
+        return cast(Callable[..., Result], wrapped)
+    return decorator
+
+
+def module_required(module_key: str):
+    """Require a module entitlement for limited users.
+
+    Full-access users retain their existing permissions. This lets production
+    pilot accounts receive only Activity Capture without changing established
+    manager and administrator access.
+    """
+    def decorator(function: Callable[..., Result]) -> Callable[..., Result]:
+        @wraps(function)
+        def wrapped(*args: Any, **kwargs: Any) -> Result:
+            user = getattr(g, "current_user", None)
+            if not user:
+                abort(403)
+            if user.get("module_access_mode") == "limited" and module_key not in (
+                user.get("enabled_modules") or set()
+            ):
                 abort(403)
             return function(*args, **kwargs)
         return cast(Callable[..., Result], wrapped)

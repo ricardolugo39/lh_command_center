@@ -2,6 +2,9 @@
 {% block title %}Registrar actividad · Commercial Command Center{% endblock %}
 {% block page_title %}Registrar actividad comercial{% endblock %}
 {% block content %}
+<div class="alert alert-info">
+  <strong>Módulo en piloto.</strong> La información registrada es oficial y permanecerá en el historial comercial.
+</div>
 {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
 <form method="post" enctype="multipart/form-data" class="card">
   <div class="card-header">
@@ -21,8 +24,8 @@
           {% endfor %}
         </select></div>
       <div class="col-md-4"><label class="form-label">Asesor</label>
-        <select class="form-select" name="advisor_user_id"><option value="">Sin asignar</option>
-          {% for user in context.users %}<option value="{{ user.id }}">{{ user.display_name }}</option>{% endfor %}
+        <select class="form-select" name="advisor_user_id" {{ 'disabled' if current_user.role == 'advisor' }}><option value="">Sin asignar</option>
+          {% for user in context.users %}<option value="{{ user.id }}" {{ 'selected' if (form.get('advisor_user_id')|int == user.id or (current_user.role == 'advisor' and current_user.id == user.id)) }}>{{ user.display_name }}</option>{% endfor %}
         </select></div>
       <div class="col-md-6"><label class="form-label">Contacto</label>
         <select class="form-select" name="contact_id"><option value="">Sin contacto</option>
@@ -30,10 +33,19 @@
             {{ contact.full_name }}{% if contact.job_title %} · {{ contact.job_title }}{% endif %}
           </option>{% endfor %}
         </select></div>
-      <div class="col-md-6"><label class="form-label">Oportunidad relacionada</label>
-        <select class="form-select" name="project_id"><option value="">Ninguna</option>
-          {% for project in context.projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
-        </select></div>
+      <div class="col-12"><label class="form-label required">Relación con oportunidad</label>
+        <div class="d-flex flex-wrap gap-3">
+          <label class="form-check"><input class="form-check-input" type="radio" name="opportunity_relation" value="existing" {{ 'checked' if form.get('opportunity_relation','existing') == 'existing' }}><span class="form-check-label">Vincular oportunidad existente</span></label>
+          <label class="form-check"><input class="form-check-input" type="radio" name="opportunity_relation" value="none" {{ 'checked' if form.get('opportunity_relation') == 'none' }}><span class="form-check-label">No corresponde a una oportunidad</span></label>
+        </div></div>
+      <div class="col-md-7" data-opportunity-existing><label class="form-label">Oportunidad ERP del cliente</label>
+        <select class="form-select" name="project_id"><option value="">Seleccionar</option>
+          {% for project in context.projects %}<option value="{{ project.id }}" {{ 'selected' if form.get('project_id')|int == project.id }}>
+            {% if project.external_id %}ERP #{{ project.external_id }} · {% endif %}{{ project.name }} · {{ project.status }}
+          </option>{% endfor %}
+        </select><div class="form-hint">Solo se muestran oportunidades asociadas a este cliente.</div></div>
+      <div class="col-md-5" data-opportunity-none hidden><label class="form-label">Razón</label>
+        <select class="form-select" name="opportunity_link_reason"><option value="">Seleccionar</option>{% for value in ['Relacionamiento','Soporte sin venta potencial','Capacitación','Postventa / garantía','Otra'] %}<option {{ 'selected' if form.get('opportunity_link_reason') == value }}>{{ value }}</option>{% endfor %}</select></div>
       <div class="col-md-6"><label class="form-label required">Motivo</label>
         <input class="form-control" name="purpose" value="{{ form.get('purpose','') }}" required></div>
       <div class="col-md-6"><label class="form-label">Acuerdo relacionado</label>
@@ -66,6 +78,13 @@
         <input class="form-control" name="supplier_name"></div>
       <div class="col-md-6"><label class="form-label">Persona del proveedor</label>
         <input class="form-control" name="supplier_person_name"></div>
+      <div class="col-md-6"><label class="form-label">Cargo / especialidad del proveedor</label>
+        <input class="form-control" name="supplier_person_role" placeholder="Ej. Ingeniero de aplicaciones"></div>
+      <div class="col-md-6"><label class="form-label">Objetivo de su participación</label>
+        <input class="form-control" name="supplier_objective" placeholder="Ej. Validación técnica"></div>
+      <div class="col-12"><label class="form-label">Participantes de Lugo Hermanos</label><div class="row">
+        {% for user in context.users %}<div class="col-md-4"><label class="form-check"><input class="form-check-input" type="checkbox" name="participant_user_ids" value="{{ user.id }}" {{ 'checked' if user.id|string in form.getlist('participant_user_ids') or (current_user.role == 'advisor' and current_user.id == user.id) }}><span class="form-check-label">{{ user.display_name }}</span></label></div>{% endfor %}
+      </div></div>
       <div class="col-12"><label class="form-label">Resultados</label>
         <div class="row">
         {% for value,label in [
@@ -90,4 +109,20 @@
        href="{{ url_for('workspace.customer_detail', customer_id=context.customer.id) }}">Cancelar</a>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const radios = document.querySelectorAll('input[name="opportunity_relation"]');
+  const existing = document.querySelector('[data-opportunity-existing]');
+  const none = document.querySelector('[data-opportunity-none]');
+  const render = () => {
+    const selected = document.querySelector('input[name="opportunity_relation"]:checked')?.value;
+    existing.hidden = selected !== 'existing';
+    none.hidden = selected !== 'none';
+  };
+  radios.forEach((radio) => radio.addEventListener('change', render));
+  render();
+})();
+</script>
 {% endblock %}

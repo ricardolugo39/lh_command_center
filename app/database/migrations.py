@@ -4134,6 +4134,60 @@ def _migration_0083_email_provider_provenance(connection: Connection) -> None:
         _add_column(connection, table, "email_provider", "TEXT NOT NULL DEFAULT 'gmail'")
 
 
+def _migration_0084_activity_capture_pilot(connection: Connection) -> None:
+    """Add production-pilot access controls without changing existing users."""
+    _add_column(
+        connection, "ws_users", "office",
+        "TEXT CHECK(office IS NULL OR office IN ('Bogotá','Cali'))",
+    )
+    _add_column(connection, "ws_users", "erp_sales_rep_name", "TEXT")
+    _add_column(
+        connection, "ws_users", "module_access_mode",
+        "TEXT NOT NULL DEFAULT 'full' CHECK(module_access_mode IN ('full','limited'))",
+    )
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS user_module_permissions (
+            user_id INTEGER NOT NULL,
+            module_key TEXT NOT NULL,
+            is_enabled INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled IN (0,1)),
+            rollout_phase TEXT NOT NULL DEFAULT 'pilot',
+            granted_by_user_id INTEGER,
+            granted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(user_id,module_key),
+            FOREIGN KEY(user_id) REFERENCES ws_users(id) ON DELETE CASCADE,
+            FOREIGN KEY(granted_by_user_id) REFERENCES ws_users(id) ON DELETE SET NULL
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_user_module_permissions_module
+        ON user_module_permissions(module_key,is_enabled,user_id)""",
+    ))
+    if _table_exists(connection, "ws_activities"):
+        _add_column(
+            connection, "ws_activities", "rollout_phase",
+            "TEXT NOT NULL DEFAULT 'standard'",
+        )
+        _add_column(
+            connection, "ws_activities", "opportunity_link_reason", "TEXT"
+        )
+
+
+def _migration_0085_activity_training_completion(connection: Connection) -> None:
+    """Track completion of the activity-capture training by authenticated user."""
+    _execute_statements(connection, (
+        """CREATE TABLE IF NOT EXISTS activity_training_completions (
+            user_id INTEGER NOT NULL,
+            training_key TEXT NOT NULL,
+            training_version TEXT NOT NULL,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            completed_at TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(user_id,training_key),
+            FOREIGN KEY(user_id) REFERENCES ws_users(id) ON DELETE CASCADE
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_activity_training_completed
+        ON activity_training_completions(training_key,completed_at,user_id)""",
+    ))
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4347,6 +4401,14 @@ MIGRATION_MANIFEST = (
     Migration(
         83, "email_provider_provenance",
         _migration_0083_email_provider_provenance,
+    ),
+    Migration(
+        84, "activity_capture_pilot",
+        _migration_0084_activity_capture_pilot,
+    ),
+    Migration(
+        85, "activity_training_completion",
+        _migration_0085_activity_training_completion,
     ),
 )
 

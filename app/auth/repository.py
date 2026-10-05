@@ -5,6 +5,16 @@ from app.database.transaction import connection_scope
 
 class UserRepository:
     @staticmethod
+    def enabled_modules(user_id: int) -> set[str]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT module_key FROM user_module_permissions
+                WHERE user_id = ? AND is_enabled = 1""",
+                (user_id,),
+            ).fetchall()
+        return {str(row["module_key"]) for row in rows}
+
+    @staticmethod
     def first_active() -> dict[str, Any] | None:
         with connection_scope() as connection:
             row = connection.execute(

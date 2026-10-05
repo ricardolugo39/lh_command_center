@@ -2,6 +2,7 @@ import sqlite3
 
 import pytest
 
+from app import create_app
 from app.database.migrations import upgrade
 from app.workspace.repositories.activity_repository import ActivityRepository
 from app.workspace.services.commercial_activity_service import (
@@ -79,3 +80,132 @@ def test_potential_value_requires_currency(activity_database):
             values=_values(potential_value="1000", currency_code=""),
             evidence_files=[],
         )
+
+
+def test_existing_opportunity_choice_requires_customer_opportunity(activity_database):
+    with pytest.raises(ValueError, match="oportunidad existente"):
+        CommercialActivityService.create(
+            values=_values(opportunity_relation="existing"),
+            evidence_files=[],
+        )
+
+
+def test_no_opportunity_requires_reason_and_preserves_pilot_provenance(
+    activity_database,
+):
+    with pytest.raises(ValueError, match="por qué"):
+        CommercialActivityService.create(
+            values=_values(opportunity_relation="none"),
+            evidence_files=[],
+        )
+    result = CommercialActivityService.create(
+        values=_values(
+            opportunity_relation="none",
+            opportunity_link_reason="Capacitación",
+            rollout_phase="pilot",
+        ),
+        evidence_files=[],
+    )
+    with sqlite3.connect(activity_database) as connection:
+        row = connection.execute(
+            """SELECT rollout_phase,opportunity_link_reason
+            FROM ws_activities WHERE id=?""",
+            (result.activity_id,),
+        ).fetchone()
+    assert row == ("pilot", "Capacitación")
+
+
+def test_limited_pilot_user_only_reaches_activity_capture(activity_database):
+    with sqlite3.connect(activity_database) as connection:
+        connection.execute(
+            """INSERT INTO ws_users (
+                id,display_name,email,email_normalized,role,is_active,
+                office,erp_sales_rep_name,module_access_mode
+            ) VALUES (20,'Asesor Piloto','piloto@lugohermanos.com',
+                'piloto@lugohermanos.com','advisor',1,'Cali',
+                'Asesor Piloto','limited')"""
+        )
+        connection.execute(
+            """INSERT INTO user_module_permissions(user_id,module_key)
+            VALUES (20,'activities')"""
+        )
+        connection.execute(
+            """INSERT INTO ws_customer_portfolio_metadata(
+                erp_customer_id,advisor,office
+            ) VALUES ('ERP-1','Asesor Piloto','Cali')"""
+        )
+        connection.execute(
+            "UPDATE ws_customers SET erp_customer_id='ERP-1' WHERE id=1"
+        )
+    application = create_app({
+        "TESTING": True,
+        "TEST_AUTH_BYPASS": True,
+        "TEST_AUTH_USER_ID": 20,
+    }, run_migrations=False)
+    client = application.test_client()
+    home = client.get("/")
+    assert home.status_code == 302
+    assert home.headers["Location"].endswith("/activities/")
+    assert client.get("/workspace/projects").status_code == 403
+    capture = client.get("/activities/")
+    assert capture.status_code == 200
+    assert b"Cliente Uno" in capture.data
+    assert client.get("/activities/customer/1/new").status_code == 200
+    assert client.get("/activities/customer/2/new").status_code == 403
+
+
+def test_training_completion_is_tied_to_authenticated_user(activity_database):
+    with sqlite3.connect(activity_database) as connection:
+        connection.execute(
+            """INSERT INTO ws_users (
+                id,display_name,email,email_normalized,role,is_active,
+                office,module_access_mode
+            ) VALUES (21,'Vendedora Bogotá','ventas@lugohermanos.com',
+                'ventas@lugohermanos.com','advisor',1,'Bogotá','limited')"""
+        )
+        connection.execute(
+            """INSERT INTO user_module_permissions(user_id,module_key)
+            VALUES (21,'activities')"""
+        )
+    application = create_app({
+        "TESTING": True,
+        "TEST_AUTH_BYPASS": True,
+        "TEST_AUTH_USER_ID": 21,
+    }, run_migrations=False)
+    client = application.test_client()
+
+    assert client.get("/activities/training").status_code == 200
+    with client.session_transaction() as session:
+        completion_token = session["activity_training_token"]
+    response = client.post("/activities/training", data={
+        "completion_token": completion_token,
+        "completed_steps": "7",
+    })
+
+    assert response.status_code == 302
+    with sqlite3.connect(activity_database) as connection:
+        row = connection.execute(
+            """SELECT user_id,completed_at,attempt_count
+            FROM activity_training_completions WHERE user_id=21"""
+        ).fetchone()
+    assert row[0] == 21
+    assert row[1]
+    assert row[2] == 1
+
+
+def test_training_cannot_be_completed_without_finishing_steps(activity_database):
+    application = create_app({
+        "TESTING": True,
+        "TEST_AUTH_BYPASS": True,
+    }, run_migrations=False)
+    client = application.test_client()
+    client.get("/activities/training")
+    with client.session_transaction() as session:
+        completion_token = session["activity_training_token"]
+
+    response = client.post("/activities/training", data={
+        "completion_token": completion_token,
+        "completed_steps": "1",
+    })
+
+    assert response.status_code == 400

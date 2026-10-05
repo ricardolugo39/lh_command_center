@@ -84,6 +84,9 @@ class CommercialActivityService:
                     visited_area=clean.get("visited_area"),
                     created_by=clean.get("created_by", "system"),
                     occurred_at=clean["occurred_at"],
+                    created_by_user_id=clean.get("created_by_user_id"),
+                    rollout_phase=clean.get("rollout_phase", "standard"),
+                    opportunity_link_reason=clean.get("opportunity_link_reason"),
                 )
                 ActivityRepository.add_participants(
                     activity_id, clean["participant_user_ids"]
@@ -138,6 +141,18 @@ class CommercialActivityService:
             raise ValueError("Fecha, motivo y resumen son obligatorios.")
 
         project_id = cls._integer(values.get("project_id"))
+        opportunity_relation = str(
+            values.get("opportunity_relation") or ""
+        ).strip()
+        opportunity_link_reason = str(
+            values.get("opportunity_link_reason") or ""
+        ).strip() or None
+        if opportunity_relation == "existing" and not project_id:
+            raise ValueError("Seleccione una oportunidad existente del ERP.")
+        if opportunity_relation == "none" and not opportunity_link_reason:
+            raise ValueError(
+                "Indique por qué la actividad no corresponde a una oportunidad."
+            )
         if project_id:
             project = ActivityFormRepository.get_project(project_id)
             if not project or project["customer_id"] != customer_id:
@@ -182,6 +197,8 @@ class CommercialActivityService:
             "supplier_name": supplier_name, "potential_value": potential_value,
             "currency_code": currency, "results": results,
             "participant_user_ids": participants,
+            "opportunity_relation": opportunity_relation,
+            "opportunity_link_reason": opportunity_link_reason,
         }
 
     @classmethod

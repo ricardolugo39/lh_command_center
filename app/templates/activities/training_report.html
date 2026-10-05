@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Avance de capacitación{% endblock %}
+{% block page_title %}Avance de capacitación{% endblock %}
+{% block content %}
+<div class="card"><div class="card-header"><div><h3 class="card-title">Registro de vendedores</h3><div class="text-secondary">Capacitación para registrar actividades comerciales.</div></div></div><div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>Persona</th><th>Sede</th><th>Estado</th><th>Finalización</th><th>Versión</th><th>Intentos</th></tr></thead><tbody>{% for row in rows %}<tr><td><strong>{{ row.display_name }}</strong><div class="text-secondary small">{{ row.email }}</div></td><td>{{ row.office or 'Sin asignar' }}</td><td>{% if row.completed_at %}<span class="badge bg-green-lt">Completada</span>{% elif row.started_at %}<span class="badge bg-yellow-lt">En progreso</span>{% else %}<span class="badge bg-secondary-lt">No iniciada</span>{% endif %}</td><td>{{ row.completed_at or '—' }}</td><td>{{ row.training_version or '—' }}</td><td>{{ row.attempt_count or 0 }}</td></tr>{% else %}<tr><td colspan="6" class="text-secondary">No hay usuarios activos.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
