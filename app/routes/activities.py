@@ -59,7 +59,7 @@ def training():
 
 
 @activities_bp.get("/training/report")
-@roles_required("administrator", "commercial_management")
+@roles_required("administrator")
 @module_required("activities")
 def training_report():
     return render_template(

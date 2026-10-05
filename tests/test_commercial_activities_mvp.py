@@ -191,6 +191,7 @@ def test_limited_pilot_user_only_reaches_activity_capture(activity_database):
     assert b"Cliente Uno" in capture.data
     assert client.get("/activities/customer/1/new").status_code == 200
     assert client.get("/activities/customer/2/new").status_code == 403
+    assert client.get("/activities/training/report").status_code == 403
 
 
 def test_training_completion_is_tied_to_authenticated_user(activity_database):

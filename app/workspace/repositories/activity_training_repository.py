@@ -54,7 +54,7 @@ class ActivityTrainingRepository:
                 FROM ws_users u
                 LEFT JOIN activity_training_completions c
                   ON c.user_id=u.id AND c.training_key=?
-                WHERE u.is_active=1 AND u.role IN ('advisor','commercial_management')
+                WHERE u.is_active=1 AND u.role='advisor'
                 ORDER BY c.completed_at IS NULL, u.office, u.display_name""",
                 (cls.TRAINING_KEY,),
             ).fetchall()
