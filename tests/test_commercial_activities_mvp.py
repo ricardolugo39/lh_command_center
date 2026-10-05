@@ -42,6 +42,7 @@ def _values(**overrides):
         "occurred_at": "2026-07-23T10:30",
         "participant_user_ids": [],
         "results": ["followup_required"],
+        "finding_type": "none",
     }
     values.update(overrides)
     return values
@@ -72,6 +73,44 @@ def test_supplier_name_is_conditional(activity_database):
             values=_values(supplier_participated=True),
             evidence_files=[],
         )
+
+
+def test_activity_can_create_contact_inline(activity_database):
+    result = CommercialActivityService.create(
+        values=_values(
+            contact_id="__new__",
+            new_contact_name="Ana Compras",
+            new_contact_job_title="Jefe de compras",
+        ),
+        evidence_files=[],
+    )
+    with sqlite3.connect(activity_database) as connection:
+        row = connection.execute(
+            """SELECT c.full_name,c.job_title FROM ws_activities a
+            JOIN contacts c ON c.id=a.contact_id WHERE a.id=?""",
+            (result.activity_id,),
+        ).fetchone()
+    assert row == ("Ana Compras", "Jefe de compras")
+
+
+def test_activity_preserves_structured_finding_and_engineering(activity_database):
+    result = CommercialActivityService.create(
+        values=_values(
+            finding_type="risk",
+            finding_detail="Competidor instalado",
+            engineering_participants="Andrea Pérez",
+        ),
+        evidence_files=[],
+    )
+    with sqlite3.connect(activity_database) as connection:
+        row = connection.execute(
+            """SELECT finding_type,finding_detail,engineering_participants,
+                identified_risk FROM ws_activities WHERE id=?""",
+            (result.activity_id,),
+        ).fetchone()
+    assert row == (
+        "risk", "Competidor instalado", "Andrea Pérez", "Competidor instalado"
+    )
 
 
 def test_potential_value_requires_currency(activity_database):

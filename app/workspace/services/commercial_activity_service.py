@@ -43,8 +43,11 @@ class CommercialActivityService:
             "customer": customer,
             "contacts": ContactRepository.list_for_customer(customer_id),
             "projects": ActivityFormRepository.list_projects(customer_id),
-            "agreements": ActivityFormRepository.list_agreements(customer_id),
             "users": ActivityFormRepository.list_users(),
+            "supplier_options": [
+                "SKF", "Dodge", "Timken", "Gates", "Loctite", "FAG / INA",
+                "NSK", "NTN", "Rexnord", "SEW-Eurodrive",
+            ],
             "activity_types": [
                 (value, ActivityType.label(value))
                 for value in sorted(ActivityType.MANUAL_TYPES)
@@ -59,6 +62,15 @@ class CommercialActivityService:
         stored_files: list[Path] = []
         try:
             with transaction():
+                if clean["create_contact"]:
+                    clean["contact_id"] = ContactRepository.create({
+                        "customer_id": clean["customer_id"],
+                        "full_name": clean["new_contact_name"],
+                        "job_title": clean.get("new_contact_job_title"),
+                        "email": clean.get("new_contact_email"),
+                        "phone": clean.get("new_contact_phone"),
+                        "created_by_user_id": clean.get("created_by_user_id"),
+                    })
                 activity_id = ActivityRepository.create_activity(
                     project_id=clean.get("project_id"),
                     customer_id=clean["customer_id"],
@@ -87,6 +99,9 @@ class CommercialActivityService:
                     created_by_user_id=clean.get("created_by_user_id"),
                     rollout_phase=clean.get("rollout_phase", "standard"),
                     opportunity_link_reason=clean.get("opportunity_link_reason"),
+                    finding_type=clean.get("finding_type"),
+                    finding_detail=clean.get("finding_detail"),
+                    engineering_participants=clean.get("engineering_participants"),
                 )
                 ActivityRepository.add_participants(
                     activity_id, clean["participant_user_ids"]
@@ -162,14 +177,27 @@ class CommercialActivityService:
             contact = ContactRepository.get(contact_id)
             if not contact or contact["customer_id"] != customer_id:
                 raise ValueError("El contacto no pertenece al cliente.")
-        agreement_id = cls._integer(values.get("agreement_id"))
-        if agreement_id:
-            agreement = ActivityFormRepository.get_agreement(agreement_id)
-            if not agreement or agreement["customer_id"] != customer_id:
-                raise ValueError("El acuerdo no pertenece al cliente.")
+        agreement_id = None
+
+        create_contact = str(values.get("contact_id") or "") == "__new__"
+        new_contact_name = str(values.get("new_contact_name") or "").strip()
+        if create_contact:
+            contact_id = None
+            if not new_contact_name:
+                raise ValueError("Escriba el nombre del nuevo contacto.")
+
+        finding_type = str(values.get("finding_type") or "").strip()
+        finding_detail = str(values.get("finding_detail") or "").strip() or None
+        allowed_findings = {"need", "risk", "new", "none", "pending"}
+        if finding_type not in allowed_findings:
+            raise ValueError("Seleccione el hallazgo comercial principal.")
+        if finding_type in {"need", "risk", "new"} and not finding_detail:
+            raise ValueError("Describa el hallazgo comercial.")
 
         supplier_participated = bool(values.get("supplier_participated"))
         supplier_name = str(values.get("supplier_name") or "").strip() or None
+        if supplier_name == "__other__":
+            supplier_name = str(values.get("supplier_name_other") or "").strip() or None
         if supplier_participated and not supplier_name:
             raise ValueError(
                 "El proveedor es obligatorio cuando participó en la actividad."
@@ -199,6 +227,16 @@ class CommercialActivityService:
             "participant_user_ids": participants,
             "opportunity_relation": opportunity_relation,
             "opportunity_link_reason": opportunity_link_reason,
+            "create_contact": create_contact,
+            "new_contact_name": new_contact_name,
+            "new_contact_job_title": str(values.get("new_contact_job_title") or "").strip() or None,
+            "new_contact_email": str(values.get("new_contact_email") or "").strip() or None,
+            "new_contact_phone": str(values.get("new_contact_phone") or "").strip() or None,
+            "finding_type": finding_type,
+            "finding_detail": finding_detail,
+            "identified_need": finding_detail if finding_type == "need" else None,
+            "identified_risk": finding_detail if finding_type == "risk" else None,
+            "engineering_participants": str(values.get("engineering_participants") or "").strip() or None,
         }
 
     @classmethod

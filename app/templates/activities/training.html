@@ -14,7 +14,7 @@
   <div class="card-header"><div><h3 class="card-title">Papeles Nacionales</h3><div class="text-secondary">Ejemplo de práctica · ERP 900123 · Cali</div></div></div>
   <div class="card-body"><div class="row g-3">
     <div class="col-12 training-step" id="step-basic"><h3 class="mb-2">Datos de la visita</h3></div>
-    <div class="col-md-4"><label class="form-label required">Fecha y hora</label><input class="form-control" type="datetime-local" value="2026-10-05T10:30"></div>
+    <div class="col-md-4"><label class="form-label required">Fecha</label><input class="form-control" type="date" value="2026-10-05"></div>
     <div class="col-md-4"><label class="form-label required">Tipo</label><select class="form-select"><option>Visita</option><option>Reunión virtual</option><option>Llamada</option></select></div>
     <div class="col-md-4"><label class="form-label">Asesor</label><input class="form-control" value="{{ current_user.display_name }}" disabled></div>
     <div class="col-md-6"><label class="form-label">Contacto</label><select class="form-select"><option>Iván Cardona · Compras</option><option>Crear contacto nuevo…</option></select></div>
@@ -31,7 +31,7 @@
     <div class="col-12 training-step" id="step-vendor"><h3 class="mb-2">Acompañantes externos</h3><label class="form-check"><input class="form-check-input" type="checkbox" id="vendor-toggle"><span class="form-check-label">Participó un fabricante o vendor (SKF, Dodge u otro)</span></label></div>
     <div class="col-12 training-conditional" id="vendor-fields" hidden><div class="row g-3 p-3 bg-azure-lt rounded"><div class="col-md-6"><label class="form-label">Vendor</label><select class="form-select" id="vendor"><option value="">Seleccionar</option><option>SKF</option><option>Dodge</option><option>Timken</option><option>Otro</option></select></div><div class="col-md-6"><label class="form-label">Representante</label><input class="form-control" id="vendor-person"></div><div class="col-md-6"><label class="form-label">Cargo / especialidad</label><input class="form-control" placeholder="Ej. Ingeniero de aplicaciones"></div><div class="col-md-6"><label class="form-label">Objetivo de su participación</label><input class="form-control" placeholder="Ej. Validación técnica"></div></div></div>
 
-    <div class="col-12 training-step" id="step-participants"><h3 class="mb-2">Participantes y resultado</h3><label class="form-label">Participantes de Lugo Hermanos</label><div class="row"><div class="col-md-4"><label class="form-check"><input class="form-check-input" type="checkbox" checked><span class="form-check-label">{{ current_user.display_name }}</span></label></div><div class="col-md-4"><label class="form-check"><input class="form-check-input" type="checkbox"><span class="form-check-label">Carlos Martínez · Ingeniería</span></label></div><div class="col-md-4"><label class="form-check"><input class="form-check-input" type="checkbox"><span class="form-check-label">Laura Gómez · Comercial</span></label></div></div></div>
+    <div class="col-12 training-step" id="step-participants"><h3 class="mb-2">Ingeniería y resultado</h3><label class="form-label">Ingeniería de Lugo Hermanos</label><input class="form-control" placeholder="Nombre(s) de quienes acompañaron la visita"><div class="form-hint">El asesor comercial queda identificado automáticamente.</div></div>
     <div class="col-12"><label class="form-label">Resultado de la visita</label><div class="row">{% for label in ['Oportunidad identificada','RFQ recibida','Cotización solicitada','Capacitación realizada','Soporte realizado','Seguimiento requerido','Cliente sin necesidad','Pendiente información','Otro'] %}<div class="col-md-4"><label class="form-check"><input class="form-check-input" type="checkbox"><span class="form-check-label">{{ label }}</span></label></div>{% endfor %}</div></div>
 
     <div class="col-12 training-step" id="step-followup"><h3 class="mb-2">Próxima acción</h3><label class="form-check"><input class="form-check-input" type="checkbox" id="follow-toggle"><span class="form-check-label">Crear próxima acción</span></label></div>
@@ -49,7 +49,7 @@ const steps=[
  ['Oportunidad ERP','Seleccione la oportunidad usando el ID del ERP o indique por qué no aplica.','#step-opportunity'],
  ['Hallazgo comercial','Seleccione un solo hallazgo principal y detalle únicamente cuando corresponda.','#step-finding'],
  ['Acompañantes externos','Active esta sección si participó SKF, Dodge u otro vendor.','#step-vendor'],
- ['Participantes y resultado','Registre a Ingeniería u otros compañeros y marque el resultado.','#step-participants'],
+ ['Ingeniería y resultado','Registre únicamente al personal de Ingeniería de Lugo Hermanos que acompañó la visita y marque el resultado.','#step-participants'],
  ['Próxima acción','Si quedó un compromiso, incluya acción, responsable y fecha.','#step-followup'],
  ['Revisión final','Complete los campos obligatorios y use el botón final. Solo entonces se registrará la capacitación.','#step-finish']
 ];let current=0;

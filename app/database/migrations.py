@@ -4188,6 +4188,13 @@ def _migration_0085_activity_training_completion(connection: Connection) -> None
     ))
 
 
+def _migration_0086_activity_capture_quality_fields(connection: Connection) -> None:
+    """Add structured findings and non-sales Lugo engineering participants."""
+    _add_column(connection, "ws_activities", "finding_type", "TEXT")
+    _add_column(connection, "ws_activities", "finding_detail", "TEXT")
+    _add_column(connection, "ws_activities", "engineering_participants", "TEXT")
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4409,6 +4416,10 @@ MIGRATION_MANIFEST = (
     Migration(
         85, "activity_training_completion",
         _migration_0085_activity_training_completion,
+    ),
+    Migration(
+        86, "activity_capture_quality_fields",
+        _migration_0086_activity_capture_quality_fields,
     ),
 )
 

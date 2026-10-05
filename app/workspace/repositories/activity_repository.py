@@ -36,6 +36,9 @@ class ActivityRepository:
         created_by_user_id: int | None = None,
         rollout_phase: str = "standard",
         opportunity_link_reason: str | None = None,
+        finding_type: str | None = None,
+        finding_detail: str | None = None,
+        engineering_participants: str | None = None,
     ) -> int:
         sql = """
         INSERT INTO ws_activities (
@@ -65,12 +68,15 @@ class ActivityRepository:
             occurred_at,
             created_by_user_id,
             rollout_phase,
-            opportunity_link_reason
+            opportunity_link_reason,
+            finding_type,
+            finding_detail,
+            engineering_participants
         )
         VALUES (
             COALESCE(?, (SELECT customer_id FROM ws_projects WHERE id = ?)),
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?
+            ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, ?, ?, ?
         )
         """
 
@@ -103,6 +109,9 @@ class ActivityRepository:
                     created_by_user_id,
                     rollout_phase,
                     opportunity_link_reason,
+                    finding_type,
+                    finding_detail,
+                    engineering_participants,
                 )
         with connection_scope() as conn:
             try:
