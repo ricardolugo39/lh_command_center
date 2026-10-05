@@ -140,6 +140,12 @@ class RFQVendorRequestService:
                     attachments=RFQVendorRequestService._attachments(rfq_id),
                 )
             except Exception as error:
+                current_app.logger.exception(
+                    "Vendor RFQ email failed for rfq_id=%s brand=%s provider=%s",
+                    rfq_id,
+                    brand,
+                    current_app.config.get("EMAIL_PROVIDER", "gmail"),
+                )
                 raise ValueError(
                     f"La RFQ se conservó; no se pudo enviar la solicitud a {brand}."
                 ) from error

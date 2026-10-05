@@ -1,10 +1,17 @@
+import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from flask import Flask
 
 from app.workspace.connectors.microsoft_graph_mail_provider import (
     MicrosoftGraphMailProvider,
+)
+from app.database.transaction import transaction
+from app.workspace.repositories.integration_credential_repository import (
+    IntegrationCredentialRepository,
 )
 
 
@@ -77,6 +84,31 @@ class MicrosoftGraphMailProviderTest(unittest.TestCase):
         self.assertEqual(messages[0]["direction"], "incoming")
         self.assertEqual(messages[0]["sender"], "vendor@example.com")
         self.assertEqual(messages[0]["body_html"], "<p>Attached</p>")
+
+
+class IntegrationCredentialTransactionTest(unittest.TestCase):
+    def test_token_cache_save_reuses_active_write_transaction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "credentials.db"
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    """CREATE TABLE integration_credentials(
+                    credential_key TEXT PRIMARY KEY,
+                    encrypted_value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )"""
+                )
+            app = Flask(__name__)
+            app.secret_key = "test-secret"
+            with (
+                app.app_context(),
+                patch("app.database.connection.DB_PATH", database),
+                transaction(),
+            ):
+                IntegrationCredentialRepository.save("mail", "token")
+                self.assertEqual(
+                    IntegrationCredentialRepository.get("mail"), "token"
+                )
 
 
 if __name__ == "__main__":
