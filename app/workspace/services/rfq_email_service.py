@@ -24,14 +24,14 @@ class RFQEmailService:
         subject = f"Precotización {number} | {rfq['customer_name']} | {brand_summary}"
         body_text, body_html = cls._body(rfq, items, number, sender)
         try:
-            result = current_app.extensions["gmail_provider"].send(
+            result = current_app.extensions["email_provider"].send(
                 sender=sender, recipients=[recipient], cc=cc, subject=subject,
                 body_text=body_text, body_html=body_html,
             )
         except Exception as error:
-            current_app.logger.exception("No se pudo enviar la RFQ por Gmail")
+            current_app.logger.exception("No se pudo enviar la RFQ por correo")
             raise ValueError(
-                "La RFQ se conservó, pero no fue posible enviarla por Gmail."
+                "La RFQ se conservó, pero no fue posible enviarla por correo."
             ) from error
         cls._complete_send(
             rfq_id, subject, sender, recipient, cc, result, body_text, body_html
@@ -47,17 +47,25 @@ class RFQEmailService:
             cc=cc, provider_thread_id=result["thread_id"],
             provider_message_id=result["message_id"], body_text=body_text,
             body_html=body_html,
+            provider=current_app.config.get("EMAIL_PROVIDER", "gmail"),
         )
-        RFQService.advance(rfq_id, status="sent", comment="Enviada por Gmail")
+        RFQService.advance(rfq_id, status="sent", comment="Enviada por correo")
 
     @classmethod
     @transactional
     def sync(cls, rfq_id: int) -> None:
         thread = RFQEmailRepository.get_thread(rfq_id)
         if not thread or not thread.get("provider_thread_id"):
-            raise ValueError("La RFQ todavía no tiene una conversación de Gmail.")
+            raise ValueError("La RFQ todavía no tiene una conversación de correo.")
+        if thread.get("provider", "gmail") != current_app.config.get(
+            "EMAIL_PROVIDER", "gmail"
+        ):
+            raise ValueError(
+                "Esta conversación pertenece al proveedor de correo anterior y "
+                "se conserva como historial de solo lectura."
+            )
         try:
-            messages = current_app.extensions["gmail_provider"].thread(
+            messages = current_app.extensions["email_provider"].thread(
                 thread["provider_thread_id"]
             )
             for message in messages:

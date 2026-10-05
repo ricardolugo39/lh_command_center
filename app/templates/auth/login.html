@@ -8,14 +8,15 @@
 <div class="card card-md"><div class="card-body text-center">
 <div class="h1 mb-2">Commercial Command Center</div>
 <p class="text-secondary mb-4">Acceso seguro para el equipo comercial de Lugo Hermanos.</p>
-{% if error == 'oauth_unavailable' %}<div class="alert alert-warning">
-Google OAuth todavía no está listo. Faltan:
-{% for item in oauth_report.missing %}<strong>{{ item.name }}</strong>{{ ', ' if not loop.last }}{% endfor %}.
-</div>
+{% if error == 'oauth_unavailable' %}<div class="alert alert-warning">El proveedor de inicio de sesión seleccionado todavía no está disponible.</div>
 {% elif error %}<div class="alert alert-danger">No fue posible iniciar sesión con esa cuenta. Verifique que el usuario interno esté activo y autorizado.</div>{% endif %}
+{% if microsoft_ready %}
+<a class="btn btn-primary w-100" href="{{ url_for('auth.microsoft') }}">Iniciar sesión con Microsoft 365</a>
+{% endif %}
 {% if oauth_ready %}
-<a class="btn btn-primary w-100" href="{{ url_for('auth.google') }}">Iniciar sesión con Google</a>
+<a class="btn btn-outline-secondary w-100 mt-2" href="{{ url_for('auth.google') }}">Iniciar sesión con Google</a>
 {% else %}
+{% if not microsoft_ready %}
 <div class="alert alert-warning text-start">
 <strong>Configuración incompleta.</strong>
 <ul class="mb-0 mt-2">{% for item in oauth_report.missing %}
@@ -25,6 +26,7 @@ Google OAuth todavía no está listo. Faltan:
 </div>
 <button class="btn btn-primary w-100" disabled>Iniciar sesión con Google</button>
 <a class="btn btn-link w-100 mt-2" href="{{ url_for('auth.status') }}">Ver estado y guía de configuración</a>
+{% endif %}
 {% if oauth_report.development_login_available %}
 <form method="post" action="{{ url_for('auth.development_login') }}">
 <button class="btn btn-outline-secondary w-100 mt-2">Entrar como Administrador (Development Only)</button>

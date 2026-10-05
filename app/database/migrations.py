@@ -3895,7 +3895,7 @@ def _migration_0075_global_forecast_portfolio_frontier(connection: Connection) -
 
 
 def _migration_0076_vendor_purchase_order_drafts(connection: Connection) -> None:
-    """Track editable Gmail drafts used to issue ERP purchase orders."""
+    """Track editable provider drafts used to issue ERP purchase orders."""
     connection.execute(
         """CREATE TABLE IF NOT EXISTS vendor_purchase_order_drafts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -4118,6 +4118,22 @@ def _migration_0081_brand_pricing_decision_choice(connection: Connection) -> Non
         )
 
 
+def _migration_0082_national_cop_quotes(connection: Connection) -> None:
+    """Reserve the production ledger entry applied by the prior release."""
+
+
+def _migration_0083_email_provider_provenance(connection: Connection) -> None:
+    """Preserve Gmail history while new conversations move to Microsoft 365."""
+    for table in (
+        "rfq_vendor_requests",
+        "quote_deliveries",
+        "rfq_vendor_followups",
+        "quote_followup_emails",
+        "vendor_purchase_order_drafts",
+    ):
+        _add_column(connection, table, "email_provider", "TEXT NOT NULL DEFAULT 'gmail'")
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4323,6 +4339,14 @@ MIGRATION_MANIFEST = (
     Migration(
         81, "brand_pricing_decision_choice",
         _migration_0081_brand_pricing_decision_choice,
+    ),
+    Migration(
+        82, "national_cop_quotes",
+        _migration_0082_national_cop_quotes,
+    ),
+    Migration(
+        83, "email_provider_provenance",
+        _migration_0083_email_provider_provenance,
     ),
 )
 

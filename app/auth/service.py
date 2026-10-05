@@ -29,3 +29,26 @@ class AuthenticationService:
         if not user or not user["is_active"]:
             raise ValueError("El usuario está inactivo.")
         return user
+
+    @staticmethod
+    @transactional
+    def authorize_microsoft_identity(
+        identity, *, allowed_domain: str, tenant_id: str
+    ):
+        email = str(
+            identity.get("preferred_username") or identity.get("email") or ""
+        ).strip().casefold()
+        identity_tenant = str(identity.get("tid") or "").strip().casefold()
+        subject = str(identity.get("oid") or identity.get("sub") or "").strip()
+        if (
+            not subject
+            or not email.endswith("@" + allowed_domain.casefold())
+            or identity_tenant != tenant_id.strip().casefold()
+        ):
+            raise ValueError("Cuenta de Microsoft no autorizada.")
+        user = UserRepository.get_by_email(email)
+        if not user:
+            raise ValueError("El usuario no está autorizado.")
+        if not user["is_active"]:
+            raise ValueError("El usuario está inactivo.")
+        return user

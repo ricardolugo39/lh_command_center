@@ -34,7 +34,9 @@ GOOGLE_WORKSPACE_ALLOWED_DOMAIN=lugohermanos.com
 
 Optional integration variables are documented in `.env.example`. Do not commit
 real credentials. `OPENAI_API_KEY` enables Ask, the Google Visits variables
-enable the Sheets/AppSheet sync, and `GOOGLE_GMAIL_TOKEN_JSON` enables RFQ mail.
+enable the Sheets/AppSheet sync, and the Microsoft variables enable operational
+mail through Microsoft Graph. See `docs/MICROSOFT_MAIL.md` for the Entra and
+Railway setup.
 
 The application currently uses SQLite. Keep Gunicorn at one worker and mount
 the volume before first boot. A new volume starts with an empty migrated schema;

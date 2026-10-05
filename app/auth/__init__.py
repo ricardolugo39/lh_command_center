@@ -42,6 +42,7 @@ def init_auth(application: Flask, provider: Any | None = None) -> None:
                 g.current_user = user
         if (
             request.blueprint == "auth"
+            or request.endpoint == "integrations.microsoft_mail_callback"
             or request.endpoint in {"static", "home.healthcheck"}
         ):
             return None

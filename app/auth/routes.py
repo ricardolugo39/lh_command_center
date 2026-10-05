@@ -27,12 +27,31 @@ def _safe_destination(value: str | None) -> str:
 @auth_bp.get("/login")
 def login():
     report = OAuthConfigurationService.report()
+    microsoft_provider = current_app.extensions.get(
+        "microsoft_mail_oauth_provider"
+    )
     return render_template(
         "auth/login.html",
         oauth_ready=report["enabled"],
+        microsoft_ready=bool(
+            microsoft_provider and microsoft_provider.configured()
+        ),
         oauth_report=report,
         error=request.args.get("error"),
     )
+
+
+@auth_bp.get("/microsoft")
+def microsoft():
+    provider = current_app.extensions["microsoft_mail_oauth_provider"]
+    try:
+        flow = provider.begin_login()
+    except RuntimeError:
+        current_app.logger.exception("Microsoft login is unavailable")
+        return redirect(url_for("auth.login", error="oauth_unavailable"))
+    session["microsoft_login_flow"] = flow
+    session["post_login_next"] = _safe_destination(request.args.get("next"))
+    return redirect(flow["auth_uri"])
 
 
 @auth_bp.get("/status")

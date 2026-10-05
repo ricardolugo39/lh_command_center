@@ -5,11 +5,17 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.auth import init_auth
 from app.auth.oauth import GmailOAuthProvider
+from app.auth.microsoft_mail_oauth import (
+    MICROSOFT_MAIL_VARIABLES, MicrosoftMailOAuthProvider,
+)
 from app.auth.configuration import OAUTH_VARIABLES, source_label
 from app.configuration import (
     LEGACY_ENV_PATH, PROJECT_CONFIG_PATH, PROJECT_ENV_PATH, resolve_settings,
 )
 from app.workspace.connectors.gmail_provider import GmailProvider
+from app.workspace.connectors.microsoft_graph_mail_provider import (
+    MicrosoftGraphMailProvider,
+)
 from app.database.migrations import MigrationReport, upgrade
 from app.routes import register_blueprints
 from app.routes.api.customers import customers_api
@@ -17,7 +23,7 @@ from app.routes.api.customers import customers_api
 
 def create_app(
     config: dict | None = None, *, run_migrations: bool = True,
-    oauth_provider=None, gmail_provider=None,
+    oauth_provider=None, gmail_provider=None, email_provider=None,
 ) -> Flask:
     """Create an application that is schema-ready before serving requests."""
     application = Flask(
@@ -29,7 +35,8 @@ def create_app(
         application.wsgi_app, x_for=1, x_proto=1, x_host=1
     )
     settings, setting_sources = resolve_settings(
-        OAUTH_VARIABLES + ("FLASK_ENV", "DEFAULT_COMMERCIAL_OFFICE")
+        OAUTH_VARIABLES + MICROSOFT_MAIL_VARIABLES
+        + ("FLASK_ENV", "DEFAULT_COMMERCIAL_OFFICE", "EMAIL_PROVIDER")
     )
     provenance = {
         name: source_label(
@@ -46,6 +53,14 @@ def create_app(
         GOOGLE_WORKSPACE_ALLOWED_DOMAIN=settings.get(
             "GOOGLE_WORKSPACE_ALLOWED_DOMAIN", "lugohermanos.com"
         ),
+        MICROSOFT_TENANT_ID=settings.get("MICROSOFT_TENANT_ID"),
+        MICROSOFT_CLIENT_ID=settings.get("MICROSOFT_CLIENT_ID"),
+        MICROSOFT_CLIENT_SECRET=settings.get("MICROSOFT_CLIENT_SECRET"),
+        MICROSOFT_MAIL_REDIRECT_URI=settings.get("MICROSOFT_MAIL_REDIRECT_URI"),
+        MICROSOFT_MAILBOX_ADDRESS=settings.get(
+            "MICROSOFT_MAILBOX_ADDRESS", "ricardo.lugo@lugohermanos.com"
+        ),
+        EMAIL_PROVIDER=settings.get("EMAIL_PROVIDER", "gmail").casefold(),
         APP_ENVIRONMENT=settings.get("FLASK_ENV", "production").casefold(),
         DEFAULT_COMMERCIAL_OFFICE=settings.get(
             "DEFAULT_COMMERCIAL_OFFICE", "Cali"
@@ -61,6 +76,8 @@ def create_app(
             config_name = "SECRET_KEY" if name == "FLASK_SECRET_KEY" else name
             if config.get(config_name):
                 provenance[name] = "Flask config"
+    if application.config["EMAIL_PROVIDER"] not in {"gmail", "microsoft"}:
+        raise ValueError("EMAIL_PROVIDER debe ser 'gmail' o 'microsoft'.")
     if (
         application.config["APP_ENVIRONMENT"] == "development"
         and not application.secret_key
@@ -78,8 +95,20 @@ def create_app(
     application.register_blueprint(customers_api)
     init_auth(application, oauth_provider)
     application.extensions["oauth_configuration_sources"] = provenance
-    application.extensions["gmail_provider"] = gmail_provider or GmailProvider()
+    selected_email_provider = email_provider or gmail_provider
+    if selected_email_provider is None:
+        selected_email_provider = (
+            MicrosoftGraphMailProvider()
+            if application.config["EMAIL_PROVIDER"] == "microsoft"
+            else GmailProvider()
+        )
+    application.extensions["email_provider"] = selected_email_provider
+    # Transitional alias for older tests and extensions during the cutover.
+    application.extensions["gmail_provider"] = selected_email_provider
     application.extensions["gmail_oauth_provider"] = GmailOAuthProvider()
+    application.extensions[
+        "microsoft_mail_oauth_provider"
+    ] = MicrosoftMailOAuthProvider()
     application.extensions["schema_migration_report"] = migration_report
 
     if migration_report:

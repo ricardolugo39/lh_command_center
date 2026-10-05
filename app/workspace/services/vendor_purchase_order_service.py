@@ -41,13 +41,20 @@ class VendorPurchaseOrderService:
             raise ValueError("Primero envíe la cotización al asesor comercial.")
         pending = cls.latest(quote_id)
         if pending and pending.get("status") == "draft":
-            raise ValueError("Ya existe un borrador de PO pendiente en Gmail.")
+            raise ValueError("Ya existe un borrador de PO pendiente en el correo.")
         rfq_id = int(quote["originating_rfq_id"])
         vendor_request = RFQVendorRequestRepository.get_for_rfq(
             rfq_id, vendor_request_id
         )
         if not vendor_request or not vendor_request.get("provider_thread_id"):
             raise ValueError("No se encontró la conversación del proveedor.")
+        if vendor_request.get("email_provider", "gmail") != current_app.config.get(
+            "EMAIL_PROVIDER", "gmail"
+        ):
+            raise ValueError(
+                "La conversación original pertenece a Gmail y se conserva como "
+                "historial; debe iniciar un correo nuevo en Microsoft 365."
+            )
         incoming = RFQVendorRequestRepository.latest_incoming(vendor_request_id)
         if not incoming:
             raise ValueError("El proveedor todavía no ha respondido esta RFQ.")
@@ -84,7 +91,7 @@ class VendorPurchaseOrderService:
         )
         body_html = "<p>" + html.escape(body_text).replace("\n", "<br>") + "</p>"
         try:
-            result = current_app.extensions["gmail_provider"].create_reply_draft(
+            result = current_app.extensions["email_provider"].create_reply_draft(
                 thread_id=vendor_request["provider_thread_id"],
                 sender=cls.SENDER,
                 recipients=[recipient],
@@ -97,18 +104,19 @@ class VendorPurchaseOrderService:
         except Exception as error:
             current_app.logger.exception("No se pudo crear el borrador de PO")
             raise ValueError(
-                "La cotización se conservó, pero Gmail no pudo crear el borrador."
+                "La cotización se conservó, pero no se pudo crear el borrador."
             ) from error
         with connection_scope() as connection:
             cursor = connection.execute(
                 """INSERT INTO vendor_purchase_order_drafts(
                 quote_id,rfq_id,vendor_request_id,recipient_email,subject,body_text,
                 provider_draft_id,provider_message_id,provider_thread_id,
-                prepared_by_user_id) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                prepared_by_user_id,email_provider) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     quote_id, rfq_id, vendor_request_id, recipient, subject,
                     body_text, result["draft_id"], result.get("message_id"),
                     result["thread_id"], actor,
+                    current_app.config.get("EMAIL_PROVIDER", "gmail"),
                 ),
             )
         return {"id": int(cursor.lastrowid), **result}

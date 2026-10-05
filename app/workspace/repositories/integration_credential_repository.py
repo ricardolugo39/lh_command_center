@@ -43,7 +43,9 @@ class IntegrationCredentialRepository:
         try:
             return cls._cipher().decrypt(row["encrypted_value"].encode()).decode()
         except InvalidToken as error:
-            raise RuntimeError("No fue posible descifrar la credencial de Gmail.") from error
+            raise RuntimeError(
+                "No fue posible descifrar la credencial de integración."
+            ) from error
 
     @classmethod
     def exists(cls, key: str) -> bool:

@@ -447,6 +447,7 @@ class QuoteManagementService:
             "advisor_note": advisor_note, "note_internal_only": bool(review.get("note_internal_only")),
             "note_included": bool(advisor_note),
             "attachment_ids": review.get("attachment_ids", []),
+            "email_provider": current_app.config.get("EMAIL_PROVIDER", "gmail"),
         }, actor)
 
     @staticmethod
@@ -455,6 +456,13 @@ class QuoteManagementService:
         delivery = QuoteManagementRepository.get_delivery(delivery_id)
         if not delivery:
             raise ValueError("El borrador de entrega no existe.")
+        if delivery.get("email_provider", "gmail") != current_app.config.get(
+            "EMAIL_PROVIDER", "gmail"
+        ):
+            raise ValueError(
+                "Este borrador pertenece al proveedor de correo anterior. "
+                "Prepare una nueva entrega antes de enviarlo."
+            )
         quote = QuoteManagementRepository.get(delivery["quote_id"])
         pdf = QuoteManagementRepository.latest_pdf(delivery["quote_id"])
         if not quote:
@@ -482,7 +490,7 @@ class QuoteManagementService:
                     "mime_type": item.get("mime_type"),
                 })
         try:
-            result = current_app.extensions["gmail_provider"].send(
+            result = current_app.extensions["email_provider"].send(
                 sender="ricardo.lugo@lugohermanos.com",
                 recipients=[delivery["recipient_email"]],
                 cc=json.loads(delivery["cc_json"]), subject=delivery["subject"],
@@ -491,7 +499,9 @@ class QuoteManagementService:
             )
         except Exception as error:
             QuoteManagementRepository.mark_delivery_error(delivery_id, str(error))
-            raise ValueError("La cotización se conservó, pero Gmail no pudo enviarla.") from error
+            raise ValueError(
+                "La cotización se conservó, pero no se pudo enviar el correo."
+            ) from error
         QuoteManagementRepository.mark_delivery_sent(delivery_id, result, actor)
         settings = QuoteManagementRepository.settings()
         due = date.today()
@@ -568,7 +578,7 @@ class QuoteManagementService:
         body_html = "<p>" + escape(body_text).replace("\n", "<br>") + "</p>"
         import json
         try:
-            result = current_app.extensions["gmail_provider"].reply(
+            result = current_app.extensions["email_provider"].reply(
                 thread_id=delivery["provider_thread_id"],
                 sender="ricardo.lugo@lugohermanos.com",
                 recipients=[delivery["recipient_email"]],
@@ -577,7 +587,7 @@ class QuoteManagementService:
             )
         except Exception as error:
             raise ValueError(
-                "La cotización se conservó, pero Gmail no pudo enviar el seguimiento."
+                "La cotización se conservó, pero no se pudo enviar el seguimiento."
             ) from error
         QuoteManagementRepository.record_followup_email(
             quote_id, delivery["id"], result["message_id"], actor

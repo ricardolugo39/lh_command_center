@@ -12,23 +12,23 @@
     <section class="card h-100">
       <div class="card-header">
         <div class="d-flex align-items-center justify-content-between w-100 gap-3">
-          <div><div class="text-secondary small">Google Gmail</div>
+          <div><div class="text-secondary small">Microsoft 365 / Outlook</div>
             <h2 class="card-title mb-0">Correos de RFQ</h2></div>
-          {% if page.gmail.ready %}<span class="badge bg-green-lt">Conectado</span>
+          {% if page.email.ready and page.email.provider == 'microsoft' %}<span class="badge bg-green-lt">Conectado</span>
           {% else %}<span class="badge bg-yellow-lt">Sin conectar</span>{% endif %}
         </div>
       </div>
       <div class="card-body">
-        {% if request.args.get('gmail') == 'connected' %}
-        <div class="alert alert-success">Gmail quedó conectado correctamente.</div>
-        {% elif request.args.get('gmail') == 'failed' %}
-        <div class="alert alert-danger">No fue posible conectar Gmail. Intente nuevamente.</div>
+        {% if request.args.get('microsoft_mail') == 'connected' %}
+        <div class="alert alert-success">Microsoft 365 quedó conectado correctamente.</div>
+        {% elif request.args.get('microsoft_mail') == 'failed' %}
+        <div class="alert alert-danger">No fue posible conectar Microsoft 365. Revise la configuración e intente nuevamente.</div>
         {% endif %}
-        <p class="mb-0">Envía las pruebas y RFQ desde ricardo.lugo@lugohermanos.com y permite detectar respuestas reales.</p>
+        <p class="mb-0">Envía RFQ, cotizaciones y borradores desde {{ page.email.mailbox or 'el buzón configurado' }}, y permite sincronizar respuestas.</p>
       </div>
       <div class="card-footer bg-transparent">
-        <a class="btn btn-primary" href="{{ url_for('integrations.gmail_connect') }}">
-          {{ 'Reconectar Gmail' if page.gmail.ready else 'Conectar Gmail' }}
+        <a class="btn btn-primary" href="{{ url_for('integrations.microsoft_mail_connect') }}">
+          {{ 'Reconectar Microsoft 365' if page.email.ready and page.email.provider == 'microsoft' else 'Conectar Microsoft 365' }}
         </a>
       </div>
     </section>

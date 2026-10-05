@@ -171,7 +171,7 @@ def test_gmail_send_sync_and_failure_are_safe(targeted_database):
     ]
 
     second = RFQService.create(_rfq_values("PC-FAIL"))
-    application.extensions["gmail_provider"] = FakeGmail(fail=True)
+    application.extensions["email_provider"] = FakeGmail(fail=True)
     with application.app_context(), pytest.raises(ValueError, match="se conservó"):
         RFQEmailService.send(second)
     assert RFQService.detail(second)["rfq"]["workflow_status"] == "draft"

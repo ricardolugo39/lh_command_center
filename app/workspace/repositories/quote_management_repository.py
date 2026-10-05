@@ -508,14 +508,15 @@ class QuoteManagementRepository:
             cursor = connection.execute(
                 """INSERT INTO quote_deliveries(quote_id,recipient_email,cc_json,
                 subject,body_text,body_html,advisor_note,note_internal_only,
-                note_included,attachment_ids_json,prepared_by_user_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                note_included,attachment_ids_json,prepared_by_user_id,email_provider)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     quote_id, values["recipient_email"], json.dumps(values["cc"]),
                     values["subject"], values["body_text"], values["body_html"],
                     values.get("advisor_note"), int(values.get("note_internal_only", True)),
                     int(values.get("note_included", True)),
                     json.dumps(values.get("attachment_ids", [])), actor,
+                    values.get("email_provider", "gmail"),
                 ),
             )
         return int(cursor.lastrowid)

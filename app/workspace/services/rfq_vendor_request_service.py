@@ -85,7 +85,7 @@ class RFQVendorRequestService:
                 number, items, rfq.get("vendor_message")
             )
             try:
-                current_app.extensions["gmail_provider"].send(
+                current_app.extensions["email_provider"].send(
                     sender=cls.TEST_RECIPIENT,
                     recipients=[cls.TEST_RECIPIENT], cc=[],
                     subject=f"[PRUEBA] {number} - {brand}",
@@ -133,7 +133,7 @@ class RFQVendorRequestService:
             )
             cc = json.loads(config["default_cc_json"])
             try:
-                result = current_app.extensions["gmail_provider"].send(
+                result = current_app.extensions["email_provider"].send(
                     sender="ricardo.lugo@lugohermanos.com",
                     recipients=[config["vendor_email"]], cc=cc, subject=subject,
                     body_text=body_text, body_html=body_html,
@@ -147,12 +147,14 @@ class RFQVendorRequestService:
                 cursor = connection.execute(
                     """INSERT INTO rfq_vendor_requests(rfq_id,brand,vendor_config_id,
                     status,recipient_email,cc_json,subject,body_text,body_html,
-                    provider_message_id,provider_thread_id,sent_by_user_id,sent_at)
-                    VALUES (?,?,?,'sent',?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
+                    provider_message_id,provider_thread_id,sent_by_user_id,sent_at,
+                    email_provider)
+                    VALUES (?,?,?,'sent',?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,?)""",
                     (
                         rfq_id,brand,config["id"],config["vendor_email"],json.dumps(cc),
                         subject,body_text,body_html,result.get("message_id"),
                         result.get("thread_id"),actor_user_id,
+                        current_app.config.get("EMAIL_PROVIDER", "gmail"),
                     ),
                 )
                 vendor_request_id = int(cursor.lastrowid)
@@ -180,12 +182,16 @@ class RFQVendorRequestService:
             raise ValueError("La RFQ todavía no se ha enviado a un proveedor.")
         response_count = 0
         for vendor_request in requests:
+            if vendor_request.get("email_provider", "gmail") != current_app.config.get(
+                "EMAIL_PROVIDER", "gmail"
+            ):
+                continue
             thread_id = vendor_request.get("provider_thread_id")
             if not thread_id:
                 continue
             try:
-                messages = current_app.extensions["gmail_provider"].thread(thread_id)
-                provider = current_app.extensions["gmail_provider"]
+                messages = current_app.extensions["email_provider"].thread(thread_id)
+                provider = current_app.extensions["email_provider"]
                 if hasattr(provider, "search"):
                     number = str(rfq["rfq_number"]).replace('"', "")
                     recipient = str(vendor_request["recipient_email"]).strip()
@@ -275,7 +281,7 @@ class RFQVendorRequestService:
             )
             body_html = "<p>" + html.escape(body_text).replace("\n", "<br>") + "</p>"
             try:
-                result = current_app.extensions["gmail_provider"].reply(
+                result = current_app.extensions["email_provider"].reply(
                     thread_id=item["provider_thread_id"],
                     sender="ricardo.lugo@lugohermanos.com",
                     recipients=[item["recipient_email"]],

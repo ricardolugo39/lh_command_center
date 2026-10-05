@@ -17,24 +17,25 @@ class RFQEmailRepository:
     def save_sent(
         rfq_id: int, *, subject: str, sender: str, recipients: list[str],
         cc: list[str], provider_thread_id: str, provider_message_id: str,
-        body_text: str, body_html: str,
+        body_text: str, body_html: str, provider: str = "gmail",
     ) -> None:
         with connection_scope() as connection:
             connection.execute(
                 """INSERT INTO rfq_email_threads (
-                    rfq_id, provider_thread_id, subject, sender_email,
+                    rfq_id, provider, provider_thread_id, subject, sender_email,
                     recipient_emails_json, cc_emails_json, sent_message_id,
                     sent_at, sync_status, last_synced_at, last_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'synced',
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'synced',
                     CURRENT_TIMESTAMP, NULL)
                 ON CONFLICT(rfq_id) DO UPDATE SET
+                    provider=excluded.provider,
                     provider_thread_id=excluded.provider_thread_id,
                     sent_message_id=excluded.sent_message_id,
                     sent_at=excluded.sent_at, sync_status='synced',
                     last_synced_at=CURRENT_TIMESTAMP, last_error=NULL,
                     updated_at=CURRENT_TIMESTAMP""",
                 (
-                    rfq_id, provider_thread_id, subject, sender,
+                    rfq_id, provider, provider_thread_id, subject, sender,
                     json.dumps(recipients), json.dumps(cc), provider_message_id,
                 ),
             )
