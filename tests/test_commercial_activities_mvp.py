@@ -188,7 +188,15 @@ def test_limited_pilot_user_only_reaches_activity_capture(activity_database):
     assert client.get("/workspace/projects").status_code == 403
     capture = client.get("/activities/")
     assert capture.status_code == 200
-    assert b"Cliente Uno" in capture.data
+    assert b"Cliente Uno" not in capture.data
+    assert client.get("/activities/customer-search?q=C").get_json() == []
+    customer_results = client.get(
+        "/activities/customer-search?q=Cliente"
+    ).get_json()
+    assert [row["name"] for row in customer_results] == ["Cliente Uno"]
+    assert customer_results[0]["activity_url"].endswith(
+        "/activities/customer/1/new"
+    )
     assert client.get("/activities/customer/1/new").status_code == 200
     assert client.get("/activities/customer/2/new").status_code == 403
     assert client.get("/activities/training/report").status_code == 403

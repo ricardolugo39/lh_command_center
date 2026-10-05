@@ -1,7 +1,8 @@
 import secrets
 
 from flask import (
-    Blueprint, abort, g, redirect, render_template, request, session, url_for,
+    Blueprint, abort, g, jsonify, redirect, render_template, request, session,
+    url_for,
 )
 
 from app.auth import module_required, roles_required
@@ -21,14 +22,26 @@ activities_bp = Blueprint("activities", __name__, url_prefix="/activities")
 @roles_required("administrator", "commercial_management", "advisor")
 @module_required("activities")
 def index():
+    return render_template("activities/capture_index.html")
+
+
+@activities_bp.get("/customer-search")
+@roles_required("administrator", "commercial_management", "advisor")
+@module_required("activities")
+def customer_search():
     search = request.args.get("q", "").strip()
-    return render_template(
-        "activities/capture_index.html",
-        customers=ActivityFormRepository.list_customers_for_capture(
-            user=g.current_user, search=search
-        ),
-        search=search,
+    customers = ActivityFormRepository.list_customers_for_capture(
+        user=g.current_user, search=search, limit=10
     )
+    return jsonify([
+        {
+            **customer,
+            "activity_url": url_for(
+                "activities.new", customer_id=customer["id"]
+            ),
+        }
+        for customer in customers
+    ])
 
 
 @activities_bp.route("/training", methods=["GET", "POST"])

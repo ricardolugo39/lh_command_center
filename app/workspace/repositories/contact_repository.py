@@ -71,8 +71,12 @@ class ActivityFormRepository:
 
     @staticmethod
     def list_customers_for_capture(
-        *, user: dict[str, Any], search: str = ""
+        *, user: dict[str, Any], search: str = "", limit: int = 10
     ) -> list[dict[str, Any]]:
+        search = search.strip()
+        if len(search) < 2:
+            return []
+        limit = max(1, min(int(limit), 25))
         clauses = ["1=1"]
         parameters: list[Any] = []
         if user.get("role") == "advisor":
@@ -83,12 +87,12 @@ class ActivityFormRepository:
         elif user.get("office"):
             clauses.append("m.office = ?")
             parameters.append(user["office"])
-        if search.strip():
-            clauses.append(
-                "(UPPER(c.name) LIKE UPPER(?) OR UPPER(c.erp_customer_id) LIKE UPPER(?))"
-            )
-            term = f"%{search.strip()}%"
-            parameters.extend((term, term))
+        clauses.append(
+            "(UPPER(c.name) LIKE UPPER(?) OR UPPER(c.erp_customer_id) LIKE UPPER(?))"
+        )
+        term = f"%{search}%"
+        parameters.extend((term, term))
+        parameters.append(limit)
         with connection_scope() as connection:
             rows = connection.execute(
                 f"""SELECT c.id,c.name,c.erp_customer_id,m.office,m.advisor
@@ -96,7 +100,7 @@ class ActivityFormRepository:
                 LEFT JOIN ws_customer_portfolio_metadata m
                   ON m.erp_customer_id=c.erp_customer_id
                 WHERE {' AND '.join(clauses)}
-                ORDER BY c.name COLLATE NOCASE LIMIT 100""",
+                ORDER BY c.name COLLATE NOCASE LIMIT ?""",
                 parameters,
             ).fetchall()
         return [dict(row) for row in rows]
