@@ -130,7 +130,11 @@
             <span class="badge bg-green-lt">Coincide</span>
             {% elif line.comparison_status == 'price_change' %}
             <span class="badge bg-yellow-lt">Cambio de precio</span>
+            {% if line.variance_amount is not none %}
             <div class="small text-secondary mt-1">Diferencia por unidad: USD {{ '%+.2f'|format(line.variance_amount) }}.</div>
+            {% else %}
+            <div class="small text-secondary mt-1">No existe un precio FOB anterior para calcular la diferencia.</div>
+            {% endif %}
             {% elif line.comparison_status == 'quantity_mismatch' %}
             <span class="badge bg-red-lt">Cantidad diferente</span>
             <div class="small text-secondary mt-1">La cantidad cotizada no coincide con la cantidad aprobada.</div>
