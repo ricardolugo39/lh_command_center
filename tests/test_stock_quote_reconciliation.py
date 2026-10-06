@@ -1,4 +1,5 @@
 import io
+import pytest
 
 from reportlab.pdfgen import canvas
 
@@ -65,3 +66,33 @@ def test_vendor_sku_is_read_after_customer_reference():
     assert StockQuoteReconciliationService._vendor_sku(
         "411 N45 A0THO", raw
     ) == "411N45B0"
+
+
+def test_thk_reference_matching_handles_invoice_aliases_and_cut_lengths():
+    key = StockQuoteReconciliationService._thk_match_key
+    assert key("BTK 1405V-2.6ZZ NUTTHK") == key("BTK1405V-2.6ZZ")
+    assert key("C 8THK") == key("CV8")
+    assert key("KR 32 PPATHK") == key("CF12-1UU-AB")
+    assert key("KR 40 PPATHK") == key("CF18UU-AB")
+    assert key("LM 20 UU-OPTHK") == key("LM20NUU-OP")
+    assert key("SRS 15 WMUU(GK)THK") == key("SRS15WMUU")
+    assert key("SR 15+3000LTHK") == key("SR15-3000LY")
+    assert key("TS 2510+3000LTHK") == key("TS2510+2500L")
+
+
+def test_thk_alignment_aggregates_split_invoice_rows_and_marks_missing_items():
+    orders = [
+        {"sku": "SHS 35-3000LTHK"},
+        {"sku": "LMK 25 LUUTHK"},
+    ]
+    quoted = (
+        {"vendor_sku": "SHS35-3000L", "quantity": 3.0,
+         "unit_price": 229.4, "line_total": 688.2, "raw_text": "carton 6"},
+        {"vendor_sku": "SHS35-3000L", "quantity": 4.0,
+         "unit_price": 229.4, "line_total": 917.6, "raw_text": "carton 8"},
+    )
+    aligned = StockQuoteReconciliationService._align_lines(orders, quoted)
+    assert aligned[0]["quantity"] == 7
+    assert aligned[0]["line_total"] == pytest.approx(1605.8)
+    assert aligned[1]["quantity"] == 0
+    assert "no encontrada" in aligned[1]["raw_text"]

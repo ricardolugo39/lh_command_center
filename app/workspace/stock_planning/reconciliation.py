@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from pypdf import PdfReader
+import pdfplumber
 from werkzeug.utils import secure_filename
 
 from app.database.transaction import transaction
@@ -54,12 +55,7 @@ class StockQuoteReconciliationService:
             raise ValueError("El análisis de inventario no existe.")
         parsed = cls.parse(content)
         order_rows = cls._order_rows(snapshot_id, branch_code)
-        if len(parsed.lines) != len(order_rows):
-            raise ValueError(
-                "La cotización contiene "
-                f"{len(parsed.lines)} línea(s), pero el pedido de la sede tiene "
-                f"{len(order_rows)}. Revise que corresponda a este pedido."
-            )
+        aligned_lines = cls._align_lines(order_rows, parsed.lines)
 
         digest = hashlib.sha256(content).hexdigest()
         directory = upload_path("stock-planning", "vendor-quotes", str(snapshot_id))
@@ -91,9 +87,10 @@ class StockQuoteReconciliationService:
             )
             quote_id = int(cursor.lastrowid)
             for index, (ordered, quoted) in enumerate(
-                zip(order_rows, parsed.lines), start=1
+                zip(order_rows, aligned_lines), start=1
             ):
-                quoted["vendor_sku"] = cls._vendor_sku(
+                quoted = dict(quoted)
+                quoted["vendor_sku"] = quoted.get("vendor_sku") or cls._vendor_sku(
                     ordered["sku"], quoted.get("raw_text", "")
                 )
                 comparison = cls._compare(ordered, quoted)
@@ -137,6 +134,11 @@ class StockQuoteReconciliationService:
         if not text.strip():
             raise ValueError("El PDF no contiene texto legible.")
 
+        if "THK BRAND PRODUCTS" in text.upper() and "INVOICE" in text.upper():
+            return StockQuoteReconciliationService._parse_thk_invoice(
+                content, text
+            )
+
         lines = []
         for match in MONEY_PATTERN.finditer(text):
             start = text.rfind("\n", 0, match.start()) + 1
@@ -161,6 +163,151 @@ class StockQuoteReconciliationService:
             cls_number(total_matches[-1]) if total_matches else None,
             tuple(lines),
         )
+
+    @staticmethod
+    def _parse_thk_invoice(content: bytes, text: str) -> ParsedQuote:
+        """Read THK Brasil invoices using their physical table columns.
+
+        The PDF's text stream joins net weight and unit price, so a regular
+        expression over extracted text cannot reliably recover the rows.
+        """
+        from io import BytesIO
+
+        lines = []
+        with pdfplumber.open(BytesIO(content)) as document:
+            for page in document.pages:
+                rows: dict[float, list[dict[str, Any]]] = {}
+                for word in page.extract_words(use_text_flow=False):
+                    rows.setdefault(round(float(word["top"]), 1), []).append(word)
+                for words in rows.values():
+                    words.sort(key=lambda word: float(word["x0"]))
+                    description = [
+                        word["text"] for word in words if float(word["x0"]) < 230
+                    ]
+                    quantities = [
+                        word["text"] for word in words
+                        if 225 <= float(word["x0"]) < 260
+                    ]
+                    prices = [
+                        word["text"] for word in words
+                        if 315 <= float(word["x0"]) < 390
+                    ]
+                    amounts = [
+                        word["text"] for word in words if float(word["x0"]) >= 470
+                    ]
+                    if not (description and quantities and prices and amounts):
+                        continue
+                    vendor_sku = description[0].split("(", 1)[0]
+                    if vendor_sku.upper() in {"DESCRIPTION", "CATALOGS"}:
+                        continue
+                    if not re.fullmatch(r"\d+(?:[.,]\d+)?", quantities[0]):
+                        continue
+                    try:
+                        quantity = cls_number(quantities[0])
+                        unit_price = cls_number(prices[0])
+                        line_total = cls_number(amounts[-1])
+                    except ValueError:
+                        continue
+                    raw = " ".join(word["text"] for word in words)
+                    lines.append({
+                        "vendor_sku": vendor_sku,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "line_total": line_total,
+                        "raw_text": raw,
+                    })
+
+        number = re.search(r"N[\u00ba°]\.?\s+([A-Z]{2}-\d+/\d+)", text, re.I)
+        date_match = re.search(
+            r"Date:\s+([A-Z]+\s+\d{1,2},\s+\d{4})", text, re.I
+        )
+        total_match = re.search(
+            r"GRAND TOTAL:.*?USD\s+([\d.]+,\d{2})", text,
+            re.I | re.S,
+        )
+        quote_date = None
+        if date_match:
+            quote_date = datetime.strptime(
+                date_match.group(1), "%B %d, %Y"
+            ).date().isoformat()
+        return ParsedQuote(
+            number.group(1) if number else None,
+            quote_date,
+            None,
+            cls_number(total_match.group(1)) if total_match else None,
+            tuple(lines),
+        )
+
+    @classmethod
+    def _align_lines(
+        cls, order_rows: list[dict[str, Any]], quoted_lines: tuple[dict[str, Any], ...],
+    ) -> list[dict[str, Any]]:
+        """Align THK rows by reference and retain positional Thomson support."""
+        if not any(line.get("vendor_sku") for line in quoted_lines):
+            if len(quoted_lines) != len(order_rows):
+                raise ValueError(
+                    "La cotización contiene "
+                    f"{len(quoted_lines)} línea(s), pero el pedido de la sede tiene "
+                    f"{len(order_rows)}. Revise que corresponda a este pedido."
+                )
+            return [dict(line) for line in quoted_lines]
+
+        grouped: dict[str, dict[str, Any]] = {}
+        for source in quoted_lines:
+            key = cls._thk_match_key(str(source.get("vendor_sku") or ""))
+            current = grouped.get(key)
+            if current is None:
+                grouped[key] = dict(source)
+                continue
+            current["quantity"] += float(source["quantity"])
+            current["line_total"] += float(source["line_total"])
+            current["raw_text"] += " | " + str(source.get("raw_text") or "")
+            if current["quantity"]:
+                current["unit_price"] = (
+                    current["line_total"] / current["quantity"]
+                )
+
+        aligned = []
+        used = set()
+        for ordered in order_rows:
+            key = cls._thk_match_key(ordered["sku"])
+            quoted = grouped.get(key)
+            if quoted is not None:
+                used.add(key)
+                aligned.append(dict(quoted))
+            else:
+                aligned.append({
+                    "vendor_sku": None, "quantity": 0.0, "unit_price": 0.0,
+                    "line_total": 0.0,
+                    "raw_text": "Referencia no encontrada en la factura THK.",
+                })
+        extras = sorted(set(grouped) - used)
+        if extras:
+            raise ValueError(
+                "La factura THK contiene referencias que no pertenecen al pedido: "
+                + ", ".join(grouped[key]["vendor_sku"] for key in extras)
+            )
+        return aligned
+
+    @staticmethod
+    def _thk_match_key(value: str) -> str:
+        key = re.sub(r"[^A-Z0-9.+]", "", value.upper())
+        key = key.removesuffix("THK")
+        aliases = {
+            "BTK1405V2.6ZZNUT": "BTK1405V2.6ZZ",
+            "C8": "CV8",
+            "KR32PPA": "CF121UUAB",
+            "KR40PPA": "CF18UUAB",
+            "LM20UUOP": "LM20NUUOP",
+            "SRS15WMUUGK": "SRS15WMUU",
+        }
+        key = aliases.get(key, key)
+        if key.startswith("TS") and "+" in key:
+            return key.split("+", 1)[0]
+        key = key.replace("+", "")
+        if key.endswith("Y") and "3000L" in key:
+            key = key[:-1]
+        return key
 
     @staticmethod
     def _order_rows(snapshot_id: int, branch_code: str) -> list[dict[str, Any]]:
