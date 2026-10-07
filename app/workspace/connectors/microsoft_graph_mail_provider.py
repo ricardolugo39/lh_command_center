@@ -74,6 +74,21 @@ class MicrosoftGraphMailProvider:
             "thread_id": draft.get("conversationId") or thread_id,
         }
 
+    def create_message_draft(
+        self, *, sender: str, recipients: list[str], cc: list[str],
+        subject: str, body_text: str, body_html: str,
+        attachments: list[dict] | None = None,
+    ) -> dict:
+        draft = self._create_message(
+            recipients=recipients, cc=cc, subject=subject,
+            body_html=body_html, attachments=attachments,
+        )
+        return {
+            "draft_id": draft["id"],
+            "message_id": draft["id"],
+            "thread_id": draft.get("conversationId") or draft["id"],
+        }
+
     def thread(self, thread_id: str) -> list[dict]:
         result = self._request(
             "GET", "/me/messages",

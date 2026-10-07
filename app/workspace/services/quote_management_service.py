@@ -225,8 +225,7 @@ class QuoteManagementService:
             "vendor_requests": vendor_requests,
             "purchase_order_draft": VendorPurchaseOrderService.latest(quote_id),
             "purchase_order_available": (
-                bool(quote.get("originating_rfq_id"))
-                and quote.get("quote_status")
+                quote.get("quote_status")
                 in VendorPurchaseOrderService.ELIGIBLE_QUOTE_STATUSES
             ),
         }

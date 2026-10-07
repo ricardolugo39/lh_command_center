@@ -1,4 +1,5 @@
 import sqlite3
+from io import BytesIO
 
 import pytest
 
@@ -51,3 +52,66 @@ def test_vendor_po_action_remains_available_after_quote_is_won(quote_database):
     assert response.status_code == 200
     assert b"Orden de compra al proveedor" in response.data
     assert b"Crear borrador de PO en Outlook" in response.data
+
+
+def test_direct_quote_creates_outlook_draft_with_uploaded_vendor_pdf(
+    quote_database,
+):
+    quote_id = QuoteManagementService.create_direct({
+        "customer_id": 1,
+        "sales_rep_name": "Maria Sierra",
+        "sales_rep_email": "ventasonline@lugohermanos.com",
+        "items": [{
+            "reference": "LMH 20 UU",
+            "brand": "THK",
+            "quantity": "23",
+            "fob_unit_usd": "299",
+            "unit_weight_kg": "0.5",
+            "lead_time": "4 weeks",
+            "product_type": "BRG",
+        }],
+    }, 1)
+    with sqlite3.connect(quote_database) as connection:
+        connection.execute(
+            "UPDATE ws_project_quotes SET quote_status='sent_sales_rep' WHERE id=?",
+            (quote_id,),
+        )
+
+    class MailProvider:
+        payload = None
+
+        def create_message_draft(self, **payload):
+            self.payload = payload
+            return {
+                "draft_id": "draft-1",
+                "message_id": "message-1",
+                "thread_id": "thread-1",
+            }
+
+    provider = MailProvider()
+    application = create_app({
+        "TESTING": True,
+        "TEST_AUTH_BYPASS": True,
+        "EMAIL_PROVIDER": "microsoft",
+    }, run_migrations=False)
+    application.extensions["email_provider"] = provider
+    response = application.test_client().post(
+        f"/quotes/{quote_id}/vendor-po-draft",
+        data={
+            "vendor_name": "THK",
+            "vendor_email": "vendor@example.com",
+            "vendor_quote_pdf": (BytesIO(b"%PDF-1.4 vendor quote"), "quote.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 302
+    assert provider.payload["recipients"] == ["vendor@example.com"]
+    assert provider.payload["attachments"][0]["filename"] == "quote.pdf"
+    with sqlite3.connect(quote_database) as connection:
+        draft = connection.execute(
+            "SELECT recipient_email,status FROM direct_vendor_purchase_order_drafts "
+            "WHERE quote_id=?",
+            (quote_id,),
+        ).fetchone()
+    assert draft == ("vendor@example.com", "draft")

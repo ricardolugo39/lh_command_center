@@ -121,6 +121,38 @@ class GmailProvider:
         ).execute()
         return {"message_id": result["id"], "thread_id": result["threadId"]}
 
+    def create_message_draft(
+        self, *, sender: str, recipients: list[str], cc: list[str],
+        subject: str, body_text: str, body_html: str,
+        attachments: list[dict] | None = None,
+    ) -> dict:
+        message = EmailMessage()
+        message["From"], message["To"], message["Subject"] = (
+            sender, ", ".join(recipients), subject,
+        )
+        if cc:
+            message["Cc"] = ", ".join(cc)
+        message.set_content(body_text)
+        message.add_alternative(body_html, subtype="html")
+        for attachment in attachments or []:
+            path = Path(attachment["path"])
+            mime = attachment.get("mime_type") or mimetypes.guess_type(path.name)[0]
+            maintype, subtype = (mime or "application/octet-stream").split("/", 1)
+            message.add_attachment(
+                path.read_bytes(), maintype=maintype, subtype=subtype,
+                filename=attachment.get("filename") or path.name,
+            )
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        result = self._service().users().drafts().create(
+            userId="me", body={"message": {"raw": raw}},
+        ).execute()
+        draft_message = result.get("message") or {}
+        return {
+            "draft_id": result["id"],
+            "message_id": draft_message.get("id"),
+            "thread_id": draft_message.get("threadId") or result["id"],
+        }
+
     def create_reply_draft(
         self, *, thread_id: str, sender: str, recipients: list[str],
         cc: list[str], subject: str, body_text: str, body_html: str,

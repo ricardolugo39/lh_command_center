@@ -296,11 +296,42 @@ def outcome(quote_id: int):
 @roles_required("administrator")
 def vendor_po_draft(quote_id: int):
     try:
-        VendorPurchaseOrderService.create_draft(
-            quote_id,
-            request.form.get("vendor_request_id", type=int),
-            g.current_user["id"],
-        )
+        quote = QuoteManagementRepository.get(quote_id)
+        if not quote:
+            abort(404)
+        if quote.get("originating_rfq_id"):
+            VendorPurchaseOrderService.create_draft(
+                quote_id,
+                request.form.get("vendor_request_id", type=int),
+                g.current_user["id"],
+            )
+        else:
+            upload = request.files.get("vendor_quote_pdf")
+            if not upload or not upload.filename:
+                raise ValueError("Seleccione el PDF de cotización del proveedor.")
+            if upload.mimetype != "application/pdf":
+                raise ValueError("La cotización del proveedor debe ser un archivo PDF.")
+            safe_name = secure_filename(upload.filename)
+            root = upload_path("quotes", str(quote_id))
+            root.mkdir(parents=True, exist_ok=True)
+            path = root / safe_name
+            upload.save(path)
+            attachment_id = QuoteManagementRepository.add_attachment(quote_id, {
+                "original_filename": upload.filename,
+                "stored_filename": str(path),
+                "mime_type": upload.mimetype,
+                "size_bytes": path.stat().st_size,
+                "category": "vendor_quote",
+                "uploaded_by_user_id": g.current_user["id"],
+                "vendor_confidential": True,
+            })
+            VendorPurchaseOrderService.create_direct_draft(
+                quote_id,
+                request.form.get("vendor_email", ""),
+                request.form.get("vendor_name", ""),
+                attachment_id,
+                g.current_user["id"],
+            )
     except (TypeError, ValueError) as exception:
         return render_template(
             "quotes/workspace.html",

@@ -4170,6 +4170,34 @@ def _migration_0084_activity_capture_pilot(connection: Connection) -> None:
         )
 
 
+def _migration_0088_direct_vendor_purchase_order_drafts(
+    connection: Connection,
+) -> None:
+    """Support PO email drafts for quotes created without an originating RFQ."""
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS direct_vendor_purchase_order_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_id INTEGER NOT NULL,
+            recipient_email TEXT NOT NULL,
+            vendor_name TEXT,
+            subject TEXT NOT NULL,
+            body_text TEXT NOT NULL,
+            attachment_id INTEGER NOT NULL,
+            provider_draft_id TEXT NOT NULL,
+            provider_message_id TEXT,
+            provider_thread_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft','sent')),
+            prepared_by_user_id INTEGER NOT NULL,
+            confirmed_by_user_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            confirmed_at TEXT,
+            email_provider TEXT NOT NULL DEFAULT 'microsoft',
+            FOREIGN KEY(quote_id) REFERENCES ws_project_quotes(id) ON DELETE CASCADE,
+            FOREIGN KEY(attachment_id) REFERENCES quote_attachment_links(id)
+                ON DELETE RESTRICT
+        )"""
+    )
 def _migration_0085_activity_training_completion(connection: Connection) -> None:
     """Track completion of the activity-capture training by authenticated user."""
     _execute_statements(connection, (
@@ -4190,9 +4218,10 @@ def _migration_0085_activity_training_completion(connection: Connection) -> None
 
 def _migration_0086_activity_capture_quality_fields(connection: Connection) -> None:
     """Add structured findings and non-sales Lugo engineering participants."""
-    _add_column(connection, "ws_activities", "finding_type", "TEXT")
-    _add_column(connection, "ws_activities", "finding_detail", "TEXT")
-    _add_column(connection, "ws_activities", "engineering_participants", "TEXT")
+    if _table_exists(connection, "ws_activities"):
+        _add_column(connection, "ws_activities", "finding_type", "TEXT")
+        _add_column(connection, "ws_activities", "finding_detail", "TEXT")
+        _add_column(connection, "ws_activities", "engineering_participants", "TEXT")
 
 
 def _migration_0087_remove_pending_activity_pilot_users(
@@ -4437,6 +4466,10 @@ MIGRATION_MANIFEST = (
     Migration(
         87, "remove_pending_activity_pilot_users",
         _migration_0087_remove_pending_activity_pilot_users,
+    ),
+    Migration(
+        88, "direct_vendor_purchase_order_drafts",
+        _migration_0088_direct_vendor_purchase_order_drafts,
     ),
 )
 

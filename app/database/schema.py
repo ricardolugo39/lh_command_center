@@ -62,6 +62,7 @@ OPERATIONAL_TABLES = [
     "rfq_email_threads",
     "rfq_email_messages",
     "vendor_purchase_order_drafts",
+    "direct_vendor_purchase_order_drafts",
     "ask_analyses",
     "ask_messages",
     "ask_files",
