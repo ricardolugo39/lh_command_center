@@ -18,6 +18,7 @@ from app.workspace.repositories.rfq_vendor_request_repository import (
 
 class VendorPurchaseOrderService:
     SENDER = "ricardo.lugo@lugohermanos.com"
+    ELIGIBLE_QUOTE_STATUSES = {"sent_sales_rep", "won"}
 
     @staticmethod
     def latest(quote_id: int) -> dict[str, Any] | None:
@@ -37,8 +38,11 @@ class VendorPurchaseOrderService:
         quote = QuoteManagementRepository.get(quote_id)
         if not quote or not quote.get("originating_rfq_id"):
             raise ValueError("La cotización no tiene una RFQ de origen.")
-        if quote.get("quote_status") != "sent_sales_rep":
-            raise ValueError("Primero envíe la cotización al asesor comercial.")
+        if quote.get("quote_status") not in cls.ELIGIBLE_QUOTE_STATUSES:
+            raise ValueError(
+                "Primero envíe la cotización al asesor comercial y márquela "
+                "como ganada cuando reciba la orden del cliente."
+            )
         pending = cls.latest(quote_id)
         if pending and pending.get("status") == "draft":
             raise ValueError("Ya existe un borrador de PO pendiente en el correo.")
