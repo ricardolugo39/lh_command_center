@@ -203,6 +203,24 @@ class QuoteManagementService:
         from app.workspace.services.vendor_purchase_order_service import (
             VendorPurchaseOrderService,
         )
+        direct_vendor_options = []
+        if not quote.get("originating_rfq_id"):
+            brands = sorted({
+                str(line.get("brand") or "").strip()
+                for line in lines if str(line.get("brand") or "").strip()
+            })
+            with connection_scope() as connection:
+                for brand in brands:
+                    config = connection.execute(
+                        """SELECT vendor_name,vendor_email FROM quote_vendor_configs
+                        WHERE brand=? COLLATE NOCASE AND active=1""",
+                        (brand,),
+                    ).fetchone()
+                    direct_vendor_options.append({
+                        "brand": brand,
+                        "vendor_name": config["vendor_name"] if config else brand,
+                        "vendor_email": config["vendor_email"] if config else None,
+                    })
         return {
             "quote": quote,
             "lines": lines,
@@ -228,6 +246,7 @@ class QuoteManagementService:
                 quote.get("quote_status")
                 in VendorPurchaseOrderService.ELIGIBLE_QUOTE_STATUSES
             ),
+            "direct_vendor_options": direct_vendor_options,
         }
 
     @staticmethod

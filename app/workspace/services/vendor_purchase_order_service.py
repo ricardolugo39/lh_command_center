@@ -58,7 +58,8 @@ class VendorPurchaseOrderService:
     @classmethod
     def create_direct_draft(
         cls, quote_id: int, recipient_email: str, vendor_name: str,
-        attachment_id: int, actor: int,
+        vendor_quote_attachment_id: int, purchase_order_attachment_id: int,
+        actor: int,
     ) -> dict[str, Any]:
         quote = QuoteManagementRepository.get(quote_id)
         if not quote or quote.get("originating_rfq_id"):
@@ -68,28 +69,43 @@ class VendorPurchaseOrderService:
         pending = cls.latest(quote_id)
         if pending and pending.get("status") == "draft":
             raise ValueError("Ya existe un borrador de PO pendiente en el correo.")
-        recipient = parseaddr(recipient_email or "")[1].casefold()
-        if not recipient or "@" not in recipient:
-            raise ValueError("Ingrese un correo válido del proveedor.")
-        vendor = str(vendor_name or "Vendor").strip() or "Vendor"
-        attachment = next(
-            (
-                item for item in QuoteManagementRepository.attachments(quote_id)
-                if item["id"] == attachment_id
-            ),
+        quote_brands = {
+            str(line.get("brand") or "").strip()
+            for line in QuoteManagementRepository.lines(quote_id)
+            if str(line.get("brand") or "").strip()
+        }
+        requested_vendor = str(vendor_name or "").strip()
+        matching_brand = next(
+            (brand for brand in quote_brands if brand.casefold() == requested_vendor.casefold()),
             None,
         )
-        if not attachment or not Path(attachment["stored_filename"]).is_file():
-            raise ValueError("No se encontró el PDF de cotización del proveedor.")
-        if str(attachment.get("mime_type") or "").casefold() != "application/pdf":
-            raise ValueError("La cotización del proveedor debe ser un archivo PDF.")
+        if not matching_brand:
+            raise ValueError("Seleccione una marca incluida en la cotización.")
+        with connection_scope() as connection:
+            config = connection.execute(
+                """SELECT vendor_name,vendor_email FROM quote_vendor_configs
+                WHERE brand=? COLLATE NOCASE AND active=1""",
+                (matching_brand,),
+            ).fetchone()
+        configured_email = config["vendor_email"] if config else None
+        recipient = parseaddr(configured_email or recipient_email or "")[1].casefold()
+        if not recipient or "@" not in recipient:
+            raise ValueError("Ingrese un correo válido del proveedor.")
+        vendor = str(config["vendor_name"] if config else matching_brand).strip()
+        attachments = {
+            item["id"]: item for item in QuoteManagementRepository.attachments(quote_id)
+        }
+        vendor_quote = cls._pdf_attachment(
+            attachments.get(vendor_quote_attachment_id),
+            "No se encontró el PDF de cotización del proveedor.",
+        )
+        purchase_order = cls._pdf_attachment(
+            attachments.get(purchase_order_attachment_id),
+            "No se encontró el PDF del PO generado en el ERP.",
+        )
         reference = f"{quote['prefix']}-{quote['quote_number']}"
         subject, body_text, body_html = cls._content(vendor, reference)
-        file_payload = [{
-            "path": attachment["stored_filename"],
-            "filename": attachment["original_filename"],
-            "mime_type": attachment.get("mime_type"),
-        }]
+        file_payload = [vendor_quote, purchase_order]
         try:
             result = current_app.extensions["email_provider"].create_message_draft(
                 sender=cls.SENDER, recipients=[recipient], cc=[], subject=subject,
@@ -108,7 +124,8 @@ class VendorPurchaseOrderService:
                 provider_draft_id,provider_message_id,provider_thread_id,
                 prepared_by_user_id,email_provider) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    quote_id, recipient, vendor, subject, body_text, attachment_id,
+                    quote_id, recipient, vendor, subject, body_text,
+                    vendor_quote_attachment_id,
                     result["draft_id"], result.get("message_id"),
                     result["thread_id"], actor,
                     current_app.config.get("EMAIL_PROVIDER", "gmail"),
@@ -116,9 +133,24 @@ class VendorPurchaseOrderService:
             )
         return {"id": int(cursor.lastrowid), **result}
 
+    @staticmethod
+    def _pdf_attachment(
+        attachment: dict[str, Any] | None, missing_message: str,
+    ) -> dict[str, Any]:
+        if not attachment or not Path(attachment["stored_filename"]).is_file():
+            raise ValueError(missing_message)
+        if str(attachment.get("mime_type") or "").casefold() != "application/pdf":
+            raise ValueError("Los adjuntos del proveedor y del ERP deben ser PDF.")
+        return {
+            "path": attachment["stored_filename"],
+            "filename": attachment["original_filename"],
+            "mime_type": attachment.get("mime_type"),
+        }
+
     @classmethod
     def create_draft(
-        cls, quote_id: int, vendor_request_id: int, actor: int,
+        cls, quote_id: int, vendor_request_id: int,
+        purchase_order_attachment_id: int, actor: int,
     ) -> dict[str, Any]:
         quote = QuoteManagementRepository.get(quote_id)
         if not quote or not quote.get("originating_rfq_id"):
@@ -163,6 +195,16 @@ class VendorPurchaseOrderService:
                 })
         if not files:
             raise ValueError("No se encontró la cotización adjunta del proveedor.")
+        purchase_order = next(
+            (
+                item for item in QuoteManagementRepository.attachments(quote_id)
+                if item["id"] == purchase_order_attachment_id
+            ),
+            None,
+        )
+        files.append(cls._pdf_attachment(
+            purchase_order, "No se encontró el PDF del PO generado en el ERP."
+        ))
         rfq = RFQRepository.get(rfq_id)
         number = (rfq or {}).get("prequotation_number") or (rfq or {}).get(
             "rfq_number"

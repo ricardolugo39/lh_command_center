@@ -99,19 +99,22 @@ def test_direct_quote_creates_outlook_draft_with_uploaded_vendor_pdf(
         f"/quotes/{quote_id}/vendor-po-draft",
         data={
             "vendor_name": "THK",
-            "vendor_email": "vendor@example.com",
+            "vendor_email": "ignored@example.com",
             "vendor_quote_pdf": (BytesIO(b"%PDF-1.4 vendor quote"), "quote.pdf"),
+            "purchase_order_pdf": (BytesIO(b"%PDF-1.4 purchase order"), "po.pdf"),
         },
         content_type="multipart/form-data",
     )
 
     assert response.status_code == 302
-    assert provider.payload["recipients"] == ["vendor@example.com"]
-    assert provider.payload["attachments"][0]["filename"] == "quote.pdf"
+    assert provider.payload["recipients"] == ["vendas@thk.com.br"]
+    assert [item["filename"] for item in provider.payload["attachments"]] == [
+        "quote.pdf", "po.pdf",
+    ]
     with sqlite3.connect(quote_database) as connection:
         draft = connection.execute(
             "SELECT recipient_email,status FROM direct_vendor_purchase_order_drafts "
             "WHERE quote_id=?",
             (quote_id,),
         ).fetchone()
-    assert draft == ("vendor@example.com", "draft")
+    assert draft == ("vendas@thk.com.br", "draft")

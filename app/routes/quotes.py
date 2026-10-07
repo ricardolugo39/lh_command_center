@@ -22,6 +22,28 @@ from app.workspace.repositories.contact_repository import ActivityFormRepository
 quotes_bp = Blueprint("quotes", __name__, url_prefix="/quotes")
 
 
+def _save_pdf_attachment(quote_id: int, field: str, category: str) -> int:
+    upload = request.files.get(field)
+    if not upload or not upload.filename:
+        raise ValueError("Seleccione los dos PDF: cotización del proveedor y PO del ERP.")
+    if upload.mimetype != "application/pdf" and not upload.filename.casefold().endswith(".pdf"):
+        raise ValueError("La cotización del proveedor y el PO del ERP deben ser PDF.")
+    safe_name = secure_filename(upload.filename)
+    root = upload_path("quotes", str(quote_id))
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / safe_name
+    upload.save(path)
+    return QuoteManagementRepository.add_attachment(quote_id, {
+        "original_filename": upload.filename,
+        "stored_filename": str(path),
+        "mime_type": "application/pdf",
+        "size_bytes": path.stat().st_size,
+        "category": category,
+        "uploaded_by_user_id": g.current_user["id"],
+        "vendor_confidential": True,
+    })
+
+
 @quotes_bp.get("/")
 @roles_required("administrator", "commercial_management", "advisor", "read_only")
 def index():
@@ -300,36 +322,28 @@ def vendor_po_draft(quote_id: int):
         if not quote:
             abort(404)
         if quote.get("originating_rfq_id"):
+            purchase_order_attachment_id = _save_pdf_attachment(
+                quote_id, "purchase_order_pdf", "purchase_order"
+            )
             VendorPurchaseOrderService.create_draft(
                 quote_id,
                 request.form.get("vendor_request_id", type=int),
+                purchase_order_attachment_id,
                 g.current_user["id"],
             )
         else:
-            upload = request.files.get("vendor_quote_pdf")
-            if not upload or not upload.filename:
-                raise ValueError("Seleccione el PDF de cotización del proveedor.")
-            if upload.mimetype != "application/pdf":
-                raise ValueError("La cotización del proveedor debe ser un archivo PDF.")
-            safe_name = secure_filename(upload.filename)
-            root = upload_path("quotes", str(quote_id))
-            root.mkdir(parents=True, exist_ok=True)
-            path = root / safe_name
-            upload.save(path)
-            attachment_id = QuoteManagementRepository.add_attachment(quote_id, {
-                "original_filename": upload.filename,
-                "stored_filename": str(path),
-                "mime_type": upload.mimetype,
-                "size_bytes": path.stat().st_size,
-                "category": "vendor_quote",
-                "uploaded_by_user_id": g.current_user["id"],
-                "vendor_confidential": True,
-            })
+            vendor_quote_attachment_id = _save_pdf_attachment(
+                quote_id, "vendor_quote_pdf", "vendor_quote"
+            )
+            purchase_order_attachment_id = _save_pdf_attachment(
+                quote_id, "purchase_order_pdf", "purchase_order"
+            )
             VendorPurchaseOrderService.create_direct_draft(
                 quote_id,
                 request.form.get("vendor_email", ""),
                 request.form.get("vendor_name", ""),
-                attachment_id,
+                vendor_quote_attachment_id,
+                purchase_order_attachment_id,
                 g.current_user["id"],
             )
     except (TypeError, ValueError) as exception:
