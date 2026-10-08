@@ -1,0 +1,79 @@
+.planning-action-bar {
+  align-items: center;
+  background: linear-gradient(135deg, #172554 0%, #1e3a5f 100%);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(23, 37, 84, .16);
+  color: #fff;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 20px 24px;
+}
+
+.planning-action-bar .planning-eyebrow { color: #bfdbfe; }
+.planning-action-bar .text-secondary { color: #cbd5e1 !important; }
+.planning-action-count { font-size: 1.75rem; line-height: 1; }
+.planning-action-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.planning-action-buttons .btn { min-width: 148px; }
+.planning-action-buttons .btn-outline-secondary { border-color: #64748b; color: #fff; }
+.planning-action-buttons .btn-outline-secondary:hover { background: rgba(255, 255, 255, .1); }
+
+.planning-eyebrow {
+  color: #64748b;
+  display: block;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.planning-section-heading,
+.planning-card-header {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.planning-section-heading h3,
+.planning-card-header h3 { font-size: 1.08rem; margin: 0; }
+.planning-summary .card-body { padding: 20px 22px; }
+.planning-category-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 16px; }
+.planning-category { background: #f8fafc; border: 1px solid #e5eaf0; border-radius: 10px; display: grid; gap: 12px; grid-template-columns: 1.2fr 1fr .8fr; padding: 14px; }
+.planning-category > div { display: flex; flex-direction: column; justify-content: center; }
+.planning-category > div + div { border-left: 1px solid #e2e8f0; padding-left: 12px; }
+.planning-category strong { color: #17223b; font-size: 1.1rem; }
+.planning-category span:not(.planning-class-badge) { color: #64748b; font-size: .72rem; }
+.planning-category-title { gap: 5px; }
+.planning-class-badge { align-items: center; background: #e8f1ff; border-radius: 6px; color: #1769c2; display: inline-flex; font-size: .75rem; font-weight: 700; justify-content: center; padding: 4px 7px; width: max-content; }
+.planning-review-count strong { color: #c2410c; }
+
+.planning-card-header { min-height: 74px; padding: 14px 20px; }
+.planning-count-badge { align-items: center; border-radius: 999px; display: inline-flex; font-size: .82rem; font-weight: 700; height: 34px; justify-content: center; min-width: 34px; padding: 0 11px; }
+.planning-count-warning { background: #fff2df; color: #b45309; }
+.planning-count-success { background: #e9f8ed; color: #16843a; }
+.planning-table-card { overflow: hidden; }
+.planning-table { font-size: .82rem; margin: 0; min-width: 1080px; }
+.planning-table thead th { background: #f8fafc; color: #64748b; font-size: .67rem; font-weight: 700; letter-spacing: .055em; padding-bottom: 11px; padding-top: 11px; position: sticky; text-transform: uppercase; top: 0; white-space: nowrap; z-index: 1; }
+.planning-table tbody tr:hover { background: #f8fbff; }
+.planning-table td { padding-bottom: 13px; padding-top: 13px; vertical-align: middle; }
+.planning-sku { min-width: 190px; }
+.planning-sku a { font-weight: 650; }
+.planning-sku > span,
+.planning-price-source { color: #64748b; display: block; font-size: .68rem; margin-top: 3px; }
+.planning-location { background: #f1f5f9; border-radius: 999px; color: #475569; display: inline-block; font-size: .72rem; padding: 4px 8px; }
+.planning-number { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.planning-decision { display: flex; gap: 6px; }
+.planning-decision input { min-width: 66px; width: 66px; }
+.planning-reasons { max-width: 290px; min-width: 210px; }
+.planning-reasons span { background: #fff7ed; border-radius: 5px; color: #9a3412; display: inline-block; font-size: .68rem; margin: 2px 3px 2px 0; padding: 3px 6px; }
+.planning-empty { color: #64748b; padding: 28px !important; text-align: center; }
+
+@media (max-width: 767px) {
+  .planning-action-bar,
+  .planning-section-heading { align-items: stretch; flex-direction: column; }
+  .planning-action-buttons .btn { flex: 1; min-width: 130px; }
+  .planning-category-grid { grid-template-columns: 1fr; }
+  .planning-card-header { align-items: flex-start; }
+}
