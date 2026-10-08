@@ -276,7 +276,8 @@ class QuoteManagementRepository:
     def get(quote_id: int) -> dict[str, Any] | None:
         with connection_scope() as connection:
             row = connection.execute(
-                """SELECT q.*,c.name customer_name,p.name opportunity_name,
+                """SELECT q.*,c.name customer_name,c.erp_customer_id,
+                    p.name opportunity_name,
                     r.workflow_status rfq_status
                 FROM ws_project_quotes q
                 LEFT JOIN ws_customers c ON c.id=q.customer_id

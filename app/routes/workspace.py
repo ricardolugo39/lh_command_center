@@ -331,6 +331,44 @@ def new_project():
     error = None
     form_data = request.form.to_dict() if request.method == "POST" else request.args.to_dict()
 
+    if request.method == "GET" and request.args.get("source_quote_id", type=int):
+        from app.workspace.repositories.quote_management_repository import (
+            QuoteManagementRepository,
+        )
+        source_quote_id = request.args.get("source_quote_id", type=int)
+        quote = QuoteManagementRepository.get(source_quote_id)
+        if not quote:
+            abort(404)
+        if quote.get("project_id"):
+            return redirect(url_for(
+                "workspace.project_detail", project_id=quote["project_id"]
+            ))
+        lines = QuoteManagementRepository.lines(source_quote_id)
+        references = ", ".join(dict.fromkeys(
+            str(line.get("part_number") or "").strip()
+            for line in lines if str(line.get("part_number") or "").strip()
+        ))
+        reference = f"{quote['prefix']}-{quote['quote_number']}"
+        form_data.update({
+            "source_quote_id": str(source_quote_id),
+            "customer_id": str(quote.get("erp_customer_id") or ""),
+            "customer_name": quote.get("customer_name") or "",
+            "sales_rep": quote.get("sales_rep_name") or "",
+            "project_name": f"Cotización {reference}",
+            "status": "negotiation",
+            "objective": f"Convertir la cotización {reference} en una orden del cliente.",
+            "proposed_solution": references,
+            "quote_prefix": quote.get("prefix") or "RL",
+            "quote_number": str(quote.get("quote_number") or ""),
+            "quote_date": quote.get("quote_date") or "",
+            "quote_amount": str(quote.get("amount") or ""),
+            "selected_brands": [
+                brand for brand in dict.fromkeys(
+                    str(line.get("brand") or "").strip() for line in lines
+                ) if brand
+            ],
+        })
+
     if request.method == "POST":
         try:
             brands = request.form.getlist("brands")
@@ -403,6 +441,7 @@ def new_project():
                     ),
                     quote_amount=quote_amount,
                     source_visit_id=request.form.get("source_visit_id",type=int),
+                    source_quote_id=request.form.get("source_quote_id",type=int),
                 )
             )
 

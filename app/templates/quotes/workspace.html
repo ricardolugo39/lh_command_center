@@ -10,7 +10,7 @@
 <div class="card mb-3"><div class="card-header"><h3 class="card-title">{{ 'Datos heredados de la RFQ' if q.originating_rfq_id else 'Datos de la cotización directa' }}</h3></div><div class="card-body"><div class="row g-3">
   <div class="col-md-3"><div class="text-secondary small">Cliente</div><strong>{{ q.customer_name }}</strong></div>
   <div class="col-md-3"><div class="text-secondary small">Asesor</div><strong>{{ q.sales_rep_name }}</strong><div>{{ q.sales_rep_email }}</div></div>
-  <div class="col-md-3"><div class="text-secondary small">Oportunidad</div><strong>{{ q.opportunity_name or 'Sin oportunidad' }}</strong></div>
+  <div class="col-md-3"><div class="text-secondary small">Oportunidad</div>{% if q.project_id %}<a href="{{ url_for('workspace.project_detail',project_id=q.project_id) }}"><strong>{{ q.opportunity_name }}</strong></a>{% else %}<strong>Sin oportunidad</strong><div class="mt-2"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace.new_project',source_quote_id=q.id) }}">Crear oportunidad desde esta cotización</a></div>{% endif %}</div>
   <div class="col-md-3"><div class="text-secondary small">Moneda</div><strong>USD</strong></div>
   <div class="col-12"><div class="text-secondary small">Comentarios de la solicitud</div>{{ q.request_comments_snapshot or '—' }}</div>
   <div class="col-12"><div class="text-secondary small">Adjuntos heredados</div>{% for file in page.attachments %}<span class="badge me-1">{{ file.original_filename }}</span>{% else %}—{% endfor %}</div>

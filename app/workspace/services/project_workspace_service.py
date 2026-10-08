@@ -502,6 +502,7 @@ class ProjectWorkspaceService:
         quote_amount: float | None = None,
         created_by: str = "system",
         source_visit_id: int | None = None,
+        source_quote_id: int | None = None,
     ) -> dict[str, Any]:
         clean_customer_id = erp_customer_id.strip()
         clean_site_id = customer_site_id.strip()
@@ -599,7 +600,13 @@ class ProjectWorkspaceService:
                 brand=brand,
             )
 
-        if quote_number and quote_number.strip():
+        if source_quote_id:
+            ProjectQuoteRepository.attach_existing_quote(
+                project_id=project_id,
+                quote_id=source_quote_id,
+                customer_id=internal_customer_id,
+            )
+        elif quote_number and quote_number.strip():
             ProjectQuoteRepository.attach_quote(
                 project_id=project_id,
                 prefix=quote_prefix or "CTC",

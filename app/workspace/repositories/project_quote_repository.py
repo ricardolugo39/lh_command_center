@@ -6,6 +6,21 @@ from app.database.transaction import connection_scope
 class ProjectQuoteRepository:
 
     @staticmethod
+    def attach_existing_quote(
+        *, project_id: int, quote_id: int, customer_id: int,
+    ) -> None:
+        with connection_scope() as conn:
+            cursor = conn.execute(
+                """UPDATE ws_project_quotes SET project_id=?
+                WHERE id=? AND customer_id=? AND project_id IS NULL""",
+                (project_id, quote_id, customer_id),
+            )
+        if cursor.rowcount != 1:
+            raise ValueError(
+                "La cotización ya está vinculada o no pertenece al cliente seleccionado."
+            )
+
+    @staticmethod
     def attach_quote(
         *,
         project_id: int,

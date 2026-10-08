@@ -49,6 +49,7 @@
     autocomplete="off"
 >
 <input type="hidden" name="source_visit_id" value="{{ form_data.get('source_visit_id','') }}">
+<input type="hidden" name="source_quote_id" value="{{ form_data.get('source_quote_id','') }}">
 
 {% if error %}
 <div class="alert alert-danger" role="alert">
@@ -205,19 +206,19 @@
                             name="status"
                             class="form-select"
                         >
-                            <option value="prospect">
+                            <option value="prospect" {{ 'selected' if form_data.get('status','prospect') == 'prospect' }}>
                                 Prospecto
                             </option>
 
-                            <option value="quoting">
+                            <option value="quoting" {{ 'selected' if form_data.get('status') == 'quoting' }}>
                                 Cotizando
                             </option>
 
-                            <option value="waiting_customer">
+                            <option value="waiting_customer" {{ 'selected' if form_data.get('status') == 'waiting_customer' }}>
                                 Esperando cliente
                             </option>
 
-                            <option value="negotiation">
+                            <option value="negotiation" {{ 'selected' if form_data.get('status') == 'negotiation' }}>
                                 Negociación
                             </option>
 
@@ -325,7 +326,7 @@
                                 id="quote_prefix"
                                 name="quote_prefix"
                                 class="form-control"
-                                value="CTC"
+                                value="{{ form_data.get('quote_prefix','CTC') }}"
                             >
 
                         </div>
@@ -344,7 +345,8 @@
                                 id="quote_number"
                                 name="quote_number"
                                 class="form-control"
-                                placeholder="43965"
+                            placeholder="43965"
+                            value="{{ form_data.get('quote_number','') }}"
                             >
 
                         </div>
@@ -366,6 +368,7 @@
                                 min="0"
                                 step="0.01"
                                 placeholder="0"
+                                value="{{ form_data.get('quote_amount','') }}"
                             >
 
                         </div>
@@ -384,6 +387,7 @@
                                 id="quote_date"
                                 name="quote_date"
                                 class="form-control"
+                                value="{{ form_data.get('quote_date','') }}"
                             >
 
                         </div>
@@ -428,6 +432,7 @@
                                     class="form-check-input"
                                     name="brands"
                                     value="{{ brand }}"
+                                    {{ 'checked' if brand in form_data.get('selected_brands',[]) }}
                                 >
 
                                 <span class="form-check-label">
