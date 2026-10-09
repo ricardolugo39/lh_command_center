@@ -64,7 +64,8 @@ class GmailProvider:
         return {"message_id": result["id"], "thread_id": result["threadId"]}
 
     def reply(
-        self, *, thread_id: str, sender: str, recipients: list[str],
+        self, *, thread_id: str, message_id: str | None = None,
+        sender: str, recipients: list[str],
         cc: list[str], subject: str, body_text: str, body_html: str,
     ) -> dict:
         """Reply to the first message so every mail client preserves the thread."""

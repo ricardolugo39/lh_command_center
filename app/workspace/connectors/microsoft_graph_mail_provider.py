@@ -45,11 +45,13 @@ class MicrosoftGraphMailProvider:
         return {"message_id": draft["id"], "thread_id": draft["conversationId"]}
 
     def reply(
-        self, *, thread_id: str, sender: str, recipients: list[str],
+        self, *, thread_id: str, message_id: str | None = None,
+        sender: str, recipients: list[str],
         cc: list[str], subject: str, body_text: str, body_html: str,
     ) -> dict:
         draft = self._create_reply(
-            thread_id=thread_id, recipients=recipients, cc=cc,
+            thread_id=thread_id, message_id=message_id,
+            recipients=recipients, cc=cc,
             subject=subject, body_html=body_html,
         )
         self._request("POST", f"/me/messages/{draft['id']}/send")
@@ -136,11 +138,15 @@ class MicrosoftGraphMailProvider:
 
     def _create_reply(
         self, *, thread_id: str, recipients: list[str], cc: list[str],
-        subject: str, body_html: str,
+        subject: str, body_html: str, message_id: str | None = None,
     ) -> dict[str, Any]:
-        original = self._latest_message(thread_id)
+        # The immutable ID returned by the original send is the most reliable
+        # reply target. Looking the message up again by conversationId can miss
+        # recently sent mail because Microsoft Graph's collection query is
+        # eventually consistent.
+        original_id = message_id or self._latest_message(thread_id)["id"]
         draft = self._request(
-            "POST", f"/me/messages/{original['id']}/createReply",
+            "POST", f"/me/messages/{original_id}/createReply",
             json={},
         )
         return self._request(

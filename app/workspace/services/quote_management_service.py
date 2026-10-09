@@ -591,6 +591,17 @@ class QuoteManagementService:
             raise ValueError("La cotización todavía no ha sido enviada al asesor.")
         if quote.get("quote_status") in {"won", "lost", "cancelled"}:
             raise ValueError("Una cotización cerrada no requiere seguimiento.")
+        if delivery.get("email_provider", "gmail") != current_app.config.get(
+            "EMAIL_PROVIDER", "gmail"
+        ):
+            raise ValueError(
+                "Esta cotización se envió con el proveedor de correo anterior. "
+                "No es posible continuar esa conversación desde el proveedor actual."
+            )
+        if not delivery.get("provider_thread_id"):
+            raise ValueError(
+                "El correo enviado no tiene una conversación asociada para responder."
+            )
         body_text = (
             f"Hola {quote.get('sales_rep_name') or ''},\n\n"
             f"Quisiera hacer seguimiento a la cotización "
@@ -603,12 +614,19 @@ class QuoteManagementService:
         try:
             result = current_app.extensions["email_provider"].reply(
                 thread_id=delivery["provider_thread_id"],
+                message_id=delivery.get("provider_message_id"),
                 sender="ricardo.lugo@lugohermanos.com",
                 recipients=[delivery["recipient_email"]],
                 cc=json.loads(delivery["cc_json"]), subject=delivery["subject"],
                 body_text=body_text, body_html=body_html,
             )
         except Exception as error:
+            current_app.logger.exception(
+                "Quote follow-up email failed for quote_id=%s delivery_id=%s provider=%s",
+                quote_id,
+                delivery["id"],
+                current_app.config.get("EMAIL_PROVIDER", "gmail"),
+            )
             raise ValueError(
                 "La cotización se conservó, pero no se pudo enviar el seguimiento."
             ) from error

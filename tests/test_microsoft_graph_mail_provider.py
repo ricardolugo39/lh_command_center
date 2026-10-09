@@ -85,6 +85,34 @@ class MicrosoftGraphMailProviderTest(unittest.TestCase):
         self.assertEqual(messages[0]["sender"], "vendor@example.com")
         self.assertEqual(messages[0]["body_html"], "<p>Attached</p>")
 
+    @patch("app.workspace.connectors.microsoft_graph_mail_provider.requests.request")
+    def test_reply_uses_original_message_id_without_conversation_lookup(self, request):
+        request.side_effect = [
+            _Response(value={
+                "id": "reply-draft", "conversationId": "thread-1",
+            }),
+            _Response(value={
+                "id": "reply-draft", "conversationId": "thread-1",
+            }),
+            _Response(status=202),
+        ]
+
+        result = MicrosoftGraphMailProvider().reply(
+            thread_id="thread-1", message_id="message-1",
+            sender="ricardo.lugo@lugohermanos.com",
+            recipients=["advisor@example.com"], cc=[], subject="Quote 1",
+            body_text="Follow-up", body_html="<p>Follow-up</p>",
+        )
+
+        self.assertEqual(
+            result, {"message_id": "reply-draft", "thread_id": "thread-1"}
+        )
+        self.assertEqual(request.call_count, 3)
+        self.assertTrue(request.call_args_list[0].args[1].endswith(
+            "/me/messages/message-1/createReply"
+        ))
+        self.assertNotIn("$filter", request.call_args_list[0].kwargs.get("params", {}))
+
 
 class IntegrationCredentialTransactionTest(unittest.TestCase):
     def test_token_cache_save_reuses_active_write_transaction(self):
