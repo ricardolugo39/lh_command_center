@@ -574,14 +574,15 @@ class QuoteManagementRepository:
 
     @staticmethod
     def record_followup_email(
-        quote_id: int, delivery_id: int, provider_message_id: str, actor: int
+        quote_id: int, delivery_id: int, provider_message_id: str, actor: int,
+        email_provider: str,
     ) -> None:
         with connection_scope() as connection:
             connection.execute(
                 """INSERT INTO quote_followup_emails(
-                quote_id,delivery_id,provider_message_id,sent_by_user_id)
-                VALUES (?,?,?,?)""",
-                (quote_id, delivery_id, provider_message_id, actor),
+                quote_id,delivery_id,provider_message_id,sent_by_user_id,email_provider)
+                VALUES (?,?,?,?,?)""",
+                (quote_id, delivery_id, provider_message_id, actor, email_provider),
             )
             connection.execute(
                 """UPDATE quote_followups SET status='completed',

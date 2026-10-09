@@ -591,17 +591,8 @@ class QuoteManagementService:
             raise ValueError("La cotización todavía no ha sido enviada al asesor.")
         if quote.get("quote_status") in {"won", "lost", "cancelled"}:
             raise ValueError("Una cotización cerrada no requiere seguimiento.")
-        if delivery.get("email_provider", "gmail") != current_app.config.get(
-            "EMAIL_PROVIDER", "gmail"
-        ):
-            raise ValueError(
-                "Esta cotización se envió con el proveedor de correo anterior. "
-                "No es posible continuar esa conversación desde el proveedor actual."
-            )
-        if not delivery.get("provider_thread_id"):
-            raise ValueError(
-                "El correo enviado no tiene una conversación asociada para responder."
-            )
+        current_provider = current_app.config.get("EMAIL_PROVIDER", "gmail")
+        same_provider = delivery.get("email_provider", "gmail") == current_provider
         body_text = (
             f"Hola {quote.get('sales_rep_name') or ''},\n\n"
             f"Quisiera hacer seguimiento a la cotización "
@@ -612,14 +603,29 @@ class QuoteManagementService:
         body_html = "<p>" + escape(body_text).replace("\n", "<br>") + "</p>"
         import json
         try:
-            result = current_app.extensions["email_provider"].reply(
-                thread_id=delivery["provider_thread_id"],
-                message_id=delivery.get("provider_message_id"),
-                sender="ricardo.lugo@lugohermanos.com",
-                recipients=[delivery["recipient_email"]],
-                cc=json.loads(delivery["cc_json"]), subject=delivery["subject"],
-                body_text=body_text, body_html=body_html,
-            )
+            common = {
+                "sender": "ricardo.lugo@lugohermanos.com",
+                "recipients": [delivery["recipient_email"]],
+                "cc": json.loads(delivery["cc_json"]),
+                "subject": delivery["subject"],
+                "body_text": body_text,
+                "body_html": body_html,
+            }
+            if same_provider and delivery.get("provider_thread_id"):
+                result = current_app.extensions["email_provider"].reply(
+                    thread_id=delivery["provider_thread_id"],
+                    message_id=delivery.get("provider_message_id"),
+                    **common,
+                )
+            else:
+                common["subject"] = (
+                    common["subject"]
+                    if str(common["subject"]).casefold().startswith("re:")
+                    else f"Re: {common['subject']}"
+                )
+                result = current_app.extensions["email_provider"].send(
+                    **common,
+                )
         except Exception as error:
             current_app.logger.exception(
                 "Quote follow-up email failed for quote_id=%s delivery_id=%s provider=%s",
@@ -631,5 +637,6 @@ class QuoteManagementService:
                 "La cotización se conservó, pero no se pudo enviar el seguimiento."
             ) from error
         QuoteManagementRepository.record_followup_email(
-            quote_id, delivery["id"], result["message_id"], actor
+            quote_id, delivery["id"], result["message_id"], actor,
+            current_provider,
         )
