@@ -14,7 +14,7 @@ from app.database.transaction import transaction
 class StockForecastEngine:
     """Auditable per-SKU/branch demand and review engine."""
 
-    VERSION = "stock-demand-v5-bogota-warehouse-16"
+    VERSION = "stock-demand-v6-length-position"
 
     @classmethod
     def analyze(cls, snapshot_id: int) -> dict[str, Any]:
@@ -302,9 +302,28 @@ class StockForecastEngine:
         for (family, branch, purchase_sku), components in groups.items():
             if not any(length != 3000 for _, length in components):
                 continue
-            required_mm = sum(
-                int(row["recommended_order"]) * length for row, length in components
+            gross_required_mm = sum(
+                int(row["target_stock"]) * length for row, length in components
             )
+            stock_length_mm = sum(
+                max(float(row.get("usable") or 0), 0) * length
+                for row, length in components
+            )
+            transit_length_mm = sum(
+                max(float(row.get("transit") or 0), 0) * length
+                for row, length in components
+            )
+            transfer_length_mm = sum(
+                (
+                    float(row.get("transfer_in") or 0)
+                    - float(row.get("transfer_out") or 0)
+                ) * length
+                for row, length in components
+            )
+            available_length_mm = max(
+                0, stock_length_mm + transit_length_mm + transfer_length_mm,
+            )
+            required_mm = max(0, gross_required_mm - available_length_mm)
             bars = math.ceil(required_mm / 3000) if required_mm else 0
             purchase_row = next(
                 (row for row, length in components if length == 3000), None
@@ -320,12 +339,19 @@ class StockForecastEngine:
             component_detail = []
             component_reasons = []
             for row, length in components:
-                units = int(row["recommended_order"])
-                if units:
+                target_units = int(row["target_stock"])
+                usable_units = max(float(row.get("usable") or 0), 0)
+                transit_units = max(float(row.get("transit") or 0), 0)
+                if target_units or usable_units or transit_units:
                     component_detail.append({
-                        "sku": row["sku"], "units": units,
-                        "length_mm": length, "required_mm": units * length,
+                        "sku": row["sku"], "units": target_units,
+                        "usable": usable_units, "transit": transit_units,
+                        "length_mm": length,
+                        "required_mm": target_units * length,
+                        "stock_mm": usable_units * length,
+                        "transit_mm": transit_units * length,
                     })
+                if row["recommended_order"]:
                     component_reasons.extend(row["review_reasons"])
                 if row is not purchase_row:
                     row["recommended_order"] = 0
@@ -336,12 +362,23 @@ class StockForecastEngine:
             purchase_row["purchase_length_mm"] = 3000
             purchase_row["length_family"] = family
             purchase_row["required_length_mm"] = required_mm
+            purchase_row["gross_required_length_mm"] = gross_required_mm
+            purchase_row["stock_length_mm"] = stock_length_mm
+            purchase_row["transit_length_mm"] = transit_length_mm
+            purchase_row["transfer_length_mm"] = transfer_length_mm
+            purchase_row["available_length_mm"] = available_length_mm
             purchase_row["component_demand"] = component_detail
             purchase_row["review_reasons"] = list(dict.fromkeys(component_reasons))
             purchase_row["requires_review"] = bool(purchase_row["review_reasons"])
             transformations.append({
                 "family": family, "branch": branch,
-                "purchase_sku": purchase_sku, "required_mm": required_mm,
+                "purchase_sku": purchase_sku,
+                "gross_required_mm": gross_required_mm,
+                "stock_mm": stock_length_mm,
+                "transit_mm": transit_length_mm,
+                "transfer_mm": transfer_length_mm,
+                "available_mm": available_length_mm,
+                "required_mm": required_mm,
                 "bars": bars, "components": component_detail,
             })
         return rows, transformations

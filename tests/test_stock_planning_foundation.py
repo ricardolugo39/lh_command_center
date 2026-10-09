@@ -489,10 +489,11 @@ def test_analysis_history_shows_all_brands_regardless_of_selected_vendor(
     }
 
 
-def _forecast_row(sku, branch, order, usable=0, target=0):
+def _forecast_row(sku, branch, order, usable=0, target=None):
     return {
         "sku": sku, "branch": branch, "recommended_order": order,
-        "usable": usable, "transit": 0, "target_stock": target,
+        "usable": usable, "transit": 0,
+        "target_stock": order + usable if target is None else target,
         "review_reasons": [], "requires_review": False,
         "abc": "B", "xyz": "Y", "model": "Promedio 12",
     }
@@ -571,6 +572,25 @@ def test_rails_and_ball_screws_consolidate_into_three_meter_bars():
     assert len(evidence) == 2
     assert by_sku_branch[("HSR 25-1000LTHK", "1")]["recommended_order"] == 0
     assert by_sku_branch[("TS 2510+2000LTHK", "50")]["recommended_order"] == 0
+
+
+def test_length_consolidation_subtracts_family_stock_and_transit_in_meters():
+    rows = [
+        _forecast_row("TS 2010+1000LTHK", "1", 5, target=5),
+        _forecast_row("TS 2010+2000LTHK", "1", 0, usable=3, target=3),
+        _forecast_row("TS 2010+3000LTHK", "1", 0, usable=1, target=0),
+        _forecast_row("TS 2010+640LTHK", "1", 0, usable=1, target=0),
+    ]
+    rows[1]["transit"] = 3
+
+    transformed, _ = StockForecastEngine._apply_length_transformations(rows)
+    purchase = next(row for row in transformed if row["sku"] == "TS 2010+3000LTHK")
+
+    assert purchase["gross_required_length_mm"] == 11000
+    assert purchase["stock_length_mm"] == 9640
+    assert purchase["transit_length_mm"] == 6000
+    assert purchase["required_length_mm"] == 0
+    assert purchase["recommended_order"] == 0
 
 
 def test_thomson_standard_lengths_remain_independent():
