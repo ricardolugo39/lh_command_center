@@ -28,18 +28,51 @@ stock_planning_bp = Blueprint(
 )
 
 
-@stock_planning_bp.get("/brands/thk/pricing")
-@roles_required("administrator")
-def thk_pricing():
+def _brand_pricing_page(profile_code: str, routes: dict[str, str]):
     scenario_id = request.args.get("scenario_id", type=int)
-    page = BrandPricingService.overview("THK")
+    page = BrandPricingService.overview(profile_code)
     if scenario_id is None and page["scenarios"]:
         scenario_id = page["scenarios"][0]["id"]
     page["detail"] = (
         BrandPricingService.detail(scenario_id) if scenario_id else None
     )
     page["message"] = request.args.get("message")
+    page["routes"] = routes
+    page["supports_rail_increment"] = profile_code.casefold() == "thk"
     return render_template("stock_planning/brand_pricing.html", page=page)
+
+
+THK_PRICING_ROUTES = {
+    "page": "stock_planning.thk_pricing",
+    "create": "stock_planning.create_thk_pricing",
+    "settings": "stock_planning.update_thk_pricing_settings",
+    "rule": "stock_planning.update_thk_pricing_rule",
+    "approve": "stock_planning.approve_thk_pricing_lines",
+    "close": "stock_planning.close_thk_pricing",
+    "reopen": "stock_planning.reopen_thk_pricing",
+}
+
+THOMSON_PRICING_ROUTES = {
+    "page": "stock_planning.thomson_pricing",
+    "create": "stock_planning.create_thomson_pricing",
+    "settings": "stock_planning.update_thomson_pricing_settings",
+    "rule": "stock_planning.update_thomson_pricing_rule",
+    "approve": "stock_planning.approve_thomson_pricing_lines",
+    "close": "stock_planning.close_thomson_pricing",
+    "reopen": "stock_planning.reopen_thomson_pricing",
+}
+
+
+@stock_planning_bp.get("/brands/thk/pricing")
+@roles_required("administrator")
+def thk_pricing():
+    return _brand_pricing_page("THK", THK_PRICING_ROUTES)
+
+
+@stock_planning_bp.get("/brands/thomson/pricing")
+@roles_required("administrator")
+def thomson_pricing():
+    return _brand_pricing_page("Thomson", THOMSON_PRICING_ROUTES)
 
 
 @stock_planning_bp.post("/brands/thk/pricing")
@@ -56,6 +89,24 @@ def create_thk_pricing():
         message = str(exception)
     return redirect(url_for(
         "stock_planning.thk_pricing", scenario_id=scenario_id, message=message,
+    ))
+
+
+@stock_planning_bp.post("/brands/thomson/pricing")
+@roles_required("administrator")
+def create_thomson_pricing():
+    try:
+        scenario_id = BrandPricingService.create(
+            "Thomson", request.form.get("scenario_name", ""),
+            float(request.form.get("trm", "0")), str(g.current_user["email"]),
+        )
+        message = "Análisis Thomson creado con reglas por familia."
+    except (TypeError, ValueError) as exception:
+        scenario_id = None
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thomson_pricing",
+        scenario_id=scenario_id, message=message,
     ))
 
 
@@ -145,6 +196,97 @@ def reopen_thk_pricing(scenario_id: int):
         message = str(exception)
     return redirect(url_for(
         "stock_planning.thk_pricing", scenario_id=scenario_id, message=message,
+    ))
+
+
+@stock_planning_bp.post("/brands/thomson/pricing/<int:scenario_id>/settings")
+@roles_required("administrator")
+def update_thomson_pricing_settings(scenario_id: int):
+    try:
+        BrandPricingService.update_settings(
+            scenario_id, float(request.form.get("trm", "0")), 0,
+            int(request.form.get("rounding_increment", "100")),
+            str(g.current_user["email"]),
+        )
+        message = "Parámetros actualizados; las aprobaciones anteriores se reiniciaron."
+    except (TypeError, ValueError) as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thomson_pricing",
+        scenario_id=scenario_id, message=message,
+    ))
+
+
+@stock_planning_bp.post(
+    "/brands/thomson/pricing/<int:scenario_id>/rules/<int:rule_id>"
+)
+@roles_required("administrator")
+def update_thomson_pricing_rule(scenario_id: int, rule_id: int):
+    try:
+        BrandPricingService.update_rule(
+            scenario_id, rule_id,
+            float(request.form.get("gross_margin_percent", "0")),
+            str(g.current_user["email"]),
+        )
+        message = "Margen actualizado; las aprobaciones anteriores se reiniciaron."
+    except (TypeError, ValueError) as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thomson_pricing", scenario_id=scenario_id,
+        message=message, _anchor="rules",
+    ))
+
+
+@stock_planning_bp.post("/brands/thomson/pricing/<int:scenario_id>/approve")
+@roles_required("administrator")
+def approve_thomson_pricing_lines(scenario_id: int):
+    try:
+        count = BrandPricingService.approve_many(
+            scenario_id, request.form.getlist("skus"),
+            str(g.current_user["email"]),
+            request.form.get("price_choice", "calculated"),
+        )
+        message = (
+            f"{count} referencia(s) conservarán el precio actual."
+            if request.form.get("price_choice") == "current"
+            else f"{count} precio(s) propuestos aprobados."
+        )
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thomson_pricing", scenario_id=scenario_id,
+        message=message, _anchor="results",
+    ))
+
+
+@stock_planning_bp.post("/brands/thomson/pricing/<int:scenario_id>/close")
+@roles_required("administrator")
+def close_thomson_pricing(scenario_id: int):
+    try:
+        count = BrandPricingService.close(scenario_id)
+        message = f"Versión cerrada con {count} precio(s) aprobados."
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thomson_pricing",
+        scenario_id=scenario_id, message=message,
+    ))
+
+
+@stock_planning_bp.post("/brands/thomson/pricing/<int:scenario_id>/reopen")
+@roles_required("administrator")
+def reopen_thomson_pricing(scenario_id: int):
+    try:
+        count = BrandPricingService.reopen(scenario_id)
+        message = (
+            "Versión reabierta para revisión. "
+            f"Se conservaron {count} decisión(es) de precio."
+        )
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thomson_pricing",
+        scenario_id=scenario_id, message=message,
     ))
 
 

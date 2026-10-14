@@ -77,6 +77,41 @@ def test_accepted_vendor_quote_replaces_erp_fob_in_calculation():
     assert line["calculated_price_cop"] == 542_900
 
 
+def test_thomson_shaft_uses_its_own_fob_without_length_increment():
+    scenario = {
+        "profile_code": "Thomson", "trm": 3800, "import_factor": 1.2,
+        "rail_increment_percent": 17, "rounding_increment": 100,
+    }
+    products = [{
+        "internal_sku": "W 20 H6/1500THO", "vendor_sku": None,
+        "product_name": "EJE CORTADO", "fob_usd": 40,
+        "lista1_cop": 500_000,
+    }]
+    rules = [{
+        "product_type": "EJE", "series": "W 20 H6",
+        "gross_margin_percent": 58,
+    }]
+
+    line = BrandPricingService._calculate(
+        scenario, rules, products, {}, {}
+    )[0]
+
+    assert line["product_type"] == "EJE"
+    assert line["series"] == "W 20 H6"
+    assert line["adjusted_fob_usd"] == 40
+    assert line["rail_increment_applied"] == 0
+    assert line["calculated_price_cop"] == 434_300
+
+
+def test_thomson_product_families_are_classified_from_name():
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "SUPER 16THO", "product_name": "RODAMIENTO LINEAL",
+    }) == ("RODAMIENTO LINEAL", "SUPER 16")
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "LL24B020THO", "product_name": "ACTUADOR ELECTRAK",
+    }) == ("ACTUADOR", "LL24")
+
+
 class _ReopenConnection:
     def __init__(self, status="approved", decision_count=542):
         self.status = status

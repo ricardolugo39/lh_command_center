@@ -25,6 +25,8 @@ DEFAULT_RULES = (
     ("OTRO", "GENERAL", 58.0),
 )
 
+THOMSON_DEFAULT_MARGIN = 58.0
+
 
 class BrandPricingService:
     """Versioned, explainable final-price simulations for managed brands."""
@@ -80,6 +82,22 @@ class BrandPricingService:
                 ),
             )
             scenario_id = int(cursor.lastrowid)
+            rules = DEFAULT_RULES
+            if profile_code.casefold() == "thomson":
+                products = [dict(row) for row in connection.execute(
+                    """SELECT internal_sku,product_name
+                    FROM stock_planning_snapshot_products
+                    WHERE snapshot_id=?""",
+                    (overview["snapshot"]["id"],),
+                ).fetchall()]
+                discovered = sorted({
+                    cls._thomson_classification(product)
+                    for product in products
+                })
+                rules = tuple(
+                    (product_type, series, THOMSON_DEFAULT_MARGIN)
+                    for product_type, series in discovered
+                ) or (("OTRO", "GENERAL", THOMSON_DEFAULT_MARGIN),)
             connection.executemany(
                 """INSERT INTO brand_pricing_rules (
                     scenario_id,product_type,series,gross_margin_percent,
@@ -87,7 +105,7 @@ class BrandPricingService:
                 ) VALUES (?,?,?,?,?,?)""",
                 [
                     (scenario_id, product_type, series, margin, "inferred", created_by)
-                    for product_type, series, margin in DEFAULT_RULES
+                    for product_type, series, margin in rules
                 ],
             )
         return scenario_id
@@ -116,7 +134,8 @@ class BrandPricingService:
                 WHERE p.snapshot_id=? ORDER BY p.internal_sku""",
                 (scenario["source_snapshot_id"],),
             ).fetchall()]
-            if scenario["status"] == "draft":
+            if scenario["status"] == "draft" and \
+                    str(scenario["profile_code"]).casefold() == "thk":
                 cls._ensure_ball_screw_rules(
                     connection, scenario_id, products, scenario["created_by"]
                 )
@@ -152,6 +171,7 @@ class BrandPricingService:
         eligible = [line for line in lines if line["calculated_price_cop"] is not None]
         return {
             "scenario": dict(scenario), "rules": rules, "lines": lines,
+            "product_types": sorted({line["product_type"] for line in lines}),
             "summary": {
                 "total": len(lines),
                 "with_list_price": sum(line["list_price_cop"] is not None for line in lines),
@@ -332,7 +352,9 @@ class BrandPricingService:
         }
         rail_bases = {}
         for product in products:
-            product_type, series = cls._classification(product)
+            product_type, series = cls._classification_for(
+                scenario.get("profile_code"), product
+            )
             length, rail_key = cls._rail_identity(product["internal_sku"])
             quote_rows = quote_prices.get(product["internal_sku"], [])
             quote_values = [float(row["accepted_fob_usd"]) for row in quote_rows]
@@ -342,12 +364,15 @@ class BrandPricingService:
                 else None
             )
             base_fob = quote_base or product.get("fob_usd")
-            if product_type == "RIEL" and length == 3000 and base_fob:
+            if str(scenario.get("profile_code")).casefold() == "thk" \
+                    and product_type == "RIEL" and length == 3000 and base_fob:
                 rail_bases[rail_key] = float(base_fob)
 
         lines = []
         for product in products:
-            product_type, series = cls._classification(product)
+            product_type, series = cls._classification_for(
+                scenario.get("profile_code"), product
+            )
             margin = rule_map.get(
                 (product_type, series),
                 rule_map.get((product_type, "GENERAL"), rule_map.get(("OTRO", "GENERAL"))),
@@ -372,7 +397,9 @@ class BrandPricingService:
             adjusted_fob = fob
             length, rail_key = cls._rail_identity(product["internal_sku"])
             rail_increment_applied = 0.0
-            if product_type == "RIEL" and length in {1000, 2000} and rail_key in rail_bases:
+            if str(scenario.get("profile_code")).casefold() == "thk" \
+                    and product_type == "RIEL" and length in {1000, 2000} \
+                    and rail_key in rail_bases:
                 rail_increment_applied = float(scenario["rail_increment_percent"])
                 adjusted_fob = (
                     rail_bases[rail_key] * length / 3000
@@ -441,6 +468,45 @@ class BrandPricingService:
             product_type = "RODAMIENTO"
         elif "GUIA LINEAL" in name or "CARRO" in name or "BLOQUE" in name:
             product_type = "BLOQUE"
+        else:
+            product_type = "OTRO"
+        return product_type, series
+
+    @classmethod
+    def _classification_for(
+        cls, profile_code: str | None, product: dict[str, Any],
+    ) -> tuple[str, str]:
+        if str(profile_code or "").casefold() == "thomson":
+            return cls._thomson_classification(product)
+        return cls._classification(product)
+
+    @staticmethod
+    def _thomson_classification(product: dict[str, Any]) -> tuple[str, str]:
+        """Classify Thomson references without deriving prices from bar lengths."""
+        sku = str(product["internal_sku"]).upper().strip()
+        name = str(product.get("product_name") or "").upper()
+        shaft = re.match(r"(?P<family>W \d+ H6|WZ .+? L)/\d+", sku)
+        token = re.match(r"([A-Z]+(?:\s*\d+)?)", sku)
+        series = shaft.group("family") if shaft else (
+            token.group(1).strip() if token else "GENERAL"
+        )
+        if shaft or "EJE" in name:
+            product_type = "EJE"
+        elif "ACTUADOR" in name or "ELECTRAK" in name:
+            product_type = "ACTUADOR"
+        elif "TUERCA" in name:
+            product_type = "TUERCA"
+        elif "TORNILLO" in name or "HUSILLO" in name:
+            product_type = "TORNILLO"
+        elif "RODAMIENTO" in name or "BALINERA" in name or "BUJE" in name:
+            product_type = "RODAMIENTO LINEAL"
+        elif "GUIA" in name or "GUÍA" in name or "RIEL" in name \
+                or "CARRO" in name:
+            product_type = "GUIA LINEAL"
+        elif any(value in name for value in (
+            "SOPORTE", "ACOPLE", "BRIDA", "ABRAZADERA", "ACCESORIO",
+        )):
+            product_type = "ACCESORIO"
         else:
             product_type = "OTRO"
         return product_type, series
