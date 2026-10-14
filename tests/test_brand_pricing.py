@@ -118,6 +118,15 @@ def test_thomson_product_families_are_classified_from_name():
     }) == ("RODAMIENTO LINEAL", "FNYBU")
 
 
+def test_thomson_numeric_linear_guides_are_grouped_by_hundreds_series():
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "411 N15 A0THO", "product_name": "GUIA CUADRADA",
+    }) == ("GUIA LINEAL", "400")
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "511 H25 D0THO", "product_name": "GUIA LINEAL",
+    }) == ("GUIA LINEAL", "500")
+
+
 class _ReopenConnection:
     def __init__(self, status="approved", decision_count=542):
         self.status = status

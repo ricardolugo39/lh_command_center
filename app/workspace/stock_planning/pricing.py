@@ -490,8 +490,6 @@ class BrandPricingService:
         sku = str(product["internal_sku"]).upper().strip()
         name = str(product.get("product_name") or "").upper()
         shaft = re.match(r"(?:W \d+ H6|WZ .+? L)/\d+", sku)
-        token = re.match(r"([A-Z]+)", sku)
-        series = token.group(1) if token else "GENERAL"
         if shaft or "EJE" in name:
             product_type = "EJE"
         elif "ACTUADOR" in name or "ELECTRAK" in name:
@@ -511,6 +509,12 @@ class BrandPricingService:
             product_type = "ACCESORIO"
         else:
             product_type = "OTRO"
+        numeric_guide = re.match(r"([45])\d{2}(?:\s|$)", sku)
+        if product_type == "GUIA LINEAL" and numeric_guide:
+            series = f"{numeric_guide.group(1)}00"
+        else:
+            token = re.match(r"([A-Z]+)", sku)
+            series = token.group(1) if token else "GENERAL"
         return product_type, series
 
     @classmethod
@@ -532,9 +536,20 @@ class BrandPricingService:
             candidates = [
                 row for row in existing
                 if row["product_type"] == product_type
-                and re.match(r"([A-Z]+)", str(row["series"]).upper())
-                and re.match(r"([A-Z]+)", str(row["series"]).upper()).group(1)
-                == series
+                and (
+                    str(row["series"]).upper() == series
+                    or (
+                        re.match(r"([A-Z]+)", str(row["series"]).upper())
+                        and re.match(
+                            r"([A-Z]+)", str(row["series"]).upper()
+                        ).group(1) == series
+                    )
+                    or (
+                        product_type == "GUIA LINEAL"
+                        and series in {"400", "500"}
+                        and str(row["series"]).upper() == "GENERAL"
+                    )
+                )
             ]
             preferred = next(
                 (row for row in candidates if row["rule_source"] == "manual"),
