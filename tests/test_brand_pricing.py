@@ -138,6 +138,19 @@ def test_thomson_numeric_rails_are_separate_and_grouped_by_hundreds_series():
     }) == ("RIEL", "500")
 
 
+def test_margin_change_targets_only_products_using_that_rule():
+    products = [
+        {"internal_sku": "411 N15 A0THO", "product_name": "GUIA CUADRADA"},
+        {"internal_sku": "511 H25 D0THO", "product_name": "GUIA LINEAL"},
+        {"internal_sku": "521 H30 A + 1500THO", "product_name": "RIEL LINEAL"},
+        {"internal_sku": "W 20 H6/1500THO", "product_name": "EJE CORTADO"},
+    ]
+
+    assert BrandPricingService._matching_rule_skus(
+        "Thomson", "GUIA LINEAL", "500", products,
+    ) == ["511 H25 D0THO"]
+
+
 def test_bulk_pricing_approval_requires_matching_confirmed_count():
     app = Flask(__name__)
     with app.test_request_context(

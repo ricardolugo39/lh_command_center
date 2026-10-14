@@ -221,6 +221,18 @@ class BrandPricingService:
             raise ValueError("El margen bruto debe estar entre 0% y 100%.")
         with transaction(write=True) as connection:
             cls._require_draft(connection, scenario_id)
+            rule = connection.execute(
+                """SELECT r.product_type,r.series,s.source_snapshot_id,
+                    v.profile_code
+                FROM brand_pricing_rules r
+                JOIN brand_pricing_scenarios s ON s.id=r.scenario_id
+                JOIN stock_planning_vendor_profiles v
+                    ON v.id=s.vendor_profile_id
+                WHERE r.id=? AND r.scenario_id=?""",
+                (rule_id, scenario_id),
+            ).fetchone()
+            if not rule:
+                raise ValueError("La regla de margen no existe.")
             cursor = connection.execute(
                 """UPDATE brand_pricing_rules SET gross_margin_percent=?,
                     rule_source='manual',updated_by=?,updated_at=CURRENT_TIMESTAMP
@@ -229,10 +241,23 @@ class BrandPricingService:
             )
             if cursor.rowcount != 1:
                 raise ValueError("La regla de margen no existe.")
-            connection.execute(
-                "DELETE FROM brand_pricing_line_decisions WHERE scenario_id=?",
-                (scenario_id,),
+            products = [dict(row) for row in connection.execute(
+                """SELECT internal_sku,product_name
+                FROM stock_planning_snapshot_products
+                WHERE snapshot_id=?""",
+                (rule["source_snapshot_id"],),
+            ).fetchall()]
+            affected_skus = cls._matching_rule_skus(
+                rule["profile_code"], rule["product_type"], rule["series"],
+                products,
             )
+            if affected_skus:
+                placeholders = ",".join("?" for _ in affected_skus)
+                connection.execute(
+                    f"""DELETE FROM brand_pricing_line_decisions
+                    WHERE scenario_id=? AND internal_sku IN ({placeholders})""",
+                    (scenario_id, *affected_skus),
+                )
 
     @classmethod
     def approve_many(
@@ -483,6 +508,18 @@ class BrandPricingService:
         if str(profile_code or "").casefold() == "thomson":
             return cls._thomson_classification(product)
         return cls._classification(product)
+
+    @classmethod
+    def _matching_rule_skus(
+        cls, profile_code: str | None, product_type: str, series: str,
+        products: list[dict[str, Any]],
+    ) -> list[str]:
+        """Return only products whose price depends on one margin rule."""
+        return [
+            product["internal_sku"] for product in products
+            if cls._classification_for(profile_code, product)
+            == (product_type, series)
+        ]
 
     @staticmethod
     def _thomson_classification(product: dict[str, Any]) -> tuple[str, str]:

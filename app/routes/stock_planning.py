@@ -151,7 +151,10 @@ def update_thk_pricing_rule(scenario_id: int, rule_id: int):
             float(request.form.get("gross_margin_percent", "0")),
             str(g.current_user["email"]),
         )
-        message = "Margen actualizado; las aprobaciones anteriores se reiniciaron."
+        message = (
+            "Margen actualizado; solo se reiniciaron las aprobaciones "
+            "de esta familia y serie."
+        )
     except (TypeError, ValueError) as exception:
         message = str(exception)
     return redirect(url_for(
@@ -241,7 +244,10 @@ def update_thomson_pricing_rule(scenario_id: int, rule_id: int):
             float(request.form.get("gross_margin_percent", "0")),
             str(g.current_user["email"]),
         )
-        message = "Margen actualizado; las aprobaciones anteriores se reiniciaron."
+        message = (
+            "Margen actualizado; solo se reiniciaron las aprobaciones "
+            "de esta familia y serie."
+        )
     except (TypeError, ValueError) as exception:
         message = str(exception)
     return redirect(url_for(
