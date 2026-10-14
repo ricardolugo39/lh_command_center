@@ -57,7 +57,7 @@
     </form>
     <div class="small text-secondary mt-3">Cambiar parámetros o márgenes reinicia las aprobaciones de esta versión.</div>
     {% else %}
-    <div class="row"><div class="col-md-3"><div class="text-secondary">TRM</div><strong>{{ '{:,.2f}'.format(s.trm) }}</strong></div><div class="col-md-3"><div class="text-secondary">Factor</div><strong>1,20</strong></div><div class="col-md-3"><div class="text-secondary">Incremento rieles</div><strong>{{ s.rail_increment_percent }}%</strong></div><div class="col-md-3"><a class="btn btn-success" href="{{ url_for('stock_planning.export_thk_pricing_it', scenario_id=s.id) }}">Exportar para IT</a></div></div>
+    <div class="row align-items-end"><div class="col-md-3"><div class="text-secondary">TRM</div><strong>{{ '{:,.2f}'.format(s.trm) }}</strong></div><div class="col-md-3"><div class="text-secondary">Factor</div><strong>1,20</strong></div><div class="col-md-2"><div class="text-secondary">Incremento rieles</div><strong>{{ s.rail_increment_percent }}%</strong></div><div class="col-md-4 d-flex flex-wrap gap-2 justify-content-md-end">{% if s.status == 'approved' %}<form method="post" action="{{ url_for('stock_planning.reopen_thk_pricing', scenario_id=s.id) }}" onsubmit="return confirm('La versión volverá a borrador. Las decisiones actuales se conservarán y podrá revisarlas. ¿Continuar?')"><button class="btn">Reabrir para revisar</button></form>{% endif %}<a class="btn btn-success" href="{{ url_for('stock_planning.export_thk_pricing_it', scenario_id=s.id) }}">Exportar para IT</a></div></div>
     {% endif %}
   </div>
 </section>

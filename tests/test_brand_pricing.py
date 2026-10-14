@@ -1,3 +1,8 @@
+from contextlib import contextmanager
+
+import pytest
+
+from app.workspace.stock_planning import pricing
 from app.workspace.stock_planning.pricing import BrandPricingService
 
 
@@ -70,3 +75,60 @@ def test_accepted_vendor_quote_replaces_erp_fob_in_calculation():
     assert line["quote_fob_usd"] == 50
     assert line["effective_fob_source"] == "vendor_quote"
     assert line["calculated_price_cop"] == 542_900
+
+
+class _ReopenConnection:
+    def __init__(self, status="approved", decision_count=542):
+        self.status = status
+        self.decision_count = decision_count
+        self.updated = False
+
+    def execute(self, statement, parameters):
+        if "SELECT status" in statement:
+            return _Result({"status": self.status})
+        if "UPDATE brand_pricing_scenarios" in statement:
+            self.status = "draft"
+            self.updated = True
+            return _Result(None)
+        if "SELECT COUNT(*) AS count" in statement:
+            return _Result({"count": self.decision_count})
+        raise AssertionError(statement)
+
+
+class _Result:
+    def __init__(self, row):
+        self.row = row
+
+    def fetchone(self):
+        return self.row
+
+
+def _use_connection(monkeypatch, connection):
+    @contextmanager
+    def fake_transaction(*, write):
+        assert write is True
+        yield connection
+
+    monkeypatch.setattr(pricing, "transaction", fake_transaction)
+
+
+def test_reopen_returns_scenario_to_draft_and_preserves_decisions(monkeypatch):
+    connection = _ReopenConnection()
+    _use_connection(monkeypatch, connection)
+
+    count = BrandPricingService.reopen(4)
+
+    assert count == 542
+    assert connection.status == "draft"
+    assert connection.updated is True
+
+
+@pytest.mark.parametrize("status", ["draft", "exported"])
+def test_reopen_rejects_scenarios_that_are_not_closed(monkeypatch, status):
+    connection = _ReopenConnection(status=status)
+    _use_connection(monkeypatch, connection)
+
+    with pytest.raises(ValueError):
+        BrandPricingService.reopen(4)
+
+    assert connection.updated is False

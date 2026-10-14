@@ -286,6 +286,33 @@ class BrandPricingService:
         return len(valid_skus)
 
     @staticmethod
+    def reopen(scenario_id: int) -> int:
+        """Return a closed scenario to draft without discarding its decisions."""
+        with transaction(write=True) as connection:
+            row = connection.execute(
+                "SELECT status FROM brand_pricing_scenarios WHERE id=?",
+                (scenario_id,),
+            ).fetchone()
+            if not row:
+                raise ValueError("El análisis de precios no existe.")
+            if row["status"] == "draft":
+                raise ValueError("El análisis ya está abierto para edición.")
+            if row["status"] != "approved":
+                raise ValueError("Solo se puede reabrir una versión cerrada.")
+            connection.execute(
+                """UPDATE brand_pricing_scenarios
+                SET status='draft',updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (scenario_id,),
+            )
+            approved = connection.execute(
+                """SELECT COUNT(*) AS count
+                FROM brand_pricing_line_decisions
+                WHERE scenario_id=? AND decision_status='approved'""",
+                (scenario_id,),
+            ).fetchone()
+        return int(approved["count"])
+
+    @staticmethod
     def _require_draft(connection, scenario_id: int) -> None:
         row = connection.execute(
             "SELECT status FROM brand_pricing_scenarios WHERE id=?",

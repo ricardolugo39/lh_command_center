@@ -132,6 +132,22 @@ def close_thk_pricing(scenario_id: int):
     ))
 
 
+@stock_planning_bp.post("/brands/thk/pricing/<int:scenario_id>/reopen")
+@roles_required("administrator")
+def reopen_thk_pricing(scenario_id: int):
+    try:
+        count = BrandPricingService.reopen(scenario_id)
+        message = (
+            "Versión reabierta para revisión. "
+            f"Se conservaron {count} decisión(es) de precio."
+        )
+    except ValueError as exception:
+        message = str(exception)
+    return redirect(url_for(
+        "stock_planning.thk_pricing", scenario_id=scenario_id, message=message,
+    ))
+
+
 def _profile_id() -> int | None:
     raw = request.values.get("profile_id")
     return int(raw) if raw and raw.isdigit() else None
