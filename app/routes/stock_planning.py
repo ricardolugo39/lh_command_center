@@ -42,6 +42,18 @@ def _brand_pricing_page(profile_code: str, routes: dict[str, str]):
     return render_template("stock_planning/brand_pricing.html", page=page)
 
 
+def _validate_pricing_bulk_confirmation() -> None:
+    selected_count = len({
+        sku.strip() for sku in request.form.getlist("skus") if sku.strip()
+    })
+    if selected_count > 1 and request.form.get("confirmed_count") != str(
+        selected_count
+    ):
+        raise ValueError(
+            "La aprobación múltiple no fue confirmada. Revise la selección."
+        )
+
+
 THK_PRICING_ROUTES = {
     "page": "stock_planning.thk_pricing",
     "create": "stock_planning.create_thk_pricing",
@@ -152,6 +164,7 @@ def update_thk_pricing_rule(scenario_id: int, rule_id: int):
 @roles_required("administrator")
 def approve_thk_pricing_lines(scenario_id: int):
     try:
+        _validate_pricing_bulk_confirmation()
         count = BrandPricingService.approve_many(
             scenario_id, request.form.getlist("skus"),
             str(g.current_user["email"]),
@@ -241,6 +254,7 @@ def update_thomson_pricing_rule(scenario_id: int, rule_id: int):
 @roles_required("administrator")
 def approve_thomson_pricing_lines(scenario_id: int):
     try:
+        _validate_pricing_bulk_confirmation()
         count = BrandPricingService.approve_many(
             scenario_id, request.form.getlist("skus"),
             str(g.current_user["email"]),

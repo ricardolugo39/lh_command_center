@@ -1,7 +1,9 @@
 from contextlib import contextmanager
 
 import pytest
+from flask import Flask
 
+from app.routes.stock_planning import _validate_pricing_bulk_confirmation
 from app.workspace.stock_planning import pricing
 from app.workspace.stock_planning.pricing import BrandPricingService
 
@@ -134,6 +136,25 @@ def test_thomson_numeric_rails_are_separate_and_grouped_by_hundreds_series():
     assert BrandPricingService._thomson_classification({
         "internal_sku": "521 H30 A + 1500THO", "product_name": "RIEL LINEAL",
     }) == ("RIEL", "500")
+
+
+def test_bulk_pricing_approval_requires_matching_confirmed_count():
+    app = Flask(__name__)
+    with app.test_request_context(
+        "/", method="POST",
+        data={"skus": ["ONE", "TWO"], "confirmed_count": "1"},
+    ):
+        with pytest.raises(ValueError, match="no fue confirmada"):
+            _validate_pricing_bulk_confirmation()
+
+
+def test_bulk_pricing_approval_accepts_matching_confirmed_count():
+    app = Flask(__name__)
+    with app.test_request_context(
+        "/", method="POST",
+        data={"skus": ["ONE", "TWO"], "confirmed_count": "2"},
+    ):
+        _validate_pricing_bulk_confirmation()
 
 
 class _ReopenConnection:
