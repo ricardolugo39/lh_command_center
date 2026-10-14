@@ -134,11 +134,15 @@ class BrandPricingService:
                 WHERE p.snapshot_id=? ORDER BY p.internal_sku""",
                 (scenario["source_snapshot_id"],),
             ).fetchall()]
-            if scenario["status"] == "draft" and \
-                    str(scenario["profile_code"]).casefold() == "thk":
-                cls._ensure_ball_screw_rules(
-                    connection, scenario_id, products, scenario["created_by"]
-                )
+            if scenario["status"] == "draft":
+                if str(scenario["profile_code"]).casefold() == "thk":
+                    cls._ensure_ball_screw_rules(
+                        connection, scenario_id, products, scenario["created_by"]
+                    )
+                elif str(scenario["profile_code"]).casefold() == "thomson":
+                    cls._ensure_thomson_rules(
+                        connection, scenario_id, products, scenario["created_by"]
+                    )
             rules = [dict(row) for row in connection.execute(
                 """SELECT * FROM brand_pricing_rules
                 WHERE scenario_id=? ORDER BY product_type,series""",
@@ -485,11 +489,9 @@ class BrandPricingService:
         """Classify Thomson references without deriving prices from bar lengths."""
         sku = str(product["internal_sku"]).upper().strip()
         name = str(product.get("product_name") or "").upper()
-        shaft = re.match(r"(?P<family>W \d+ H6|WZ .+? L)/\d+", sku)
-        token = re.match(r"([A-Z]+(?:\s*\d+)?)", sku)
-        series = shaft.group("family") if shaft else (
-            token.group(1).strip() if token else "GENERAL"
-        )
+        shaft = re.match(r"(?:W \d+ H6|WZ .+? L)/\d+", sku)
+        token = re.match(r"([A-Z]+)", sku)
+        series = token.group(1) if token else "GENERAL"
         if shaft or "EJE" in name:
             product_type = "EJE"
         elif "ACTUADOR" in name or "ELECTRAK" in name:
@@ -510,6 +512,56 @@ class BrandPricingService:
         else:
             product_type = "OTRO"
         return product_type, series
+
+    @classmethod
+    def _ensure_thomson_rules(
+        cls, connection, scenario_id: int, products: list[dict[str, Any]],
+        updated_by: str,
+    ) -> None:
+        """Collapse size-specific Thomson rules into commercial prefixes."""
+        discovered = sorted({
+            cls._thomson_classification(product) for product in products
+        })
+        existing = [dict(row) for row in connection.execute(
+            """SELECT * FROM brand_pricing_rules
+            WHERE scenario_id=? ORDER BY updated_at DESC,id DESC""",
+            (scenario_id,),
+        ).fetchall()]
+        desired = set(discovered)
+        for product_type, series in discovered:
+            candidates = [
+                row for row in existing
+                if row["product_type"] == product_type
+                and re.match(r"([A-Z]+)", str(row["series"]).upper())
+                and re.match(r"([A-Z]+)", str(row["series"]).upper()).group(1)
+                == series
+            ]
+            preferred = next(
+                (row for row in candidates if row["rule_source"] == "manual"),
+                candidates[0] if candidates else None,
+            )
+            margin = (
+                float(preferred["gross_margin_percent"])
+                if preferred else THOMSON_DEFAULT_MARGIN
+            )
+            source = preferred["rule_source"] if preferred else "inferred"
+            connection.execute(
+                """INSERT INTO brand_pricing_rules (
+                    scenario_id,product_type,series,gross_margin_percent,
+                    rule_source,updated_by
+                ) VALUES (?,?,?,?,?,?)
+                ON CONFLICT(scenario_id,product_type,series) DO UPDATE SET
+                    gross_margin_percent=excluded.gross_margin_percent,
+                    rule_source=excluded.rule_source,
+                    updated_by=excluded.updated_by,
+                    updated_at=CURRENT_TIMESTAMP""",
+                (scenario_id, product_type, series, margin, source, updated_by),
+            )
+        for row in existing:
+            if (row["product_type"], row["series"]) not in desired:
+                connection.execute(
+                    "DELETE FROM brand_pricing_rules WHERE id=?", (row["id"],)
+                )
 
     @classmethod
     def _ensure_ball_screw_rules(

@@ -88,7 +88,7 @@ def test_thomson_shaft_uses_its_own_fob_without_length_increment():
         "lista1_cop": 500_000,
     }]
     rules = [{
-        "product_type": "EJE", "series": "W 20 H6",
+        "product_type": "EJE", "series": "W",
         "gross_margin_percent": 58,
     }]
 
@@ -97,7 +97,7 @@ def test_thomson_shaft_uses_its_own_fob_without_length_increment():
     )[0]
 
     assert line["product_type"] == "EJE"
-    assert line["series"] == "W 20 H6"
+    assert line["series"] == "W"
     assert line["adjusted_fob_usd"] == 40
     assert line["rail_increment_applied"] == 0
     assert line["calculated_price_cop"] == 434_300
@@ -106,10 +106,16 @@ def test_thomson_shaft_uses_its_own_fob_without_length_increment():
 def test_thomson_product_families_are_classified_from_name():
     assert BrandPricingService._thomson_classification({
         "internal_sku": "SUPER 16THO", "product_name": "RODAMIENTO LINEAL",
-    }) == ("RODAMIENTO LINEAL", "SUPER 16")
+    }) == ("RODAMIENTO LINEAL", "SUPER")
     assert BrandPricingService._thomson_classification({
         "internal_sku": "LL24B020THO", "product_name": "ACTUADOR ELECTRAK",
-    }) == ("ACTUADOR", "LL24")
+    }) == ("ACTUADOR", "LL")
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "WZ 1 L/600THO", "product_name": "EJE SOPORTADO",
+    }) == ("EJE", "WZ")
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "FNYBU 20THO", "product_name": "RODAMIENTO LINEAL",
+    }) == ("RODAMIENTO LINEAL", "FNYBU")
 
 
 class _ReopenConnection:
