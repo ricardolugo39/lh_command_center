@@ -500,8 +500,9 @@ class BrandPricingService:
             product_type = "TORNILLO"
         elif "RODAMIENTO" in name or "BALINERA" in name or "BUJE" in name:
             product_type = "RODAMIENTO LINEAL"
-        elif "GUIA" in name or "GUÍA" in name or "RIEL" in name \
-                or "CARRO" in name:
+        elif "RIEL" in name:
+            product_type = "RIEL"
+        elif "GUIA" in name or "GUÍA" in name or "CARRO" in name:
             product_type = "GUIA LINEAL"
         elif any(value in name for value in (
             "SOPORTE", "ACOPLE", "BRIDA", "ABRAZADERA", "ACCESORIO",
@@ -510,7 +511,7 @@ class BrandPricingService:
         else:
             product_type = "OTRO"
         numeric_guide = re.match(r"([45])\d{2}(?:\s|$)", sku)
-        if product_type == "GUIA LINEAL" and numeric_guide:
+        if product_type in {"GUIA LINEAL", "RIEL"} and numeric_guide:
             series = f"{numeric_guide.group(1)}00"
         else:
             token = re.match(r"([A-Z]+)", sku)
@@ -545,7 +546,7 @@ class BrandPricingService:
                         ).group(1) == series
                     )
                     or (
-                        product_type == "GUIA LINEAL"
+                        product_type in {"GUIA LINEAL", "RIEL"}
                         and series in {"400", "500"}
                         and str(row["series"]).upper() == "GENERAL"
                     )

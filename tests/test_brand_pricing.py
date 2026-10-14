@@ -127,6 +127,15 @@ def test_thomson_numeric_linear_guides_are_grouped_by_hundreds_series():
     }) == ("GUIA LINEAL", "500")
 
 
+def test_thomson_numeric_rails_are_separate_and_grouped_by_hundreds_series():
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "421 H20 A + 1500THO", "product_name": "RIEL LINEAL",
+    }) == ("RIEL", "400")
+    assert BrandPricingService._thomson_classification({
+        "internal_sku": "521 H30 A + 1500THO", "product_name": "RIEL LINEAL",
+    }) == ("RIEL", "500")
+
+
 class _ReopenConnection:
     def __init__(self, status="approved", decision_count=542):
         self.status = status
