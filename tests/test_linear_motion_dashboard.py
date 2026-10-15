@@ -62,3 +62,26 @@ def test_linear_motion_service_rejects_unknown_brand(monkeypatch):
 
     assert page["brand"] == ""
     assert calls == [""]
+
+
+def test_linear_motion_diagnosis_uses_percentage_variation(monkeypatch):
+    repository = "app.workspace.services.linear_motion_service.LinearMotionRepository"
+    monkeypatch.setattr(f"{repository}.sales_summary", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.monthly_sales", lambda brand: [])
+    monkeypatch.setattr(f"{repository}.family_sales", lambda brand: [])
+    monkeypatch.setattr(f"{repository}.city_sales", lambda brand: [])
+    monkeypatch.setattr(f"{repository}.inventory", lambda brand: [])
+    monkeypatch.setattr(f"{repository}.customer_coverage", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.customer_segments", lambda brand: [])
+    monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.diagnostic_breakdown", lambda brand, focus: {
+        "components": [{"name": "Rieles", "current": 75, "previous": 100}],
+        "cities": [{"name": "Cali", "current": 10, "previous": 0}],
+        "segments": [], "customers": [],
+    })
+
+    page = LinearMotionService.get_page("THK", "guides")
+
+    assert page["diagnosis"]["components"][0]["change"] == -25
+    assert page["diagnosis"]["components"][0]["display_change"] == "-25.0%"
+    assert page["diagnosis"]["cities"][0]["display_change"] == "Nueva"

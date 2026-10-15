@@ -46,8 +46,10 @@ class LinearMotionService:
         for rows in diagnosis.values():
             for row in rows:
                 current_row, previous_row = float(row.get("current") or 0), float(row.get("previous") or 0)
+                change = ((current_row - previous_row) / previous_row * 100) if previous_row else None
                 row.update(delta=current_row-previous_row, display_current=cls._cop(current_row),
-                           display_previous=cls._cop(previous_row), display_delta=cls._cop(abs(current_row-previous_row)))
+                           display_previous=cls._cop(previous_row), change=change,
+                           display_change=f"{change:+.1f}%" if change is not None else "Nueva")
         return {
             "brand": brand,
             "brand_label": cls.BRAND_OPTIONS[brand],
