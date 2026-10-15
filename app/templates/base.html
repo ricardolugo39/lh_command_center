@@ -112,6 +112,14 @@
                         </a>
                     </li>{% endif %}
 
+                    {% if not limited_access %}<li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'workspace.linear_motion_dashboard' %}active{% endif %}"
+                           href="{{ url_for('workspace.linear_motion_dashboard') }}">
+                            <span class="ccc-nav-icon" aria-hidden="true">↔</span>
+                            <span class="nav-link-title">THK y Thomson</span>
+                        </a>
+                    </li>{% endif %}
+
                     {% if not limited_access %}{% set tools_active = request.blueprint in ('ask', 'rfqs', 'quotes', 'stock_planning', 'integrations', 'imports', 'purchase_history') or request.endpoint in ('workspace.initiative_list', 'workspace.visit_integration', 'workspace.visit_data_quality') %}
                     <li class="nav-item ccc-tools-item">
                         <details class="ccc-tools" {% if tools_active %}open{% endif %}>

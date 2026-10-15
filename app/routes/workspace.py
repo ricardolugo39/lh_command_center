@@ -77,6 +77,7 @@ from app.workspace.services.strategic_account_service import (
     StrategicAccountService,
 )
 from app.workspace.services.company_sales_dashboard_service import CompanySalesDashboardService
+from app.workspace.services.linear_motion_service import LinearMotionService
 from app.workspace.services.agreement_import_service import (
     AgreementImportError,
     AgreementImportService,
@@ -166,6 +167,12 @@ def company_sales_dashboard():
         _requested_office()
     )
     return render_template("workspace/company_sales_dashboard.html", page=page)
+
+
+@workspace_bp.get("/analytics/linear-motion")
+def linear_motion_dashboard():
+    page = LinearMotionService.get_page(request.args.get("brand", "").strip())
+    return render_template("workspace/linear_motion_dashboard.html", page=page)
 
 
 @workspace_bp.route("/workspace/projects/<int:project_id>")

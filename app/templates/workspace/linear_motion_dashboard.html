@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}THK y Thomson · Command Center{% endblock %}
+{% block page_title %}Inteligencia THK y Thomson{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static',filename='css/linear-motion-dashboard.css') }}">{% endblock %}
+{% block content %}
+<main class="lm" data-monthly='{{ page.monthly|tojson }}'>
+  <header class="lm-hero">
+    <div><span>MOVIMIENTO LINEAL</span><h1>{{ page.brand_label }}</h1><p>Ventas, portafolio, clientes e inventario en una sola lectura.</p></div>
+    <nav aria-label="Filtro de marca">
+      {% for value,label in page.brand_options.items() %}<a class="{{ 'active' if page.brand == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=value) }}">{{ label }}</a>{% endfor %}
+    </nav>
+  </header>
+
+  <section class="lm-kpis">
+    <article><small>VENTAS YTD</small><strong>{{ page.summary.display_sales }}</strong><span class="{{ 'negative' if page.summary.change is not none and page.summary.change < 0 else 'positive' }}">{{ '%+.1f'|format(page.summary.change) if page.summary.change is not none else '—' }}% vs. año anterior</span></article>
+    <article><small>CLIENTES ACTIVOS</small><strong>{{ page.summary.active_customers }}</strong><span>{{ page.summary.documents }} pedidos en el año</span></article>
+    <article><small>PRODUCTOS VENDIDOS</small><strong>{{ page.summary.active_products }}</strong><span>Referencias distintas YTD</span></article>
+    <article><small>ÚLTIMA VENTA</small><strong>{{ page.summary.last_sale or '—' }}</strong><span>Histórico desde {{ page.summary.first_sale or '—' }}</span></article>
+  </section>
+
+  <section class="lm-grid lm-main-grid">
+    <article class="lm-panel"><header><div><small>COMPORTAMIENTO</small><h2>Ventas mensuales por marca</h2></div></header><div id="lm-chart" class="lm-chart" role="img" aria-label="Ventas mensuales de THK y Thomson"></div><p class="lm-note">La vista conjunta conserva cada marca separada para evitar ocultar diferencias de comportamiento.</p></article>
+    <article class="lm-panel"><header><div><small>PORTAFOLIO</small><h2>Familias de producto</h2></div></header><div class="lm-table"><table><thead><tr><th>Marca y familia</th><th>Productos</th><th>Ventas YTD</th><th>Variación</th></tr></thead><tbody>{% for item in page.families[:12] %}<tr><td><b>{{ item.brand }}</b><span>{{ item.family|title }}</span></td><td>{{ item.products }}</td><td>{{ item.display_sales }}</td><td class="{{ 'negative' if item.change is not none and item.change < 0 else 'positive' }}">{{ '%+.1f'|format(item.change) if item.change is not none else 'Nueva' }}%</td></tr>{% else %}<tr><td colspan="4">No hay ventas para el periodo.</td></tr>{% endfor %}</tbody></table></div></article>
+  </section>
+
+  <section class="lm-grid">
+    <article class="lm-panel"><header><div><small>GEOGRAFÍA</small><h2>Principales ciudades YTD</h2></div></header>{% for item in page.cities[:10] %}<div class="lm-city"><div><strong>{{ item.city|title }}</strong><span>{{ item.brand }} · {{ item.customers }} clientes</span><b>{{ item.display_sales }}</b></div><i><span style="width:{{ item.bar_width }}%"></span></i></div>{% else %}<p class="lm-empty">No hay ciudades para mostrar.</p>{% endfor %}</article>
+    <article class="lm-panel"><header><div><small>INVENTARIO</small><h2>Última fotografía disponible</h2></div></header>{% for item in page.inventory %}<div class="lm-stock"><div><strong>{{ item.brand }}</strong><span>Corte {{ item.snapshot_date }}</span></div><b>{{ item.display_value }}</b><dl><div><dt>Referencias</dt><dd>{{ item.products }}</dd></div><div><dt>Disponible</dt><dd>{{ item.available|round(0)|int }}</dd></div><div><dt>Reservado</dt><dd>{{ item.reserved|round(0)|int }}</dd></div><div><dt>En tránsito</dt><dd>{{ item.transit|round(0)|int }}</dd></div></dl></div>{% else %}<p class="lm-empty">No hay inventario para mostrar.</p>{% endfor %}</article>
+  </section>
+
+  <section class="lm-grid">
+    <article class="lm-panel lm-quality"><header><div><small>CALIDAD DE DATOS</small><h2>Qué podemos segmentar hoy</h2></div></header><div><span>Ubicación de compradores</span><strong>{{ page.coverage.city_percent|round(1) }}%</strong><i><b style="width:{{ page.coverage.city_percent }}%"></b></i></div><div><span>Industria o actividad</span><strong>{{ page.coverage.industry_percent|round(1) }}%</strong><i><b style="width:{{ page.coverage.industry_percent }}%"></b></i></div><p>La ubicación ya permite análisis comercial. La industria necesita enriquecimiento antes de impulsar campañas segmentadas.</p></article>
+    <article class="lm-panel lm-next"><header><div><small>PROYECTOS Y MERCADEO</small><h2>Preparación del siguiente paso</h2></div></header><div class="lm-mini-kpis"><div><strong>{{ page.commercial.quotes or 0 }}</strong><span>Cotizaciones detectadas</span></div><div><strong>{{ page.commercial.linked_projects or 0 }}</strong><span>Proyectos vinculados</span></div><div><strong>{{ page.commercial.tagged_projects or 0 }}</strong><span>Proyectos etiquetados</span></div></div><p>Para convertir esta sección en pipeline y plan de mercadeo debemos completar marca, aplicación, industria y próxima acción en cada proyecto.</p></article>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/linear-motion-dashboard.js') }}"></script>{% endblock %}
