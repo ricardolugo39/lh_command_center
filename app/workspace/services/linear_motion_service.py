@@ -92,6 +92,17 @@ class LinearMotionService:
     def _format_segment_opportunity(cls, result: dict[str, Any]) -> dict[str, Any]:
         for row in result.get("customers", []):
             row["display_other_sales"] = cls._cop(row.get("other_sales"))
+            brands = sorted({
+                value.strip() for value in str(row.get("brands") or "").split(",")
+                if value.strip()
+            })
+            linear_brands = sorted({
+                value.strip() for value in str(
+                    row.get("competitor_linear_brands") or ""
+                ).split(",") if value.strip()
+            })
+            row["brand_items"] = brands
+            row["linear_brand_items"] = linear_brands
         return result
 
     @classmethod

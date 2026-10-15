@@ -132,3 +132,14 @@ def test_segment_opportunity_uses_one_brand_binding(monkeypatch):
 
     assert captured["sql"].count("?") == 2
     assert captured["params"] == ("THK", "PLASTICOS")
+
+
+def test_segment_opportunity_formats_brands_for_compact_ui():
+    result = LinearMotionService._format_segment_opportunity({"customers": [{
+        "other_sales": 100, "brands": "SKF,FAG,SKF",
+        "competitor_linear_brands": "HIW,SKF",
+    }]})
+
+    customer = result["customers"][0]
+    assert customer["brand_items"] == ["FAG", "SKF"]
+    assert customer["linear_brand_items"] == ["HIW", "SKF"]
