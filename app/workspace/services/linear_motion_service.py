@@ -7,14 +7,16 @@ from app.workspace.repositories.linear_motion_repository import (
 
 class LinearMotionService:
     BRAND_OPTIONS = {"": "Ambas", "THK": "THK", "Thomson": "Thomson"}
+    FOCUS_OPTIONS = {"": "Vista general", "guides": "Guías y rieles", "screws": "Tornillos de bolas"}
 
     @staticmethod
     def _cop(value: Any) -> str:
         return f"COP {float(value or 0):,.0f}".replace(",", ".")
 
     @classmethod
-    def get_page(cls, requested_brand: str = "") -> dict[str, Any]:
+    def get_page(cls, requested_brand: str = "", requested_focus: str = "") -> dict[str, Any]:
         brand = requested_brand if requested_brand in cls.BRAND_OPTIONS else ""
+        focus = requested_focus if requested_focus in cls.FOCUS_OPTIONS else ""
         summary = LinearMotionRepository.sales_summary(brand)
         current = float(summary.get("sales_ytd") or 0)
         previous = float(summary.get("sales_previous_ytd") or 0)
@@ -40,10 +42,18 @@ class LinearMotionService:
         for row in segments:
             row["display_sales"] = cls._cop(row["sales"])
             row["bar_width"] = float(row["sales"] or 0) / maximum_segment * 100
+        diagnosis = LinearMotionRepository.diagnostic_breakdown(brand, focus)
+        for rows in diagnosis.values():
+            for row in rows:
+                current_row, previous_row = float(row.get("current") or 0), float(row.get("previous") or 0)
+                row.update(delta=current_row-previous_row, display_current=cls._cop(current_row),
+                           display_previous=cls._cop(previous_row), display_delta=cls._cop(abs(current_row-previous_row)))
         return {
             "brand": brand,
             "brand_label": cls.BRAND_OPTIONS[brand],
             "brand_options": cls.BRAND_OPTIONS,
+            "focus": focus, "focus_label": cls.FOCUS_OPTIONS[focus],
+            "focus_options": cls.FOCUS_OPTIONS,
             "summary": {
                 **summary,
                 "display_sales": cls._cop(current),
@@ -56,5 +66,6 @@ class LinearMotionService:
             "inventory": inventory,
             "coverage": coverage,
             "segments": segments,
+            "diagnosis": diagnosis,
             "commercial": LinearMotionRepository.commercial_coverage(brand),
         }

@@ -7,9 +7,10 @@
   <header class="lm-hero">
     <div><span>MOVIMIENTO LINEAL</span><h1>{{ page.brand_label }}</h1><p>Ventas, portafolio, clientes e inventario en una sola lectura.</p></div>
     <nav aria-label="Filtro de marca">
-      {% for value,label in page.brand_options.items() %}<a class="{{ 'active' if page.brand == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=value) }}">{{ label }}</a>{% endfor %}
+      {% for value,label in page.brand_options.items() %}<a class="{{ 'active' if page.brand == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=value,focus=page.focus) }}">{{ label }}</a>{% endfor %}
     </nav>
   </header>
+  <nav class="lm-focus">{% for value,label in page.focus_options.items() %}<a class="{{ 'active' if page.focus == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=page.brand,focus=value) }}">{{ label }}</a>{% endfor %}</nav>
 
   <section class="lm-kpis">
     <article><small>VENTAS YTD</small><strong>{{ page.summary.display_sales }}</strong><span class="{{ 'negative' if page.summary.change is not none and page.summary.change < 0 else 'positive' }}">{{ '%+.1f'|format(page.summary.change) if page.summary.change is not none else '—' }}% vs. año anterior</span></article>
@@ -22,6 +23,12 @@
     <article class="lm-panel"><header><div><small>COMPORTAMIENTO</small><h2>Ventas mensuales por marca</h2></div><div class="lm-legend"><span><i></i>THK</span><span><i class="thomson"></i>Thomson</span></div></header><div id="lm-chart" class="lm-chart" role="img" aria-label="Ventas mensuales de THK y Thomson"></div><p class="lm-note">Se muestran los últimos 24 meses. Las etiquetas señalan un mes por trimestre para facilitar la lectura.</p></article>
     <article class="lm-panel"><header><div><small>PORTAFOLIO</small><h2>Familias de producto</h2></div></header><div class="lm-table"><table><thead><tr><th>Marca y familia</th><th>Productos</th><th>Ventas YTD</th><th>Variación</th></tr></thead><tbody>{% for item in page.families[:12] %}<tr><td><b>{{ item.brand }}</b><span>{{ item.family|title }}</span></td><td>{{ item.products }}</td><td>{{ item.display_sales }}</td><td class="{{ 'negative' if item.change is not none and item.change < 0 else 'positive' }}">{% if item.change is not none %}{{ '%+.1f'|format(item.change) }}%{% else %}Nueva{% endif %}</td></tr>{% else %}<tr><td colspan="4">No hay ventas para el periodo.</td></tr>{% endfor %}</tbody></table></div></article>
   </section>
+
+  {% if page.focus %}<section class="lm-diagnosis">
+    <header><div><small>DIAGNÓSTICO DE VARIACIÓN</small><h2>{{ page.focus_label }} · qué requiere atención</h2></div><p>YTD frente al mismo periodo anterior.</p></header>
+    <div class="lm-diagnostic-grid">{% for title,key in [('Componente técnico','components'),('Ciudad','cities'),('Tipo de cliente','segments')] %}<article class="lm-panel"><h3>{{ title }}</h3>{% for item in page.diagnosis[key][:7] %}<div class="lm-impact"><div><strong>{{ item.name|title }}</strong><span>{{ item.display_current }} vs. {{ item.display_previous }}</span></div><b class="{{ 'negative' if item.delta < 0 else 'positive' }}">{{ '-' if item.delta < 0 else '+' }}{{ item.display_delta }}</b></div>{% endfor %}</article>{% endfor %}</div>
+    <article class="lm-panel"><header><div><small>CUENTAS QUE EXPLICAN LA CAÍDA</small><h2>Clientes para investigar</h2></div></header><div class="lm-table"><table><thead><tr><th>Cliente</th><th>Actual</th><th>Anterior</th><th>Impacto</th></tr></thead><tbody>{% for item in page.diagnosis.customers %}<tr><td>{{ item.name }}</td><td>{{ item.display_current }}</td><td>{{ item.display_previous }}</td><td class="{{ 'negative' if item.delta < 0 else 'positive' }}">{{ '-' if item.delta < 0 else '+' }}{{ item.display_delta }}</td></tr>{% endfor %}</tbody></table></div></article>
+  </section>{% endif %}
 
   <section class="lm-grid">
     <article class="lm-panel"><header><div><small>GEOGRAFÍA</small><h2>Principales ciudades YTD</h2></div></header>{% for item in page.cities[:10] %}<div class="lm-city"><div><strong>{{ item.city|title }}</strong><span>{{ item.brand }} · {{ item.customers }} clientes</span><b>{{ item.display_sales }}</b></div><i><span style="width:{{ item.bar_width }}%"></span></i></div>{% else %}<p class="lm-empty">No hay ciudades para mostrar.</p>{% endfor %}</article>

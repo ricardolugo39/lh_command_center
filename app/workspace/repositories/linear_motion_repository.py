@@ -206,3 +206,21 @@ class LinearMotionRepository:
                                 THEN 'Thomson' END) IN ({placeholders})) tagged_projects
             FROM selected
         """, values + values)
+
+    @classmethod
+    def diagnostic_breakdown(cls, brand: str, focus: str) -> dict[str, list[dict[str, Any]]]:
+        group_id = {"guides": 1550, "screws": 1560}.get(focus)
+        if not group_id:
+            return {"components": [], "cities": [], "segments": [], "customers": []}
+        clause, brand_params = cls._sales_filter(brand)
+        params = (group_id,) + brand_params
+        totals = """SUM(CASE WHEN strftime('%Y',date(s.fecha))=strftime('%Y','now') THEN COALESCE(s.neto,0) ELSE 0 END) current,
+            SUM(CASE WHEN strftime('%Y',date(s.fecha))=strftime('%Y','now','-1 year') AND strftime('%m-%d',date(s.fecha))<=strftime('%m-%d','now') THEN COALESCE(s.neto,0) ELSE 0 END) previous"""
+        where = f"{cls.SALES_BRAND_SQL} IS NOT NULL AND CAST(s.idfam2 AS INTEGER)=? {clause}"
+        component = ("""CASE WHEN UPPER(s.nombreproducto) LIKE '%RIEL LINEAL%' AND UPPER(s.nombreproducto) LIKE '%GUIA%' THEN 'Conjunto riel + patines' WHEN UPPER(s.nombreproducto) LIKE '%RIEL LINEAL%' THEN 'Rieles' WHEN UPPER(s.nombreproducto) LIKE '%GUIA LINEAL%' THEN 'Patines o guías' ELSE 'Otros productos en la familia ERP' END""" if focus == "guides" else """CASE WHEN UPPER(s.nombreproducto) LIKE '%TORNILLO DE BOLAS%' AND UPPER(s.nombreproducto) LIKE '%TUERCA%' THEN 'Conjunto tornillo + tuerca' WHEN UPPER(s.nombreproducto) LIKE '%TORNILLO DE BOLAS%' THEN 'Tornillos de bolas' WHEN UPPER(s.nombreproducto) LIKE '%TUERCA DE BOLAS%' THEN 'Tuercas de bolas' ELSE 'Otros productos en la familia ERP' END""")
+        components = cls._all(f"SELECT {component} name,{totals} FROM raw_sales s WHERE {where} GROUP BY name HAVING current<>0 OR previous<>0 ORDER BY current-previous", params)
+        cte = "WITH customers AS (SELECT TRIM(customer_id) customer_id,MAX(city) city,MAX(classification_name) customer_type FROM dim_customer GROUP BY TRIM(customer_id))"
+        cities = cls._all(f"{cte} SELECT COALESCE(NULLIF(TRIM(c.city),''),'Sin ciudad') name,{totals} FROM raw_sales s LEFT JOIN customers c ON c.customer_id=REPLACE(TRIM(s.nit),',','') WHERE {where} GROUP BY name HAVING current<>0 OR previous<>0 ORDER BY current-previous LIMIT 10", params)
+        segments = cls._all(f"{cte} SELECT COALESCE(NULLIF(TRIM(c.customer_type),''),'Sin clasificar') name,{totals} FROM raw_sales s LEFT JOIN customers c ON c.customer_id=REPLACE(TRIM(s.nit),',','') WHERE {where} GROUP BY name HAVING current<>0 OR previous<>0 ORDER BY current-previous LIMIT 10", params)
+        customers = cls._all(f"SELECT REPLACE(TRIM(s.nit),',','') customer_id,MAX(s.razonsocial) name,{totals} FROM raw_sales s WHERE {where} GROUP BY customer_id HAVING current<>0 OR previous<>0 ORDER BY current-previous LIMIT 12", params)
+        return {"components": components, "cities": cities, "segments": segments, "customers": customers}

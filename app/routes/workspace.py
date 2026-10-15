@@ -171,7 +171,10 @@ def company_sales_dashboard():
 
 @workspace_bp.get("/analytics/linear-motion")
 def linear_motion_dashboard():
-    page = LinearMotionService.get_page(request.args.get("brand", "").strip())
+    page = LinearMotionService.get_page(
+        request.args.get("brand", "").strip(),
+        request.args.get("focus", "").strip(),
+    )
     return render_template("workspace/linear_motion_dashboard.html", page=page)
 
 

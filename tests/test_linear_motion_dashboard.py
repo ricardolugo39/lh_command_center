@@ -29,6 +29,9 @@ def test_linear_motion_service_normalizes_filter_and_builds_metrics(monkeypatch)
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {
         "quotes": 2, "linked_projects": 1, "tagged_projects": 0,
     })
+    monkeypatch.setattr(f"{repository}.diagnostic_breakdown", lambda brand, focus: {
+        "components": [], "cities": [], "segments": [], "customers": [],
+    })
 
     page = LinearMotionService.get_page("THK")
 
@@ -51,6 +54,9 @@ def test_linear_motion_service_rejects_unknown_brand(monkeypatch):
     monkeypatch.setattr(f"{repository}.customer_coverage", lambda brand: {})
     monkeypatch.setattr(f"{repository}.customer_segments", lambda brand: [])
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.diagnostic_breakdown", lambda brand, focus: {
+        "components": [], "cities": [], "segments": [], "customers": [],
+    })
 
     page = LinearMotionService.get_page("Otra")
 
