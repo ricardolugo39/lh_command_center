@@ -29,6 +29,11 @@ def test_linear_motion_service_normalizes_filter_and_builds_metrics(monkeypatch)
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {
         "quotes": 2, "linked_projects": 1, "tagged_projects": 0,
     })
+    monkeypatch.setattr(f"{repository}.segment_options", lambda: ["Plasticos"])
+    monkeypatch.setattr(f"{repository}.segment_opportunity", lambda segment, brand: {
+        "total": 3, "active": 2, "target_buyers": 1,
+        "opportunities": 1, "customers": [],
+    })
     monkeypatch.setattr(f"{repository}.diagnostic_breakdown", lambda brand, focus: {
         "components": [], "cities": [], "segments": [], "customers": [],
     })
@@ -54,6 +59,7 @@ def test_linear_motion_service_rejects_unknown_brand(monkeypatch):
     monkeypatch.setattr(f"{repository}.customer_coverage", lambda brand: {})
     monkeypatch.setattr(f"{repository}.customer_segments", lambda brand: [])
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.segment_options", lambda: [])
     monkeypatch.setattr(f"{repository}.diagnostic_breakdown", lambda brand, focus: {
         "components": [], "cities": [], "segments": [], "customers": [],
     })
@@ -74,6 +80,11 @@ def test_linear_motion_diagnosis_uses_percentage_variation(monkeypatch):
     monkeypatch.setattr(f"{repository}.customer_coverage", lambda brand: {})
     monkeypatch.setattr(f"{repository}.customer_segments", lambda brand: [])
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.segment_options", lambda: ["Plasticos"])
+    monkeypatch.setattr(f"{repository}.segment_opportunity", lambda segment, brand: {
+        "total": 0, "active": 0, "target_buyers": 0,
+        "opportunities": 0, "customers": [],
+    })
     monkeypatch.setattr(f"{repository}.diagnostic_breakdown", lambda brand, focus: {
         "components": [{"name": "Rieles", "current": 75, "previous": 100}],
         "cities": [{"name": "Cali", "current": 10, "previous": 0}],

@@ -1,3 +1,5 @@
+import csv
+from io import BytesIO, StringIO
 from typing import Any
 
 from app.workspace.repositories.linear_motion_repository import (
@@ -14,9 +16,15 @@ class LinearMotionService:
         return f"COP {float(value or 0):,.0f}".replace(",", ".")
 
     @classmethod
-    def get_page(cls, requested_brand: str = "", requested_focus: str = "") -> dict[str, Any]:
+    def get_page(cls, requested_brand: str = "", requested_focus: str = "",
+                 requested_segment: str = "") -> dict[str, Any]:
         brand = requested_brand if requested_brand in cls.BRAND_OPTIONS else ""
         focus = requested_focus if requested_focus in cls.FOCUS_OPTIONS else ""
+        segment_options = LinearMotionRepository.segment_options()
+        segment_lookup = {option.casefold(): option for option in segment_options}
+        segment = segment_lookup.get(requested_segment.casefold())
+        if not segment:
+            segment = segment_lookup.get("plasticos", segment_options[0] if segment_options else "")
         summary = LinearMotionRepository.sales_summary(brand)
         current = float(summary.get("sales_ytd") or 0)
         previous = float(summary.get("sales_previous_ytd") or 0)
@@ -53,6 +61,7 @@ class LinearMotionService:
         return {
             "brand": brand,
             "brand_label": cls.BRAND_OPTIONS[brand],
+            "target_label": brand or "movimiento lineal",
             "brand_options": cls.BRAND_OPTIONS,
             "focus": focus, "focus_label": cls.FOCUS_OPTIONS[focus],
             "focus_options": cls.FOCUS_OPTIONS,
@@ -69,5 +78,35 @@ class LinearMotionService:
             "coverage": coverage,
             "segments": segments,
             "diagnosis": diagnosis,
+            "segment": segment,
+            "segment_options": segment_options,
+            "segment_opportunity": (
+                cls._format_segment_opportunity(
+                    LinearMotionRepository.segment_opportunity(segment, brand)
+                ) if segment else {}
+            ),
             "commercial": LinearMotionRepository.commercial_coverage(brand),
         }
+
+    @classmethod
+    def _format_segment_opportunity(cls, result: dict[str, Any]) -> dict[str, Any]:
+        for row in result.get("customers", []):
+            row["display_other_sales"] = cls._cop(row.get("other_sales"))
+        return result
+
+    @classmethod
+    def export_segment_opportunities(cls, requested_brand: str,
+                                     requested_segment: str) -> tuple[BytesIO, str]:
+        page = cls.get_page(requested_brand, "", requested_segment)
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["NIT", "Cliente", "Ciudad", "Última compra", "Compras otras marcas"])
+        for row in page.get("segment_opportunity", {}).get("customers", []):
+            writer.writerow([
+                row.get("customer_id", ""), row.get("name", ""), row.get("city", ""),
+                row.get("last_purchase", ""), round(float(row.get("other_sales") or 0), 2),
+            ])
+        stream = BytesIO(output.getvalue().encode("utf-8-sig"))
+        stream.seek(0)
+        safe_segment = "".join(character if character.isalnum() else "-" for character in page["segment"])
+        return stream, f"oportunidades-{safe_segment.lower()}.csv"

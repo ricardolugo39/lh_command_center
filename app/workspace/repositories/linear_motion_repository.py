@@ -183,6 +183,70 @@ class LinearMotionRepository:
         """, params)
 
     @classmethod
+    def segment_options(cls) -> list[str]:
+        rows = cls._all("""
+            SELECT DISTINCT TRIM(classification_name) name
+            FROM dim_customer
+            WHERE TRIM(COALESCE(classification_name,''))<>''
+            ORDER BY name
+        """)
+        return [row["name"] for row in rows]
+
+    @classmethod
+    def segment_opportunity(cls, segment: str, brand: str) -> dict[str, Any]:
+        target_clause, target_params = cls._sales_filter(brand)
+        target_expression = (
+            f"{cls.SALES_BRAND_SQL} IS NOT NULL {target_clause}"
+        )
+        params = target_params + (segment,)
+        rows = cls._all(f"""
+            WITH customers AS (
+                SELECT TRIM(customer_id) customer_id,
+                       MAX(customer_name) customer_name,
+                       MAX(city) city,
+                       MAX(classification_name) segment
+                FROM dim_customer GROUP BY TRIM(customer_id)
+            ), activity AS (
+                SELECT REPLACE(TRIM(s.nit),',','') customer_id,
+                       MAX(s.razonsocial) sales_name,
+                       MAX(date(s.fecha)) last_purchase,
+                       SUM(COALESCE(s.neto,0)) total_sales,
+                       SUM(CASE WHEN {target_expression}
+                           THEN COALESCE(s.neto,0) ELSE 0 END) target_sales,
+                       SUM(CASE WHEN {cls.SALES_BRAND_SQL} IS NULL
+                           THEN COALESCE(s.neto,0) ELSE 0 END) other_sales
+                FROM raw_sales s
+                WHERE date(s.fecha)>=date('now','-12 months')
+                  AND date(s.fecha)<=date('now')
+                GROUP BY customer_id
+            )
+            SELECT c.customer_id,
+                   COALESCE(NULLIF(TRIM(c.customer_name),''),a.sales_name) name,
+                   COALESCE(NULLIF(TRIM(c.city),''),'Sin ciudad') city,
+                   a.last_purchase,a.total_sales,a.target_sales,a.other_sales
+            FROM customers c LEFT JOIN activity a USING(customer_id)
+            WHERE c.segment=?
+            ORDER BY CASE WHEN COALESCE(a.target_sales,0)=0
+                               AND COALESCE(a.other_sales,0)>0 THEN 0 ELSE 1 END,
+                     COALESCE(a.other_sales,0) DESC
+        """, params)
+        active = [row for row in rows if row.get("last_purchase")]
+        opportunities = [
+            row for row in active
+            if float(row.get("target_sales") or 0) == 0
+            and float(row.get("other_sales") or 0) > 0
+        ]
+        return {
+            "total": len(rows),
+            "active": len(active),
+            "target_buyers": sum(
+                float(row.get("target_sales") or 0) > 0 for row in active
+            ),
+            "opportunities": len(opportunities),
+            "customers": opportunities,
+        }
+
+    @classmethod
     def commercial_coverage(cls, brand: str) -> dict[str, Any]:
         values = ("THK", "Thomson") if not brand else (brand,)
         placeholders = ",".join("?" for _ in values)

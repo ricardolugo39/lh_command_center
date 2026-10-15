@@ -7,10 +7,10 @@
   <header class="lm-hero">
     <div><span>MOVIMIENTO LINEAL</span><h1>{{ page.brand_label }}</h1><p>Ventas, portafolio, clientes e inventario en una sola lectura.</p></div>
     <nav aria-label="Filtro de marca">
-      {% for value,label in page.brand_options.items() %}<a class="{{ 'active' if page.brand == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=value,focus=page.focus) }}">{{ label }}</a>{% endfor %}
+      {% for value,label in page.brand_options.items() %}<a class="{{ 'active' if page.brand == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=value,focus=page.focus,segment=page.segment) }}">{{ label }}</a>{% endfor %}
     </nav>
   </header>
-  <nav class="lm-focus">{% for value,label in page.focus_options.items() %}<a class="{{ 'active' if page.focus == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=page.brand,focus=value) }}">{{ label }}</a>{% endfor %}</nav>
+  <nav class="lm-focus">{% for value,label in page.focus_options.items() %}<a class="{{ 'active' if page.focus == value }}" href="{{ url_for('workspace.linear_motion_dashboard',brand=page.brand,focus=value,segment=page.segment) }}">{{ label }}</a>{% endfor %}</nav>
 
   <section class="lm-kpis">
     <article><small>VENTAS YTD</small><strong>{{ page.summary.display_sales }}</strong><span class="{{ 'negative' if page.summary.change is not none and page.summary.change < 0 else 'positive' }}">{{ '%+.1f'|format(page.summary.change) if page.summary.change is not none else '—' }}% vs. año anterior</span></article>
@@ -28,6 +28,12 @@
     <header><div><small>DIAGNÓSTICO DE VARIACIÓN</small><h2>{{ page.focus_label }} · qué requiere atención</h2></div><p>YTD frente al mismo periodo anterior.</p></header>
     <div class="lm-diagnostic-grid">{% for title,key in [('Componente técnico','components'),('Ciudad','cities'),('Tipo de cliente','segments')] %}<article class="lm-panel"><h3>{{ title }}</h3>{% for item in page.diagnosis[key][:7] %}<div class="lm-impact"><div><strong>{{ item.name|title }}</strong><span>{{ item.display_current }} vs. {{ item.display_previous }}</span></div><b class="{{ 'negative' if item.change is not none and item.change < 0 else 'positive' }}">{{ item.display_change }}</b></div>{% endfor %}</article>{% endfor %}</div>
     <article class="lm-panel"><header><div><small>CUENTAS QUE EXPLICAN LA CAÍDA</small><h2>Clientes para investigar</h2></div></header><div class="lm-table"><table><thead><tr><th>Cliente</th><th>Actual</th><th>Anterior</th><th>Variación</th></tr></thead><tbody>{% for item in page.diagnosis.customers %}<tr><td>{{ item.name }}</td><td>{{ item.display_current }}</td><td>{{ item.display_previous }}</td><td class="{{ 'negative' if item.change is not none and item.change < 0 else 'positive' }}">{{ item.display_change }}</td></tr>{% endfor %}</tbody></table></div></article>
+  </section>{% endif %}
+
+  {% if page.segment %}<section class="lm-segment-analysis">
+    <header><div><small>OPORTUNIDAD POR SEGMENTO</small><h2>Árbol de oportunidad · {{ page.segment }}</h2><p>Clientes activos durante los últimos 12 meses.</p></div><form method="get"><input type="hidden" name="brand" value="{{ page.brand }}"><input type="hidden" name="focus" value="{{ page.focus }}"><label>Segmento<select name="segment" onchange="this.form.submit()">{% for option in page.segment_options %}<option value="{{ option }}" {{ 'selected' if option == page.segment }}>{{ option }}</option>{% endfor %}</select></label></form></header>
+    <div class="lm-tree"><article><small>BASE ERP</small><strong>{{ page.segment_opportunity.total }}</strong><span>clientes clasificados</span></article><i>→</i><article><small>ACTIVOS</small><strong>{{ page.segment_opportunity.active }}</strong><span>compraron en 12 meses</span></article><i>→</i><article><small>YA COMPRAN {{ page.target_label|upper }}</small><strong>{{ page.segment_opportunity.target_buyers }}</strong><span>clientes atendidos</span></article><i>→</i><article class="opportunity"><small>OPORTUNIDAD</small><strong>{{ page.segment_opportunity.opportunities }}</strong><span>compran otras marcas, no {{ page.target_label }}</span></article></div>
+    <article class="lm-panel"><header><div><small>LISTA ACCIONABLE</small><h2>Clientes para desarrollar</h2></div><a class="lm-download" href="{{ url_for('workspace.linear_motion_opportunities_export',brand=page.brand,segment=page.segment) }}">Descargar CSV</a></header><div class="lm-table"><table><thead><tr><th>Cliente</th><th>Ciudad</th><th>Última compra</th><th>Compras otras marcas</th></tr></thead><tbody>{% for item in page.segment_opportunity.customers[:15] %}<tr><td><b>{{ item.name }}</b><span>{{ item.customer_id }}</span></td><td>{{ item.city|title }}</td><td>{{ item.last_purchase }}</td><td>{{ item.display_other_sales }}</td></tr>{% else %}<tr><td colspan="4">No se encontraron oportunidades con este criterio.</td></tr>{% endfor %}</tbody></table></div></article>
   </section>{% endif %}
 
   <section class="lm-grid">

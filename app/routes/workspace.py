@@ -174,8 +174,20 @@ def linear_motion_dashboard():
     page = LinearMotionService.get_page(
         request.args.get("brand", "").strip(),
         request.args.get("focus", "").strip(),
+        request.args.get("segment", "").strip(),
     )
     return render_template("workspace/linear_motion_dashboard.html", page=page)
+
+
+@workspace_bp.get("/analytics/linear-motion/opportunities.csv")
+def linear_motion_opportunities_export():
+    stream, filename = LinearMotionService.export_segment_opportunities(
+        request.args.get("brand", "").strip(),
+        request.args.get("segment", "").strip(),
+    )
+    return send_file(
+        stream, mimetype="text/csv", as_attachment=True, download_name=filename,
+    )
 
 
 @workspace_bp.route("/workspace/projects/<int:project_id>")
