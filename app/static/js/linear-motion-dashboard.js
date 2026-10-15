@@ -20,7 +20,9 @@
       group.appendChild(bar);
     });
     const label = document.createElement('label');
-    label.textContent = month.slice(2).replace('-', '/');
+    const monthNumber = Number(month.slice(5));
+    label.textContent = [1, 4, 7, 10].includes(monthNumber)
+      ? month.slice(2).replace('-', '/') : '';
     group.appendChild(label);
     chart.appendChild(group);
   });
