@@ -198,7 +198,7 @@ class LinearMotionRepository:
         target_expression = (
             f"{cls.SALES_BRAND_SQL} IS NOT NULL {target_clause}"
         )
-        params = target_params + target_params + (segment,)
+        params = target_params + (segment,)
         rows = cls._all(f"""
             WITH customers AS (
                 SELECT TRIM(customer_id) customer_id,

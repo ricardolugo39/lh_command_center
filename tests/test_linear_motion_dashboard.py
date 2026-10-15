@@ -1,3 +1,4 @@
+from app.workspace.repositories.linear_motion_repository import LinearMotionRepository
 from app.workspace.services.linear_motion_service import LinearMotionService
 
 
@@ -115,3 +116,19 @@ def test_segment_export_includes_advisor_and_brand_columns(monkeypatch):
     assert "Asesor ERP" in content
     assert "Marcas lineales competidoras" in content
     assert "SKF,FAG" in content
+
+
+def test_segment_opportunity_uses_one_brand_binding(monkeypatch):
+    captured = {}
+
+    def fake_all(sql, params=()):
+        captured["sql"] = sql
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(LinearMotionRepository, "_all", fake_all)
+
+    LinearMotionRepository.segment_opportunity("PLASTICOS", "THK")
+
+    assert captured["sql"].count("?") == 2
+    assert captured["params"] == ("THK", "PLASTICOS")
