@@ -32,6 +32,14 @@ class CustomerDimensionPipeline(BasePipeline):
         "commercial_group_name",
     ]
 
+    @staticmethod
+    def normalize_activity_id(series: pd.Series) -> pd.Series:
+        """Keep ERP CIIU identifiers stable across Excel numeric/text imports."""
+        return (
+            series.fillna("").astype(str).str.strip()
+            .str.replace(r"\.0+$", "", regex=True)
+        )
+
     def extract(self):
 
         customers = read_table(self.TABLE_CUSTOMERS)
@@ -55,9 +63,11 @@ class CustomerDimensionPipeline(BasePipeline):
         customers["ciudad"] = customers["ciudad"].astype(str).str.strip().str.upper()
         customers["vendedor"] = customers["vendedor"].astype(str).str.strip().str.upper()
         customers["cliente_credito"] = customers["cliente_credito"].astype(str).str.strip().str.upper()
-        customers["idciiu"] = customers["idciiu"].astype(str).str.strip()
+        customers["idciiu"] = self.normalize_activity_id(customers["idciiu"])
 
-        activities["activity_id"] = activities["activity_id"].astype(str).str.strip()
+        activities["activity_id"] = self.normalize_activity_id(
+            activities["activity_id"]
+        )
 
         data["customers"] = customers
         data["activities"] = activities
@@ -132,12 +142,7 @@ class CustomerDimensionPipeline(BasePipeline):
             .str.upper()
         )
 
-        customers["idciiu"] = (
-            customers["idciiu"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-        )
+        customers["idciiu"] = self.normalize_activity_id(customers["idciiu"])
 
         # Temporary site key (Sprint 3 MVP)
         customers["customer_site_id"] = (
