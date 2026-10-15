@@ -23,6 +23,9 @@ def test_linear_motion_service_normalizes_filter_and_builds_metrics(monkeypatch)
         "buyers": 4, "with_city": 4, "with_activity": 1,
         "with_classification": 1,
     })
+    monkeypatch.setattr(f"{repository}.customer_segments", lambda brand: [{
+        "brand": "THK", "customer_type": "OEM", "customers": 2, "sales": 80,
+    }])
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {
         "quotes": 2, "linked_projects": 1, "tagged_projects": 0,
     })
@@ -34,6 +37,7 @@ def test_linear_motion_service_normalizes_filter_and_builds_metrics(monkeypatch)
     assert page["families"][0]["change"] == 50
     assert page["coverage"]["city_percent"] == 100
     assert page["coverage"]["industry_percent"] == 25
+    assert page["segments"][0]["customer_type"] == "OEM"
 
 
 def test_linear_motion_service_rejects_unknown_brand(monkeypatch):
@@ -45,6 +49,7 @@ def test_linear_motion_service_rejects_unknown_brand(monkeypatch):
     monkeypatch.setattr(f"{repository}.city_sales", lambda brand: [])
     monkeypatch.setattr(f"{repository}.inventory", lambda brand: [])
     monkeypatch.setattr(f"{repository}.customer_coverage", lambda brand: {})
+    monkeypatch.setattr(f"{repository}.customer_segments", lambda brand: [])
     monkeypatch.setattr(f"{repository}.commercial_coverage", lambda brand: {})
 
     page = LinearMotionService.get_page("Otra")

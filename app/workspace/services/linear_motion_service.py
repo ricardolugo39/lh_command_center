@@ -35,6 +35,11 @@ class LinearMotionService:
         buyers = int(coverage.get("buyers") or 0)
         coverage["city_percent"] = (coverage.get("with_city") or 0) / buyers * 100 if buyers else 0
         coverage["industry_percent"] = (coverage.get("with_activity") or 0) / buyers * 100 if buyers else 0
+        segments = LinearMotionRepository.customer_segments(brand)
+        maximum_segment = max((float(row["sales"] or 0) for row in segments), default=1) or 1
+        for row in segments:
+            row["display_sales"] = cls._cop(row["sales"])
+            row["bar_width"] = float(row["sales"] or 0) / maximum_segment * 100
         return {
             "brand": brand,
             "brand_label": cls.BRAND_OPTIONS[brand],
@@ -50,5 +55,6 @@ class LinearMotionService:
             "cities": city_rows,
             "inventory": inventory,
             "coverage": coverage,
+            "segments": segments,
             "commercial": LinearMotionRepository.commercial_coverage(brand),
         }

@@ -162,6 +162,27 @@ class LinearMotionRepository:
         """, params)
 
     @classmethod
+    def customer_segments(cls, brand: str) -> list[dict[str, Any]]:
+        clause, params = cls._sales_filter(brand)
+        return cls._all(f"""
+            WITH customers AS (
+                SELECT TRIM(customer_id) customer_id,
+                       MAX(classification_name) customer_type
+                FROM dim_customer GROUP BY TRIM(customer_id)
+            )
+            SELECT {cls.SALES_BRAND_SQL} brand,
+                   COALESCE(NULLIF(TRIM(c.customer_type),''),'Sin clasificar') customer_type,
+                   COUNT(DISTINCT REPLACE(TRIM(s.nit),',','')) customers,
+                   SUM(COALESCE(s.neto,0)) sales
+            FROM raw_sales s LEFT JOIN customers c
+              ON c.customer_id=REPLACE(TRIM(s.nit),',','')
+            WHERE {cls.SALES_BRAND_SQL} IS NOT NULL
+              AND strftime('%Y',date(s.fecha))=strftime('%Y','now') {clause}
+            GROUP BY brand,customer_type
+            ORDER BY sales DESC
+        """, params)
+
+    @classmethod
     def commercial_coverage(cls, brand: str) -> dict[str, Any]:
         values = ("THK", "Thomson") if not brand else (brand,)
         placeholders = ",".join("?" for _ in values)
