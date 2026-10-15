@@ -96,3 +96,22 @@ def test_linear_motion_diagnosis_uses_percentage_variation(monkeypatch):
     assert page["diagnosis"]["components"][0]["change"] == -25
     assert page["diagnosis"]["components"][0]["display_change"] == "-25.0%"
     assert page["diagnosis"]["cities"][0]["display_change"] == "Nueva"
+
+
+def test_segment_export_includes_advisor_and_brand_columns(monkeypatch):
+    monkeypatch.setattr(LinearMotionService, "get_page", classmethod(lambda cls, brand, focus, segment: {
+        "segment": "PLASTICOS",
+        "segment_opportunity": {"customers": [{
+            "customer_id": "9001", "name": "Cliente Uno", "advisor": "ANA",
+            "city": "CALI", "last_purchase": "2026-10-01", "brands": "SKF,FAG",
+            "competitor_linear_brands": "SKF", "other_sales": 125000,
+        }]},
+    }))
+
+    stream, filename = LinearMotionService.export_segment_opportunities("", "PLASTICOS")
+    content = stream.getvalue().decode("utf-8-sig")
+
+    assert filename == "oportunidades-plasticos.csv"
+    assert "Asesor ERP" in content
+    assert "Marcas lineales competidoras" in content
+    assert "SKF,FAG" in content

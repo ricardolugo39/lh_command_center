@@ -100,11 +100,16 @@ class LinearMotionService:
         page = cls.get_page(requested_brand, "", requested_segment)
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(["NIT", "Cliente", "Ciudad", "Última compra", "Compras otras marcas"])
+        writer.writerow([
+            "NIT", "Cliente", "Asesor ERP", "Ciudad", "Última compra",
+            "Marcas que compra", "Marcas lineales competidoras", "Compras otras marcas",
+        ])
         for row in page.get("segment_opportunity", {}).get("customers", []):
             writer.writerow([
-                row.get("customer_id", ""), row.get("name", ""), row.get("city", ""),
-                row.get("last_purchase", ""), round(float(row.get("other_sales") or 0), 2),
+                row.get("customer_id", ""), row.get("name", ""), row.get("advisor", ""),
+                row.get("city", ""), row.get("last_purchase", ""), row.get("brands", ""),
+                row.get("competitor_linear_brands", ""),
+                round(float(row.get("other_sales") or 0), 2),
             ])
         stream = BytesIO(output.getvalue().encode("utf-8-sig"))
         stream.seek(0)

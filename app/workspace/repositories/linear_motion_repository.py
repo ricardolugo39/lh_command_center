@@ -198,12 +198,13 @@ class LinearMotionRepository:
         target_expression = (
             f"{cls.SALES_BRAND_SQL} IS NOT NULL {target_clause}"
         )
-        params = target_params + (segment,)
+        params = target_params + target_params + (segment,)
         rows = cls._all(f"""
             WITH customers AS (
                 SELECT TRIM(customer_id) customer_id,
                        MAX(customer_name) customer_name,
                        MAX(city) city,
+                       GROUP_CONCAT(DISTINCT NULLIF(TRIM(seller),'')) advisor,
                        MAX(classification_name) segment
                 FROM dim_customer GROUP BY TRIM(customer_id)
             ), activity AS (
@@ -214,7 +215,12 @@ class LinearMotionRepository:
                        SUM(CASE WHEN {target_expression}
                            THEN COALESCE(s.neto,0) ELSE 0 END) target_sales,
                        SUM(CASE WHEN {cls.SALES_BRAND_SQL} IS NULL
-                           THEN COALESCE(s.neto,0) ELSE 0 END) other_sales
+                           THEN COALESCE(s.neto,0) ELSE 0 END) other_sales,
+                       GROUP_CONCAT(DISTINCT NULLIF(UPPER(TRIM(s.sufijo)),'')) brands,
+                       GROUP_CONCAT(DISTINCT CASE
+                           WHEN CAST(s.idfam2 AS INTEGER) IN (1510,1550,1560)
+                            AND {cls.SALES_BRAND_SQL} IS NULL
+                           THEN NULLIF(UPPER(TRIM(s.sufijo)),'') END) competitor_linear_brands
                 FROM raw_sales s
                 WHERE date(s.fecha)>=date('now','-12 months')
                   AND date(s.fecha)<=date('now')
@@ -223,7 +229,9 @@ class LinearMotionRepository:
             SELECT c.customer_id,
                    COALESCE(NULLIF(TRIM(c.customer_name),''),a.sales_name) name,
                    COALESCE(NULLIF(TRIM(c.city),''),'Sin ciudad') city,
+                   COALESCE(NULLIF(TRIM(c.advisor),''),'Sin asesor') advisor,
                    a.last_purchase,a.total_sales,a.target_sales,a.other_sales
+                   ,a.brands,a.competitor_linear_brands
             FROM customers c LEFT JOIN activity a USING(customer_id)
             WHERE c.segment=?
             ORDER BY CASE WHEN COALESCE(a.target_sales,0)=0
