@@ -133,9 +133,13 @@ def create_app(
             )
 
     if not application.testing and application.config["APP_ENVIRONMENT"] == "production":
+        from app.workspace.services.initiative_campaign_scheduler import (
+            start_initiative_campaign_scheduler,
+        )
         from app.workspace.stock_planning.scheduler import (
             start_stock_replenishment_scheduler,
         )
+        start_initiative_campaign_scheduler(application)
         start_stock_replenishment_scheduler()
 
     return application

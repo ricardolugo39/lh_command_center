@@ -23,6 +23,39 @@ TRACKING_HEADERS = [
 class InitiativeCampaignService:
 
     @staticmethod
+    def sync_all_from_onedrive() -> dict[str, int]:
+        """Synchronize linked campaigns without one failure stopping the rest."""
+        if current_app.config.get("EMAIL_PROVIDER") != "microsoft":
+            return {"processed": 0, "succeeded": 0, "failed": 0}
+
+        files = InitiativeCampaignRepository.list_files()
+        succeeded = 0
+        failed = 0
+        for file_record in files:
+            initiative_id = file_record["initiative_id"]
+            try:
+                InitiativeCampaignService.sync_from_onedrive(initiative_id)
+                succeeded += 1
+            except Exception as exc:
+                failed += 1
+                message = str(exc).strip() or exc.__class__.__name__
+                current_app.logger.exception(
+                    "No se pudo sincronizar la campaña de la iniciativa %s",
+                    initiative_id,
+                )
+                InitiativeCampaignRepository.mark_sync(
+                    initiative_id,
+                    etag=None,
+                    status="error",
+                    message=message[:500],
+                )
+        return {
+            "processed": len(files),
+            "succeeded": succeeded,
+            "failed": failed,
+        }
+
+    @staticmethod
     def get_campaign(initiative_id: int) -> dict[str, Any]:
         customers = InitiativeCampaignRepository.list_customers(initiative_id)
         total = len(customers)

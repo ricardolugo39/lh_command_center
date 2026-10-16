@@ -6,6 +6,14 @@ from app.database.transaction import connection_scope
 class InitiativeCampaignRepository:
 
     @staticmethod
+    def list_files() -> list[dict[str, Any]]:
+        with connection_scope() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM ws_initiative_campaign_files ORDER BY initiative_id"
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    @staticmethod
     def get_file(initiative_id: int) -> dict[str, Any] | None:
         with connection_scope() as conn:
             row = conn.execute(

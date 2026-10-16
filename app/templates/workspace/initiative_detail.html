@@ -96,7 +96,16 @@
     <div class="card-body border-bottom">
         {% if campaign.file %}
         <div class="text-secondary small mb-3">
-            Archivo: {{ campaign.file.filename }} · Última sincronización: {{ campaign.file.last_sync_at or 'Pendiente' }}
+            Archivo: {{ campaign.file.filename }} · Sincronización automática cada hora ·
+            Última sincronización: {{ campaign.file.last_sync_at or 'Pendiente' }} · Estado:
+            {% if campaign.file.last_sync_status == 'success' %}
+                <span class="text-success">Exitosa</span>
+            {% elif campaign.file.last_sync_status == 'error' %}
+                <span class="text-danger">Error</span>
+            {% else %}
+                Pendiente
+            {% endif %}
+            {% if campaign.file.last_sync_message %}· {{ campaign.file.last_sync_message }}{% endif %}
         </div>
         {% endif %}
         <div class="row g-3">
