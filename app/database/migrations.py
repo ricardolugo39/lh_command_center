@@ -4237,6 +4237,156 @@ def _migration_0087_remove_pending_activity_pilot_users(
     )
 
 
+def _migration_0089_lugo_dhl_import_rate_card_2026(connection: Connection) -> None:
+    """Activate the DHL import rate card issued to Lugo Hermanos in March 2026."""
+    connection.execute("UPDATE dhl_rate_profiles SET active=0 WHERE carrier='DHL'")
+    connection.execute(
+        """INSERT INTO dhl_rate_profiles(
+        profile_name,service,direction,effective_date,expiration_date,currency,
+        active,source_attachment,notes
+        ) VALUES (?,?,?,?,?,?,?,?,?)""",
+        (
+            "Lugo Hermanos DHL Import 2026-03",
+            "Express Worldwide Import",
+            "import_to_colombia",
+            "2026-03-17",
+            "2026-12-31",
+            "USD",
+            1,
+            "Rate Card LUGO HERMANOS S A.pdf",
+            "Código COD01RZQQ/LUGO HERMANOS_20260301. Tarifas netas; no aplicar descuento adicional.",
+        ),
+    )
+    profile_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+    connection.executemany(
+        """INSERT INTO dhl_country_zones(
+        profile_id,country_code,country_name,service_area_code,service_area_name,zone
+        ) VALUES (?,?,?,?,?,?)""",
+        (
+            (profile_id, "BR", "Brasil", "default", None, 1),
+            (profile_id, "US", "Estados Unidos", "miami", "Boca Raton / Miami Gateway / Miami", 2),
+            (profile_id, "US", "Estados Unidos", "rest", "Resto de Estados Unidos", 3),
+        ),
+    )
+    published = {
+        "0.5": ("30.61", "31.92", "37.02", "38.06", "53.26", "59.71", "70.02"),
+        "1.0": ("34.07", "34.17", "40.20", "42.82", "58.18", "68.03", "80.09"),
+        "1.5": ("37.53", "36.42", "43.38", "47.59", "63.10", "76.35", "90.16"),
+        "2.0": ("40.99", "38.67", "46.56", "52.36", "68.02", "84.67", "100.23"),
+        "2.5": ("44.45", "40.93", "49.74", "57.15", "72.96", "92.99", "110.30"),
+        "3.0": ("48.02", "43.28", "53.06", "61.13", "78.09", "101.29", "119.78"),
+        "3.5": ("51.59", "45.63", "56.38", "65.11", "83.22", "109.59", "129.26"),
+        "4.0": ("55.16", "47.98", "59.70", "69.09", "88.35", "117.89", "138.74"),
+        "4.5": ("58.73", "50.33", "63.02", "73.07", "93.48", "126.19", "148.22"),
+        "5.0": ("62.30", "52.68", "66.34", "77.05", "98.61", "134.49", "157.70"),
+        "5.5": ("65.87", "55.03", "69.69", "81.10", "103.74", "142.79", "167.18"),
+        "6.0": ("69.44", "57.38", "73.04", "85.15", "108.87", "151.09", "176.66"),
+        "6.5": ("73.01", "59.73", "76.39", "89.20", "114.00", "159.39", "186.14"),
+        "7.0": ("76.58", "62.08", "79.74", "93.25", "119.13", "167.69", "195.62"),
+        "7.5": ("80.15", "64.43", "83.09", "97.30", "124.26", "175.99", "205.10"),
+        "8.0": ("83.72", "66.78", "86.44", "101.35", "129.39", "184.29", "214.58"),
+        "8.5": ("87.29", "69.13", "89.79", "105.40", "134.52", "192.59", "224.06"),
+        "9.0": ("90.86", "71.48", "93.14", "109.45", "139.65", "200.89", "233.54"),
+        "9.5": ("94.43", "73.83", "96.49", "113.50", "144.78", "209.19", "243.02"),
+        "10.0": ("98.00", "76.18", "99.84", "117.55", "149.91", "217.49", "252.50"),
+        "11.0": ("104.44", "80.02", "105.86", "124.67", "159.81", "232.17", "270.28"),
+        "12.0": ("110.88", "83.86", "111.88", "131.79", "169.71", "246.85", "288.06"),
+        "13.0": ("117.32", "87.70", "117.90", "138.91", "179.61", "261.53", "305.84"),
+        "14.0": ("123.76", "91.54", "123.92", "146.03", "189.51", "276.21", "323.62"),
+        "15.0": ("130.20", "95.38", "129.94", "153.15", "199.41", "290.89", "341.40"),
+        "16.0": ("136.64", "99.22", "135.96", "160.27", "209.31", "305.57", "359.18"),
+        "17.0": ("143.08", "103.06", "141.98", "167.39", "219.21", "320.25", "376.96"),
+        "18.0": ("149.52", "106.90", "148.00", "174.51", "229.11", "334.93", "394.74"),
+        "19.0": ("155.96", "110.74", "154.02", "181.63", "239.01", "349.61", "412.52"),
+        "20.0": ("162.40", "114.58", "160.04", "188.75", "248.91", "364.29", "430.30"),
+        "21.0": ("166.40", "120.58", "164.66", "195.81", "252.81", "374.65", "441.38"),
+        "22.0": ("170.40", "126.58", "169.28", "202.87", "256.71", "385.01", "452.46"),
+        "23.0": ("174.40", "132.58", "173.90", "209.93", "260.61", "395.37", "463.54"),
+        "24.0": ("178.40", "138.58", "178.52", "216.99", "264.51", "405.73", "474.62"),
+        "25.0": ("182.40", "144.58", "183.14", "224.05", "268.41", "416.09", "485.70"),
+        "26.0": ("186.40", "150.58", "187.76", "231.11", "272.31", "426.45", "496.78"),
+        "27.0": ("190.40", "156.58", "192.38", "238.17", "276.21", "436.81", "507.86"),
+        "28.0": ("194.40", "162.58", "197.00", "245.23", "280.11", "447.17", "518.94"),
+        "29.0": ("198.40", "168.58", "201.62", "252.29", "284.01", "457.53", "530.02"),
+        "30.0": ("202.40", "174.58", "206.24", "259.35", "287.91", "467.89", "541.10"),
+        "40.0": ("203.40", "189.58", "219.74", "260.35", "288.91", "489.69", "554.60"),
+        "50.0": ("204.40", "204.58", "233.24", "261.35", "289.91", "511.49", "568.10"),
+        "60.0": ("245.30", "245.48", "259.74", "313.65", "347.91", "613.79", "681.70"),
+        "70.0": ("286.20", "286.38", "286.24", "365.95", "405.91", "716.09", "795.30"),
+    }
+    connection.executemany(
+        """INSERT INTO dhl_weight_rates(
+        profile_id,shipment_kind,weight_kg,zone,rate_usd
+        ) VALUES (?,?,?,?,?)""",
+        [
+            (profile_id, "package", weight, zone, value)
+            for weight, values in published.items()
+            for zone, value in enumerate(values, start=1)
+        ],
+    )
+    increments = (
+        ("10.1", "20", "0.5", ("3.22", "1.92", "3.01", "3.56", "4.95", "7.34", "8.89")),
+        ("20.1", "30", "0.5", ("2.00", "3.00", "2.31", "3.53", "1.95", "5.18", "5.54")),
+        ("30.1", "50", "1", ("0.10", "1.50", "1.35", "0.10", "0.10", "2.18", "1.35")),
+        ("50.1", "70", "1", ("4.09", "4.09", "2.65", "5.23", "5.80", "10.23", "11.36")),
+        ("70.1", "100", "1", ("2.20", "2.20", "4.09", "3.35", "3.90", "8.33", "9.50")),
+        ("100.1", "300", "1", ("3.52", "3.52", "4.09", "4.66", "5.23", "9.66", "10.80")),
+        ("300.1", "99999", "1", ("3.52", "3.52", "4.09", "4.66", "5.23", "9.66", "10.80")),
+    )
+    connection.executemany(
+        """INSERT INTO dhl_increment_rates(
+        profile_id,from_weight_kg,to_weight_kg,increment_kg,zone,rate_usd
+        ) VALUES (?,?,?,?,?,?)""",
+        [
+            (profile_id, start, end, increment, zone, value)
+            for start, end, increment, values in increments
+            for zone, value in enumerate(values, start=1)
+        ],
+    )
+
+
+def _migration_0090_initiative_campaign_customers(connection: Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE ws_initiative_campaign_customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            initiative_id INTEGER NOT NULL,
+            customer_erp_id TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            city TEXT,
+            advisor TEXT NOT NULL,
+            priority TEXT NOT NULL DEFAULT 'Media',
+            brands TEXT,
+            competitor_linear_brands TEXT,
+            last_purchase TEXT,
+            other_sales REAL NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'Pendiente',
+            contact_date TEXT,
+            contact_name TEXT,
+            application TEXT,
+            installed_reference TEXT,
+            interest TEXT,
+            next_action TEXT,
+            next_action_date TEXT,
+            opportunity_decision TEXT,
+            source_key TEXT NOT NULL,
+            synced_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (initiative_id) REFERENCES ws_initiatives(id) ON DELETE CASCADE,
+            UNIQUE (initiative_id, customer_erp_id),
+            UNIQUE (initiative_id, source_key)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX idx_initiative_campaign_customers_initiative
+        ON ws_initiative_campaign_customers(initiative_id, advisor, status)
+        """
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4470,6 +4620,14 @@ MIGRATION_MANIFEST = (
     Migration(
         88, "direct_vendor_purchase_order_drafts",
         _migration_0088_direct_vendor_purchase_order_drafts,
+    ),
+    Migration(
+        89, "lugo_dhl_import_rate_card_2026",
+        _migration_0089_lugo_dhl_import_rate_card_2026,
+    ),
+    Migration(
+        90, "initiative_campaign_customers",
+        _migration_0090_initiative_campaign_customers,
     ),
 )
 

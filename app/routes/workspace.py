@@ -1,6 +1,9 @@
 from app.workspace.services.initiative_service import (
     InitiativeService,
 )
+from app.workspace.services.initiative_campaign_service import (
+    InitiativeCampaignService,
+)
 
 from flask import (
     Blueprint,
@@ -1221,6 +1224,35 @@ def initiative_detail(
         "workspace/initiative_detail.html",
         initiative_page=initiative_page,
     )
+
+
+@workspace_bp.get("/workspace/initiatives/<int:initiative_id>/campaign/export.xlsx")
+def initiative_campaign_export(initiative_id: int):
+    try:
+        stream, filename = InitiativeCampaignService.export_workbook(
+            initiative_id,
+            advisor=request.args.get("advisor") or None,
+        )
+    except ValueError as exc:
+        return str(exc), 400
+    return send_file(
+        stream,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@workspace_bp.post("/workspace/initiatives/<int:initiative_id>/campaign/sync")
+def initiative_campaign_sync(initiative_id: int):
+    uploaded = request.files.get("workbook")
+    if uploaded is None or not uploaded.filename:
+        return "Seleccione el archivo de seguimiento.", 400
+    try:
+        InitiativeCampaignService.import_workbook(initiative_id, uploaded.stream)
+    except ValueError as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.initiative_detail", initiative_id=initiative_id))
 
 @workspace_bp.post(
     "/workspace/initiatives/"

@@ -19,6 +19,9 @@ from app.workspace.services.project_access_policy import (
     ProjectAccessPolicy,
 )
 from app.database.transaction import transactional
+from app.workspace.services.initiative_campaign_service import (
+    InitiativeCampaignService,
+)
 
 
 INITIATIVE_STATUS_LABELS = {
@@ -243,6 +246,8 @@ class InitiativeService:
             if not ProjectAccessPolicy.is_read_only(project)
         ]
 
+        campaign = InitiativeCampaignService.get_campaign(initiative_id)
+
         return {
             "initiative": {
                 **initiative,
@@ -257,6 +262,7 @@ class InitiativeService:
                 available_opportunities
             ),
             "events": events,
+            "campaign": campaign,
             "summary": {
                 "opportunity_count": len(
                     opportunities

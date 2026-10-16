@@ -2,6 +2,7 @@
 
 {% set initiative = initiative_page.initiative %}
 {% set summary = initiative_page.summary %}
+{% set campaign = initiative_page.campaign %}
 
 {% block title %}
     {{ initiative.name }} · Commercial Command Center
@@ -63,6 +64,53 @@
     </div>
 
 </div>
+
+{% if campaign.customers %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h3 class="card-title">Campaña de homologación THK</h3>
+            <div class="text-secondary small mt-1">Plásticos · seguimiento desde clientes asignados hasta oportunidad.</div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('workspace.initiative_campaign_export', initiative_id=initiative.id) }}" class="btn btn-primary">
+                Descargar Excel
+            </a>
+            <form method="post" enctype="multipart/form-data" action="{{ url_for('workspace.initiative_campaign_sync', initiative_id=initiative.id) }}" class="d-flex gap-2">
+                <input type="file" name="workbook" accept=".xlsx" class="form-control" required>
+                <button type="submit" class="btn btn-outline-primary">Sincronizar</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body border-bottom">
+        <div class="row g-3">
+            <div class="col-6 col-lg-3"><div class="text-secondary small">Asignados</div><div class="h2 mb-0">{{ campaign.summary.assigned }}</div></div>
+            <div class="col-6 col-lg-3"><div class="text-secondary small">Contactados</div><div class="h2 mb-0">{{ campaign.summary.contacted_pct }}%</div><div class="text-secondary small">{{ campaign.summary.contacted }} clientes</div></div>
+            <div class="col-6 col-lg-3"><div class="text-secondary small">Aplicación identificada</div><div class="h2 mb-0">{{ campaign.summary.applications_pct }}%</div><div class="text-secondary small">{{ campaign.summary.applications }} clientes</div></div>
+            <div class="col-6 col-lg-3"><div class="text-secondary small">Oportunidad</div><div class="h2 mb-0">{{ campaign.summary.opportunities_pct }}%</div><div class="text-secondary small">{{ campaign.summary.opportunities }} clientes</div></div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+            <thead><tr><th>Cliente</th><th>Asesor</th><th>Prioridad</th><th>Estado</th><th>Aplicación</th><th>Próxima acción</th><th>Fecha</th><th>Oportunidad</th></tr></thead>
+            <tbody>
+                {% for customer in campaign.customers %}
+                <tr>
+                    <td><div class="fw-bold">{{ customer.customer_name }}</div><div class="text-secondary small">{{ customer.city or '—' }}</div></td>
+                    <td>{{ customer.advisor }}</td>
+                    <td><span class="badge {{ 'bg-orange-lt' if customer.priority == 'Alta' else 'bg-blue-lt' }}">{{ customer.priority }}</span></td>
+                    <td>{{ customer.status }}</td>
+                    <td>{{ customer.application or 'Pendiente' }}</td>
+                    <td>{{ customer.next_action or '—' }}</td>
+                    <td>{{ customer.next_action_date or '—' }}</td>
+                    <td>{{ customer.opportunity_decision or 'Revisar' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 
 <div class="row row-cards mb-4">
