@@ -15,6 +15,55 @@ class MicrosoftGraphMailProvider:
     GRAPH_URL = "https://graph.microsoft.com/v1.0"
     MAX_SIMPLE_ATTACHMENT_BYTES = 3 * 1024 * 1024
 
+    def upload_onedrive_file(
+        self, *, filename: str, content: bytes,
+        folder: str = "Campañas Comerciales",
+    ) -> dict:
+        safe_folder = folder.replace("/", "-")
+        self._request(
+            "POST", "/me/drive/root/children",
+            json={
+                "name": safe_folder,
+                "folder": {},
+                "@microsoft.graph.conflictBehavior": "replace",
+            },
+        )
+        item = self._request(
+            "PUT",
+            f"/me/drive/root:/{safe_folder}/{filename}:/content",
+            headers={"Content-Type": (
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            )},
+            data=content,
+        )
+        permission = self._request(
+            "POST", f"/me/drive/items/{item['id']}/createLink",
+            json={"type": "edit", "scope": "organization"},
+        )
+        return {
+            "item_id": item["id"],
+            "filename": item.get("name") or filename,
+            "web_url": (permission.get("link") or {}).get("webUrl")
+            or item.get("webUrl"),
+            "etag": item.get("eTag"),
+        }
+
+    def download_onedrive_file(self, item_id: str) -> tuple[bytes, str | None]:
+        token = current_app.extensions[
+            "microsoft_mail_oauth_provider"
+        ].access_token()
+        response = requests.get(
+            f"{self.GRAPH_URL}/me/drive/items/{item_id}/content",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(
+                "Microsoft Graph no pudo descargar el Excel de campaña."
+            )
+        return response.content, response.headers.get("ETag")
+
     @classmethod
     def configured(cls) -> bool:
         return (

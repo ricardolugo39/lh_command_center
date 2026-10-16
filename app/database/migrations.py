@@ -4387,6 +4387,29 @@ def _migration_0090_initiative_campaign_customers(connection: Connection) -> Non
     )
 
 
+def _migration_0091_initiative_campaign_files(connection: Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE ws_initiative_campaign_files (
+            initiative_id INTEGER PRIMARY KEY,
+            advisor TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'microsoft',
+            item_id TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            web_url TEXT NOT NULL,
+            etag TEXT,
+            last_sync_at TEXT,
+            last_sync_status TEXT,
+            last_sync_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (initiative_id) REFERENCES ws_initiatives(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4628,6 +4651,10 @@ MIGRATION_MANIFEST = (
     Migration(
         90, "initiative_campaign_customers",
         _migration_0090_initiative_campaign_customers,
+    ),
+    Migration(
+        91, "initiative_campaign_files",
+        _migration_0091_initiative_campaign_files,
     ),
 )
 

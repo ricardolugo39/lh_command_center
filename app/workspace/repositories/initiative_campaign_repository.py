@@ -6,6 +6,53 @@ from app.database.transaction import connection_scope
 class InitiativeCampaignRepository:
 
     @staticmethod
+    def get_file(initiative_id: int) -> dict[str, Any] | None:
+        with connection_scope() as conn:
+            row = conn.execute(
+                "SELECT * FROM ws_initiative_campaign_files WHERE initiative_id = ?",
+                (initiative_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    @staticmethod
+    def save_file(initiative_id: int, advisor: str, item: dict[str, Any]) -> None:
+        with connection_scope() as conn:
+            conn.execute(
+                """
+                INSERT INTO ws_initiative_campaign_files (
+                    initiative_id, advisor, item_id, filename, web_url, etag
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(initiative_id) DO UPDATE SET
+                    advisor = excluded.advisor,
+                    item_id = excluded.item_id,
+                    filename = excluded.filename,
+                    web_url = excluded.web_url,
+                    etag = excluded.etag,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    initiative_id, advisor, item["item_id"], item["filename"],
+                    item["web_url"], item.get("etag"),
+                ),
+            )
+
+    @staticmethod
+    def mark_sync(
+        initiative_id: int, *, etag: str | None, status: str, message: str,
+    ) -> None:
+        with connection_scope() as conn:
+            conn.execute(
+                """
+                UPDATE ws_initiative_campaign_files
+                SET etag = COALESCE(?, etag), last_sync_at = CURRENT_TIMESTAMP,
+                    last_sync_status = ?, last_sync_message = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE initiative_id = ?
+                """,
+                (etag, status, message, initiative_id),
+            )
+
+    @staticmethod
     def list_customers(initiative_id: int) -> list[dict[str, Any]]:
         with connection_scope() as conn:
             cursor = conn.execute(

@@ -73,6 +73,17 @@
             <div class="text-secondary small mt-1">Plásticos · seguimiento desde clientes asignados hasta oportunidad.</div>
         </div>
         <div class="d-flex gap-2">
+            {% if campaign.file %}
+            <a href="{{ campaign.file.web_url }}" target="_blank" rel="noopener" class="btn btn-primary">Abrir Excel Online</a>
+            <form method="post" action="{{ url_for('workspace.initiative_campaign_sync_onedrive', initiative_id=initiative.id) }}">
+                <button type="submit" class="btn btn-outline-primary">Actualizar desde OneDrive</button>
+            </form>
+            {% else %}
+            <form method="post" action="{{ url_for('workspace.initiative_campaign_launch', initiative_id=initiative.id) }}" class="d-flex gap-2">
+                <input type="email" name="recipient" value="ricardo.lugo@lugohermanos.com" class="form-control" required>
+                <button type="submit" class="btn btn-primary">Lanzar piloto Microsoft</button>
+            </form>
+            {% endif %}
             <a href="{{ url_for('workspace.initiative_campaign_export', initiative_id=initiative.id) }}" class="btn btn-primary">
                 Descargar Excel
             </a>
@@ -83,6 +94,11 @@
         </div>
     </div>
     <div class="card-body border-bottom">
+        {% if campaign.file %}
+        <div class="text-secondary small mb-3">
+            Archivo: {{ campaign.file.filename }} · Última sincronización: {{ campaign.file.last_sync_at or 'Pendiente' }}
+        </div>
+        {% endif %}
         <div class="row g-3">
             <div class="col-6 col-lg-3"><div class="text-secondary small">Asignados</div><div class="h2 mb-0">{{ campaign.summary.assigned }}</div></div>
             <div class="col-6 col-lg-3"><div class="text-secondary small">Contactados</div><div class="h2 mb-0">{{ campaign.summary.contacted_pct }}%</div><div class="text-secondary small">{{ campaign.summary.contacted }} clientes</div></div>

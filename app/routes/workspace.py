@@ -1254,6 +1254,35 @@ def initiative_campaign_sync(initiative_id: int):
         return str(exc), 400
     return redirect(url_for("workspace.initiative_detail", initiative_id=initiative_id))
 
+
+@workspace_bp.post("/workspace/initiatives/<int:initiative_id>/campaign/launch")
+@roles_required("administrator")
+def initiative_campaign_launch(initiative_id: int):
+    recipient = (
+        request.form.get("recipient")
+        or current_app.config.get("MICROSOFT_MAILBOX_ADDRESS")
+        or ""
+    ).strip()
+    if not recipient:
+        return "Indique el correo de la prueba.", 400
+    try:
+        InitiativeCampaignService.launch_microsoft_pilot(
+            initiative_id, recipient=recipient,
+        )
+    except (RuntimeError, ValueError) as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.initiative_detail", initiative_id=initiative_id))
+
+
+@workspace_bp.post("/workspace/initiatives/<int:initiative_id>/campaign/sync-onedrive")
+@roles_required("administrator", "commercial_management")
+def initiative_campaign_sync_onedrive(initiative_id: int):
+    try:
+        InitiativeCampaignService.sync_from_onedrive(initiative_id)
+    except (RuntimeError, ValueError) as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.initiative_detail", initiative_id=initiative_id))
+
 @workspace_bp.post(
     "/workspace/initiatives/"
     "<int:initiative_id>/opportunities"

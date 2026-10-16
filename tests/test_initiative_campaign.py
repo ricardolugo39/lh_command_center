@@ -30,6 +30,10 @@ def test_campaign_summary_uses_percentages(monkeypatch):
         "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.list_customers",
         lambda initiative_id: [customer],
     )
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.get_file",
+        lambda initiative_id: None,
+    )
 
     campaign = InitiativeCampaignService.get_campaign(10)
 

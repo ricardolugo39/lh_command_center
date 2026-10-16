@@ -1,6 +1,7 @@
 from io import BytesIO
 from typing import Any
 
+from flask import current_app
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -30,6 +31,7 @@ class InitiativeCampaignService:
         opportunities = sum(c.get("opportunity_decision") == "Sí" for c in customers)
         return {
             "customers": customers,
+            "file": InitiativeCampaignRepository.get_file(initiative_id),
             "summary": {
                 "assigned": total,
                 "contacted": contacted,
@@ -40,6 +42,82 @@ class InitiativeCampaignService:
                 "opportunities_pct": round(opportunities * 100 / total) if total else 0,
             },
         }
+
+    @staticmethod
+    @transactional
+    def launch_microsoft_pilot(
+        initiative_id: int,
+        *, recipient: str,
+    ) -> dict[str, Any]:
+        customers = InitiativeCampaignRepository.list_customers(initiative_id)
+        if not customers:
+            raise ValueError("La iniciativa no tiene clientes de campaña.")
+        advisor = customers[0]["advisor"]
+        stream, filename = InitiativeCampaignService.export_workbook(
+            initiative_id, advisor=advisor,
+        )
+        provider = current_app.extensions["email_provider"]
+        if current_app.config.get("EMAIL_PROVIDER") != "microsoft":
+            raise ValueError("El proveedor activo debe ser Microsoft 365.")
+        uploaded = provider.upload_onedrive_file(
+            filename=filename,
+            content=stream.getvalue(),
+        )
+        InitiativeCampaignRepository.save_file(
+            initiative_id, advisor, uploaded,
+        )
+        link = uploaded["web_url"]
+        body_html = f"""
+        <p>Hola,</p>
+        <p>Iniciamos un piloto para identificar aplicaciones de movimiento lineal
+        en clientes activos del segmento de plásticos y desarrollar oportunidades
+        de homologación THK.</p>
+        <p>El archivo contiene únicamente los clientes asignados al asesor.</p>
+        <p><a href=\"{link}\">Abrir lista de clientes en Excel Online</a></p>
+        <p><strong>Instrucciones:</strong></p>
+        <ol>
+          <li>Contactar al cliente antes del 30 de octubre de 2026.</li>
+          <li>Registrar la aplicación o máquina, referencia instalada e interés.</li>
+          <li>Definir la próxima acción y su fecha.</li>
+          <li>Marcar “Sí” solo cuando exista una oportunidad comercial real.</li>
+        </ol>
+        <p>Los cambios se consolidarán en Command Center.</p>
+        """
+        provider.send(
+            sender=current_app.config.get("MICROSOFT_MAILBOX_ADDRESS") or "",
+            recipients=[recipient],
+            cc=[],
+            subject="Piloto THK · Clientes de plásticos asignados",
+            body_text="Abra su lista privada en Excel Online: " + link,
+            body_html=body_html,
+        )
+        InitiativeRepository.create_event(
+            initiative_id=initiative_id,
+            event_type="campaign_launch",
+            title="Piloto Microsoft 365 enviado",
+            details=f"Archivo privado creado y correo enviado a {recipient}.",
+            created_by="microsoft",
+        )
+        return uploaded
+
+    @staticmethod
+    @transactional
+    def sync_from_onedrive(initiative_id: int) -> dict[str, int]:
+        file_record = InitiativeCampaignRepository.get_file(initiative_id)
+        if not file_record:
+            raise ValueError("La iniciativa todavía no tiene archivo en OneDrive.")
+        provider = current_app.extensions["email_provider"]
+        content, etag = provider.download_onedrive_file(file_record["item_id"])
+        result = InitiativeCampaignService.import_workbook.__wrapped__(
+            initiative_id, BytesIO(content)
+        )
+        InitiativeCampaignRepository.mark_sync(
+            initiative_id,
+            etag=etag,
+            status="success",
+            message=f"{result['updated']} clientes actualizados.",
+        )
+        return result
 
     @staticmethod
     def export_workbook(initiative_id: int, advisor: str | None = None) -> tuple[BytesIO, str]:

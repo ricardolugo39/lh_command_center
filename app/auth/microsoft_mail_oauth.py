@@ -20,7 +20,7 @@ class MicrosoftMailOAuthProvider:
     """Delegated Microsoft Graph authorization for the operational mailbox."""
 
     CREDENTIAL_KEY = "microsoft_mail_token_cache"
-    SCOPES = ("Mail.ReadWrite", "Mail.Send")
+    SCOPES = ("Mail.ReadWrite", "Mail.Send", "Files.ReadWrite")
     LOGIN_SCOPES = ("User.Read",)
 
     @classmethod

@@ -12,8 +12,8 @@
     <section class="card h-100">
       <div class="card-header">
         <div class="d-flex align-items-center justify-content-between w-100 gap-3">
-          <div><div class="text-secondary small">Microsoft 365 / Outlook</div>
-            <h2 class="card-title mb-0">Correos de RFQ</h2></div>
+          <div><div class="text-secondary small">Microsoft 365</div>
+            <h2 class="card-title mb-0">Outlook y OneDrive</h2></div>
           {% if page.email.ready and page.email.provider == 'microsoft' %}<span class="badge bg-green-lt">Conectado</span>
           {% else %}<span class="badge bg-yellow-lt">Sin conectar</span>{% endif %}
         </div>
@@ -24,7 +24,7 @@
         {% elif request.args.get('microsoft_mail') == 'failed' %}
         <div class="alert alert-danger">No fue posible conectar Microsoft 365. Revise la configuración e intente nuevamente.</div>
         {% endif %}
-        <p class="mb-0">Envía RFQ, cotizaciones y borradores desde {{ page.email.mailbox or 'el buzón configurado' }}, y permite sincronizar respuestas.</p>
+        <p class="mb-0">Envía correos desde {{ page.email.mailbox or 'el buzón configurado' }} y administra archivos de campaña en OneDrive.</p>
       </div>
       <div class="card-footer bg-transparent">
         <a class="btn btn-primary" href="{{ url_for('integrations.microsoft_mail_connect') }}">
