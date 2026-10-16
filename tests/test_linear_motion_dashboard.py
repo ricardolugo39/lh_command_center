@@ -132,6 +132,9 @@ def test_segment_opportunity_uses_one_brand_binding(monkeypatch):
 
     assert captured["sql"].count("?") == 2
     assert captured["params"] == ("THK", "PLASTICOS")
+    assert "ws_customer_portfolio_metadata" in captured["sql"]
+    assert "WHATSAPP JOHN MORENO" in captured["sql"]
+    assert "JOHN FREDY MORENO" in captured["sql"]
 
 
 def test_segment_opportunity_formats_brands_for_compact_ui():

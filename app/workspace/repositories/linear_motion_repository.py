@@ -201,12 +201,33 @@ class LinearMotionRepository:
         params = target_params + (segment,)
         rows = cls._all(f"""
             WITH customers AS (
-                SELECT TRIM(customer_id) customer_id,
-                       MAX(customer_name) customer_name,
-                       MAX(city) city,
-                       GROUP_CONCAT(DISTINCT NULLIF(TRIM(seller),'')) advisor,
-                       MAX(classification_name) segment
-                FROM dim_customer GROUP BY TRIM(customer_id)
+                SELECT TRIM(d.customer_id) customer_id,
+                       MAX(d.customer_name) customer_name,
+                       MAX(d.city) city,
+                       COALESCE(
+                           NULLIF(TRIM(MAX(CASE
+                               WHEN UPPER(TRIM(COALESCE(m.advisor,''))) NOT IN (
+                                   '', 'ALMACEN', 'ALMACEN CALI -UNO-',
+                                   'CALL CENTER', 'WHATSAPP MARÍA',
+                                   'WHATSAPP MARIA', 'WHATSAPP JOHN MORENO'
+                               ) THEN m.advisor END)), ''),
+                           CASE
+                               WHEN MAX(UPPER(TRIM(d.seller)) IN (
+                                   'WHATSAPP MARÍA', 'WHATSAPP MARIA'
+                               )) = 1 THEN 'MARIA ELSA SIERRA FERNANDEZ'
+                               WHEN MAX(UPPER(TRIM(d.seller)) =
+                                        'WHATSAPP JOHN MORENO') = 1
+                                   THEN 'JOHN FREDY MORENO'
+                               ELSE GROUP_CONCAT(
+                                   DISTINCT NULLIF(TRIM(d.seller),'')
+                               )
+                           END
+                       ) advisor,
+                       MAX(d.classification_name) segment
+                FROM dim_customer d
+                LEFT JOIN ws_customer_portfolio_metadata m
+                  ON m.erp_customer_id = TRIM(d.customer_id)
+                GROUP BY TRIM(d.customer_id)
             ), activity AS (
                 SELECT REPLACE(TRIM(s.nit),',','') customer_id,
                        MAX(s.razonsocial) sales_name,
