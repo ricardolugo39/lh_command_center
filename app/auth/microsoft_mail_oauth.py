@@ -41,7 +41,7 @@ class MicrosoftMailOAuthProvider:
         return self._client()[0].initiate_auth_code_flow(
             scopes=list(self.SCOPES),
             redirect_uri=current_app.config["MICROSOFT_MAIL_REDIRECT_URI"],
-            prompt="select_account",
+            prompt="consent",
         )
 
     def begin_login(self) -> dict[str, Any]:
