@@ -45,6 +45,8 @@ class InitiativeCampaignRepository:
                     filename = excluded.filename,
                     web_url = excluded.web_url,
                     etag = excluded.etag,
+                    sent_at = CURRENT_TIMESTAMP,
+                    send_status = 'sent',
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
