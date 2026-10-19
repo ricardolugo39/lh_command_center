@@ -47,6 +47,10 @@ class InitiativeCampaignRepository:
                     etag = excluded.etag,
                     sent_at = CURRENT_TIMESTAMP,
                     send_status = 'sent',
+                    first_reminder_at = NULL,
+                    second_reminder_at = NULL,
+                    escalated_at = NULL,
+                    automation_note = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
@@ -73,6 +77,56 @@ class InitiativeCampaignRepository:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE initiative_id = ?""" + clause,
                 tuple(parameters),
+            )
+
+    @staticmethod
+    def mark_automation(
+        file_id: int, *, first: bool = False, second: bool = False,
+        escalated: bool = False, note: str = "",
+    ) -> None:
+        assignments = ["automation_note = ?", "updated_at = CURRENT_TIMESTAMP"]
+        parameters: list[Any] = [note]
+        if first:
+            assignments.append("first_reminder_at = CURRENT_TIMESTAMP")
+        if second:
+            assignments.append("second_reminder_at = CURRENT_TIMESTAMP")
+        if escalated:
+            assignments.append("escalated_at = CURRENT_TIMESTAMP")
+        parameters.append(file_id)
+        with connection_scope() as conn:
+            conn.execute(
+                f"UPDATE ws_initiative_campaign_files SET {', '.join(assignments)} WHERE id = ?",
+                tuple(parameters),
+            )
+
+    @staticmethod
+    def advisor_has_progress(initiative_id: int, advisor: str) -> bool:
+        with connection_scope() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM ws_initiative_campaign_customers
+                WHERE initiative_id = ? AND advisor = ? AND (
+                    status NOT IN ('Pendiente', '') OR contact_date IS NOT NULL OR
+                    contact_name IS NOT NULL OR application IS NOT NULL OR
+                    installed_reference IS NOT NULL OR interest IS NOT NULL OR
+                    next_action IS NOT NULL OR next_action_date IS NOT NULL OR
+                    opportunity_decision NOT IN ('', 'Revisar')
+                ) LIMIT 1
+                """,
+                (initiative_id, advisor),
+            ).fetchone()
+            return row is not None
+
+    @staticmethod
+    def resolve_escalation(file_id: int) -> None:
+        with connection_scope() as conn:
+            conn.execute(
+                """UPDATE ws_initiative_campaign_files
+                SET escalated_at = NULL,
+                    automation_note = 'Avance registrado después del escalamiento',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?""",
+                (file_id,),
             )
 
     @staticmethod

@@ -1,5 +1,7 @@
 from io import BytesIO
 from typing import Any
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from flask import current_app
 from openpyxl import Workbook, load_workbook
@@ -22,6 +24,94 @@ TRACKING_HEADERS = [
 
 
 class InitiativeCampaignService:
+
+    @staticmethod
+    def run_followup_automation(now: datetime | None = None) -> dict[str, int]:
+        """Send two quiet reminders, then expose inactive advisors to management."""
+        if current_app.config.get("EMAIL_PROVIDER") != "microsoft":
+            return {"reminders": 0, "escalations": 0}
+        local_now = now or datetime.now(ZoneInfo("America/Bogota"))
+        if local_now.weekday() >= 5 or local_now.hour < 8:
+            return {"reminders": 0, "escalations": 0}
+        reminders = escalations = 0
+        provider = current_app.extensions["email_provider"]
+        for record in InitiativeCampaignRepository.list_files():
+            if not record.get("sent_at") or not record.get("recipient"):
+                continue
+            if InitiativeCampaignRepository.advisor_has_progress(
+                record["initiative_id"], record["advisor"],
+            ):
+                if record.get("escalated_at"):
+                    InitiativeCampaignRepository.resolve_escalation(record["id"])
+                continue
+            sent = datetime.fromisoformat(record["sent_at"]).replace(
+                tzinfo=local_now.tzinfo,
+            )
+            business_days = InitiativeCampaignService._business_days(sent, local_now)
+            if business_days >= 3 and not record.get("first_reminder_at"):
+                InitiativeCampaignService._send_reminder(provider, record, 1)
+                InitiativeCampaignRepository.mark_automation(
+                    record["id"], first=True, note="Primer recordatorio enviado",
+                )
+                reminders += 1
+            elif business_days >= 7 and not record.get("second_reminder_at"):
+                InitiativeCampaignService._send_reminder(provider, record, 2)
+                InitiativeCampaignRepository.mark_automation(
+                    record["id"], second=True, note="Segundo recordatorio enviado",
+                )
+                reminders += 1
+            elif record.get("second_reminder_at") and not record.get("escalated_at"):
+                second = datetime.fromisoformat(record["second_reminder_at"]).replace(
+                    tzinfo=local_now.tzinfo,
+                )
+                if InitiativeCampaignService._business_days(second, local_now) >= 2:
+                    InitiativeCampaignRepository.mark_automation(
+                        record["id"], escalated=True,
+                        note="Sin actualización después del segundo recordatorio",
+                    )
+                    InitiativeRepository.create_event(
+                        initiative_id=record["initiative_id"],
+                        event_type="campaign_escalation",
+                        title="Seguimiento escalado a gerencia",
+                        details=(f"{record['advisor']} no registró avances después "
+                                 "de dos recordatorios automáticos."),
+                        created_by="automation",
+                    )
+                    escalations += 1
+        return {"reminders": reminders, "escalations": escalations}
+
+    @staticmethod
+    def _business_days(start: datetime, end: datetime) -> int:
+        day = start.date()
+        total = 0
+        while day < end.date():
+            day = day.fromordinal(day.toordinal() + 1)
+            if day.weekday() < 5:
+                total += 1
+        return total
+
+    @staticmethod
+    def _send_reminder(provider, record: dict[str, Any], number: int) -> None:
+        ordinal = "primer" if number == 1 else "segundo y último"
+        subject = f"Recordatorio {number} de 2 – Campaña THK plásticos"
+        link = record["web_url"]
+        provider.send(
+            sender=current_app.config.get("MICROSOFT_MAILBOX_ADDRESS") or "",
+            recipients=[record["recipient"]], cc=[], subject=subject,
+            body_text=(f"Este es el {ordinal} recordatorio para actualizar el archivo "
+                       f"de seguimiento THK: {link}"),
+            body_html=f"""
+            <p>Estimado(a) {record['advisor'].title()}:</p>
+            <p>Este es el <strong>{ordinal} recordatorio</strong> para registrar el
+            avance de los clientes asignados en la iniciativa THK para plásticos.</p>
+            <p>Por favor, actualice directamente en Excel Online el estado del
+            contacto y la información disponible. Si todavía no ha logrado
+            comunicación, seleccione <strong>Contacto intentado</strong>.</p>
+            <p><a href="{link}"><strong>Abrir archivo de seguimiento</strong></a></p>
+            <p>No es necesario descargar ni enviar el archivo por correo.</p>
+            <p>Cordialmente,<br><strong>Lugo Hermanos</strong></p>
+            """,
+        )
 
     @staticmethod
     def sync_all_from_onedrive() -> dict[str, int]:
@@ -73,6 +163,10 @@ class InitiativeCampaignService:
             "files": [
                 item for item in InitiativeCampaignRepository.list_files()
                 if item["initiative_id"] == initiative_id
+            ],
+            "escalations": [
+                item for item in InitiativeCampaignRepository.list_files()
+                if item["initiative_id"] == initiative_id and item.get("escalated_at")
             ],
             "summary": {
                 "assigned": total,

@@ -4453,6 +4453,17 @@ def _migration_0092_campaign_files_per_advisor(connection: Connection) -> None:
     connection.execute("DROP TABLE ws_initiative_campaign_files_old")
 
 
+def _migration_0093_campaign_followup_automation(connection: Connection) -> None:
+    """Track advisor reminders and management escalations idempotently."""
+    for name, definition in (
+        ("first_reminder_at", "TEXT"),
+        ("second_reminder_at", "TEXT"),
+        ("escalated_at", "TEXT"),
+        ("automation_note", "TEXT"),
+    ):
+        _add_column(connection, "ws_initiative_campaign_files", name, definition)
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4702,6 +4713,10 @@ MIGRATION_MANIFEST = (
     Migration(
         92, "campaign_files_per_advisor",
         _migration_0092_campaign_files_per_advisor,
+    ),
+    Migration(
+        93, "campaign_followup_automation",
+        _migration_0093_campaign_followup_automation,
     ),
 )
 

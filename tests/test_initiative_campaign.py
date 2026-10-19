@@ -1,4 +1,6 @@
 from io import BytesIO
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from flask import Flask
 from openpyxl import load_workbook
@@ -129,3 +131,74 @@ def test_hourly_sync_continues_when_one_campaign_fails(monkeypatch):
         "status": "error",
         "message": "Microsoft no disponible",
     })]
+
+
+def test_followup_automation_sends_two_reminders_then_escalates(monkeypatch):
+    app = Flask(__name__)
+    app.config.update(EMAIL_PROVIDER="microsoft", MICROSOFT_MAILBOX_ADDRESS="ventas@example.com")
+    sent = []
+    app.extensions["email_provider"] = type("Provider", (), {
+        "send": lambda self, **message: sent.append(message),
+    })()
+    record = {
+        "id": 4, "initiative_id": 10, "advisor": "ANA PEREZ",
+        "recipient": "ana@example.com", "web_url": "https://excel.example/file",
+        "sent_at": "2026-10-01 08:00:00", "first_reminder_at": None,
+        "second_reminder_at": None, "escalated_at": None,
+    }
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.list_files",
+        lambda: [record],
+    )
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.advisor_has_progress",
+        lambda *args: False,
+    )
+    changes = []
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.mark_automation",
+        lambda file_id, **values: changes.append(values),
+    )
+    events = []
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeRepository.create_event",
+        lambda **values: events.append(values),
+    )
+    tz = ZoneInfo("America/Bogota")
+    with app.app_context():
+        assert InitiativeCampaignService.run_followup_automation(
+            datetime(2026, 10, 6, 8, 0, tzinfo=tz)
+        ) == {"reminders": 1, "escalations": 0}
+        record["first_reminder_at"] = "2026-10-06 08:00:00"
+        assert InitiativeCampaignService.run_followup_automation(
+            datetime(2026, 10, 12, 8, 0, tzinfo=tz)
+        ) == {"reminders": 1, "escalations": 0}
+        record["second_reminder_at"] = "2026-10-12 08:00:00"
+        assert InitiativeCampaignService.run_followup_automation(
+            datetime(2026, 10, 14, 8, 0, tzinfo=tz)
+        ) == {"reminders": 0, "escalations": 1}
+
+    assert len(sent) == 2
+    assert sent[1]["subject"].startswith("Recordatorio 2 de 2")
+    assert changes[-1]["escalated"] is True
+    assert events[-1]["event_type"] == "campaign_escalation"
+
+
+def test_followup_automation_stops_when_advisor_has_progress(monkeypatch):
+    app = Flask(__name__)
+    app.config["EMAIL_PROVIDER"] = "microsoft"
+    app.extensions["email_provider"] = object()
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.list_files",
+        lambda: [{"sent_at": "2026-10-01 08:00:00", "recipient": "ana@example.com",
+                  "initiative_id": 10, "advisor": "ANA"}],
+    )
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.advisor_has_progress",
+        lambda *args: True,
+    )
+    with app.app_context():
+        result = InitiativeCampaignService.run_followup_automation(
+            datetime(2026, 10, 15, 8, 0, tzinfo=ZoneInfo("America/Bogota"))
+        )
+    assert result == {"reminders": 0, "escalations": 0}

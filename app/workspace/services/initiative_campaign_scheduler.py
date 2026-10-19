@@ -35,8 +35,10 @@ def _loop(application: Flask) -> None:
         try:
             with application.app_context():
                 result = InitiativeCampaignService.sync_all_from_onedrive()
+                automation = InitiativeCampaignService.run_followup_automation()
                 application.logger.info(
-                    "Sincronización horaria de campañas: %s", result
+                    "Sincronización horaria de campañas: %s; automatización: %s",
+                    result, automation,
                 )
         except Exception:
             logging.exception("Falló la sincronización horaria de campañas")

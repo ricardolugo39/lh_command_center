@@ -115,6 +115,17 @@
             <div class="col-6 col-lg-3"><div class="text-secondary small">Oportunidad</div><div class="h2 mb-0">{{ campaign.summary.opportunities_pct }}%</div><div class="text-secondary small">{{ campaign.summary.opportunities }} clientes</div></div>
         </div>
     </div>
+    {% if campaign.escalations %}
+    <div class="card-body border-bottom bg-red-lt">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div><div class="text-danger fw-bold">Requiere atención de gerencia</div><div class="small text-secondary">Sin actualización después de dos recordatorios automáticos.</div></div>
+            <span class="badge bg-red text-white">{{ campaign.escalations|length }} escalado(s)</span>
+        </div>
+        {% for item in campaign.escalations %}
+        <div class="d-flex justify-content-between border-top py-2"><strong>{{ item.advisor|title }}</strong><span>{{ item.escalated_at }}</span></div>
+        {% endfor %}
+    </div>
+    {% endif %}
     {% if current_user.role == 'administrator' %}
     <div class="card-body border-bottom">
         <h4 class="mb-2">Preparación de envíos</h4>
@@ -125,8 +136,8 @@
             <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Crear y enviar</button></div>
         </form>
         {% if campaign.files %}
-        <div class="table-responsive mt-3"><table class="table table-sm table-vcenter mb-0"><thead><tr><th>Asesor</th><th>Correo</th><th>Enviado</th><th>Archivo</th><th>Sincronización</th></tr></thead><tbody>
-        {% for file in campaign.files %}<tr><td>{{ file.advisor|title }}</td><td>{{ file.recipient or 'Pendiente' }}</td><td>{{ file.sent_at or '—' }}</td><td><a href="{{ file.web_url }}" target="_blank" rel="noopener">Abrir Excel</a></td><td>{{ file.last_sync_status or 'Pendiente' }}{% if file.last_sync_at %} · {{ file.last_sync_at }}{% endif %}</td></tr>{% endfor %}
+        <div class="table-responsive mt-3"><table class="table table-sm table-vcenter mb-0"><thead><tr><th>Asesor</th><th>Correo</th><th>Enviado</th><th>Recordatorios</th><th>Estado</th><th>Archivo</th><th>Sincronización</th></tr></thead><tbody>
+        {% for file in campaign.files %}<tr><td>{{ file.advisor|title }}</td><td>{{ file.recipient or 'Pendiente' }}</td><td>{{ file.sent_at or '—' }}</td><td>{{ (1 if file.first_reminder_at else 0) + (1 if file.second_reminder_at else 0) }} de 2</td><td>{% if file.escalated_at %}<span class="badge bg-red text-white">Escalado</span>{% elif file.second_reminder_at %}<span class="badge bg-orange-lt">Último aviso</span>{% elif file.first_reminder_at %}<span class="badge bg-yellow-lt">Recordatorio 1</span>{% else %}<span class="badge bg-blue-lt">En seguimiento</span>{% endif %}</td><td><a href="{{ file.web_url }}" target="_blank" rel="noopener">Abrir Excel</a></td><td>{{ file.last_sync_status or 'Pendiente' }}{% if file.last_sync_at %} · {{ file.last_sync_at }}{% endif %}</td></tr>{% endfor %}
         </tbody></table></div>
         {% endif %}
     </div>
