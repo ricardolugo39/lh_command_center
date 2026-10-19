@@ -11,6 +11,7 @@ from app.workspace.repositories.initiative_campaign_repository import (
     InitiativeCampaignRepository,
 )
 from app.workspace.repositories.initiative_repository import InitiativeRepository
+from app.workspace.repositories.linear_motion_repository import LinearMotionRepository
 
 
 TRACKING_HEADERS = [
@@ -33,8 +34,11 @@ class InitiativeCampaignService:
         failed = 0
         for file_record in files:
             initiative_id = file_record["initiative_id"]
+            advisor = file_record["advisor"]
             try:
-                InitiativeCampaignService.sync_from_onedrive(initiative_id)
+                InitiativeCampaignService.sync_from_onedrive(
+                    initiative_id, advisor=advisor,
+                )
                 succeeded += 1
             except Exception as exc:
                 failed += 1
@@ -45,6 +49,7 @@ class InitiativeCampaignService:
                 )
                 InitiativeCampaignRepository.mark_sync(
                     initiative_id,
+                    advisor=advisor,
                     etag=None,
                     status="error",
                     message=message[:500],
@@ -65,6 +70,10 @@ class InitiativeCampaignService:
         return {
             "customers": customers,
             "file": InitiativeCampaignRepository.get_file(initiative_id),
+            "files": [
+                item for item in InitiativeCampaignRepository.list_files()
+                if item["initiative_id"] == initiative_id
+            ],
             "summary": {
                 "assigned": total,
                 "contacted": contacted,
@@ -86,6 +95,28 @@ class InitiativeCampaignService:
         if not customers:
             raise ValueError("La iniciativa no tiene clientes de campaña.")
         advisor = customers[0]["advisor"]
+        return InitiativeCampaignService.launch_advisor_campaign.__wrapped__(
+            initiative_id, advisor=advisor, recipient=recipient,
+        )
+
+    @staticmethod
+    @transactional
+    def launch_advisor_campaign(
+        initiative_id: int, *, advisor: str, recipient: str,
+        prepare_if_missing: bool = False, reset_tracking: bool = True,
+    ) -> dict[str, Any]:
+        if prepare_if_missing:
+            InitiativeCampaignService._prepare_advisor_customers(
+                initiative_id, advisor,
+            )
+        customers = [
+            item for item in InitiativeCampaignRepository.list_customers(initiative_id)
+            if item["advisor"] == advisor
+        ]
+        if not customers:
+            raise ValueError("El asesor no tiene clientes preparados para la campaña.")
+        if reset_tracking:
+            InitiativeCampaignRepository.reset_tracking(initiative_id, advisor)
         stream, filename = InitiativeCampaignService.export_workbook(
             initiative_id, advisor=advisor,
         )
@@ -95,48 +126,44 @@ class InitiativeCampaignService:
         uploaded = provider.upload_onedrive_file(
             filename=filename,
             content=stream.getvalue(),
+            recipient=recipient,
         )
         InitiativeCampaignRepository.save_file(
-            initiative_id, advisor, uploaded,
+            initiative_id, advisor, recipient, uploaded,
         )
         link = uploaded["web_url"]
-        body_html = f"""
-        <p>Hola,</p>
-        <p>Iniciamos un piloto para identificar aplicaciones de movimiento lineal
-        en clientes activos del segmento de plásticos y desarrollar oportunidades
-        de homologación THK.</p>
-        <p>El archivo contiene únicamente los clientes asignados al asesor.</p>
-        <p><a href=\"{link}\">Abrir lista de clientes en Excel Online</a></p>
-        <p><strong>Instrucciones:</strong></p>
-        <ol>
-          <li>Contactar al cliente antes del 30 de octubre de 2026.</li>
-          <li>Registrar la aplicación o máquina, referencia instalada e interés.</li>
-          <li>Definir la próxima acción y su fecha.</li>
-          <li>Marcar “Sí” solo cuando exista una oportunidad comercial real.</li>
-        </ol>
-        <p>Los cambios se consolidarán en Command Center.</p>
-        """
+        body_html = InitiativeCampaignService._campaign_email_html(
+            advisor, len(customers), link,
+        )
         provider.send(
             sender=current_app.config.get("MICROSOFT_MAILBOX_ADDRESS") or "",
             recipients=[recipient],
             cc=[],
-            subject="Piloto THK · Clientes de plásticos asignados",
-            body_text="Abra su lista privada en Excel Online: " + link,
+            subject="Iniciativa comercial THK – Clientes asignados del segmento de plásticos",
+            body_text=(
+                f"Estimado(a) {advisor.title()}, consulte su archivo privado "
+                f"de seguimiento en Excel Online: {link}"
+            ),
             body_html=body_html,
         )
         InitiativeRepository.create_event(
             initiative_id=initiative_id,
             event_type="campaign_launch",
-            title="Piloto Microsoft 365 enviado",
-            details=f"Archivo privado creado y correo enviado a {recipient}.",
+            title="Campaña THK enviada",
+            details=(f"Archivo privado de {advisor} creado y correo enviado "
+                     f"a {recipient} con {len(customers)} clientes."),
             created_by="microsoft",
         )
         return uploaded
 
     @staticmethod
     @transactional
-    def sync_from_onedrive(initiative_id: int) -> dict[str, int]:
-        file_record = InitiativeCampaignRepository.get_file(initiative_id)
+    def sync_from_onedrive(
+        initiative_id: int, advisor: str | None = None,
+    ) -> dict[str, int]:
+        file_record = InitiativeCampaignRepository.get_file(
+            initiative_id, advisor,
+        )
         if not file_record:
             raise ValueError("La iniciativa todavía no tiene archivo en OneDrive.")
         provider = current_app.extensions["email_provider"]
@@ -146,11 +173,90 @@ class InitiativeCampaignService:
         )
         InitiativeCampaignRepository.mark_sync(
             initiative_id,
+            advisor=file_record["advisor"],
             etag=etag,
             status="success",
             message=f"{result['updated']} clientes actualizados.",
         )
         return result
+
+    @staticmethod
+    def _prepare_advisor_customers(initiative_id: int, advisor: str) -> None:
+        existing = [
+            item for item in InitiativeCampaignRepository.list_customers(initiative_id)
+            if item["advisor"] == advisor
+        ]
+        if existing:
+            return
+        opportunity = LinearMotionRepository.segment_opportunity("PLASTICOS", "THK")
+        selected = [
+            item for item in opportunity.get("customers", [])
+            if str(item.get("advisor") or "").strip().casefold()
+            == advisor.strip().casefold()
+        ]
+        for index, item in enumerate(selected):
+            customer_id = str(item.get("customer_id") or "").strip()
+            InitiativeCampaignRepository.upsert_customer(initiative_id, {
+                "customer_erp_id": customer_id,
+                "customer_name": item.get("name") or customer_id,
+                "city": item.get("city"),
+                "advisor": advisor,
+                "priority": "Alta" if index < 5 else "Media",
+                "brands": item.get("brands"),
+                "competitor_linear_brands": item.get("competitor_linear_brands"),
+                "last_purchase": item.get("last_purchase"),
+                "other_sales": item.get("other_sales"),
+                "status": "Pendiente",
+                "source_key": f"THK-PLASTICOS-{customer_id}",
+            })
+
+    @staticmethod
+    def _campaign_email_html(advisor: str, count: int, link: str) -> str:
+        return f"""
+        <p>Estimado(a) {advisor.title()}:</p>
+        <p>Como parte de la iniciativa comercial para el desarrollo de la marca
+        THK, se ha preparado una lista de <strong>{count} clientes activos del
+        segmento de plásticos</strong> que actualmente no registran compras de
+        esta marca.</p>
+        <p>El objetivo es contactar a estos clientes e identificar máquinas o
+        aplicaciones con movimiento lineal en las que exista la posibilidad de
+        aportar una solución y desarrollar una eventual homologación.</p>
+        <p>En esta primera etapa no se busca ofrecer una referencia específica.
+        Se requiere conocer la máquina o aplicación, el componente instalado,
+        la necesidad del cliente, su interés en evaluar THK y la siguiente acción.</p>
+        <p><a href="{link}"><strong>Abrir archivo privado en Excel Online</strong></a></p>
+        <p>El archivo contiene exclusivamente los clientes asignados para esta
+        iniciativa y tiene tres pestañas:</p>
+        <h3>1. Seguimiento</h3>
+        <p>Es la única pestaña que debe actualizarse. Registre el estado, fecha y
+        persona de contacto, aplicación o máquina, marca o referencia instalada,
+        interés, próxima acción, fecha compromiso y si existe una oportunidad.</p>
+        <p>Estados disponibles: <strong>Pendiente</strong>, <strong>Contacto
+        intentado</strong>, <strong>Contactado</strong>, <strong>Aplicación
+        identificada</strong> y <strong>Sin oportunidad</strong>. Marque
+        “Sí” en oportunidad solamente cuando exista una necesidad concreta,
+        interés y una siguiente acción comercial o técnica.</p>
+        <h3>2. Contexto</h3>
+        <p>Es únicamente de consulta y no debe modificarse. Presenta la última
+        compra, compras de otras marcas, marcas históricas y posibles marcas
+        relacionadas con movimiento lineal.</p>
+        <h3>3. Instrucciones</h3>
+        <p>Resume el objetivo, las fechas y la información que debe recopilarse.</p>
+        <h3>Apoyo para homologaciones</h3>
+        <p>Si el cliente utiliza otra marca y desea evaluar THK, registre la
+        aplicación, marca, referencia disponible y necesidad, y seleccione
+        <strong>Proponer homologación</strong>. Lugo Hermanos brindará el apoyo
+        comercial y técnico para revisar la equivalencia y acompañar el proceso.</p>
+        <h3>Manejo del archivo</h3>
+        <p>Trabaje directamente en Excel Online. Los cambios se guardan
+        automáticamente. No es necesario descargar, copiar ni devolver el archivo.</p>
+        <p><strong>Fechas:</strong><br>
+        Primer contacto: 30 de octubre de 2026.<br>
+        Aplicación identificada: 13 de noviembre de 2026.<br>
+        Revisión inicial: 30 de noviembre de 2026.</p>
+        <p>Cordialmente,<br><strong>Lugo Hermanos</strong><br>
+        Equipo comercial y técnico</p>
+        """
 
     @staticmethod
     def export_workbook(initiative_id: int, advisor: str | None = None) -> tuple[BytesIO, str]:

@@ -4410,6 +4410,49 @@ def _migration_0091_initiative_campaign_files(connection: Connection) -> None:
     )
 
 
+def _migration_0092_campaign_files_per_advisor(connection: Connection) -> None:
+    connection.execute("ALTER TABLE ws_initiative_campaign_files RENAME TO ws_initiative_campaign_files_old")
+    connection.execute(
+        """
+        CREATE TABLE ws_initiative_campaign_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            initiative_id INTEGER NOT NULL,
+            advisor TEXT NOT NULL,
+            recipient TEXT,
+            provider TEXT NOT NULL DEFAULT 'microsoft',
+            item_id TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            web_url TEXT NOT NULL,
+            etag TEXT,
+            sent_at TEXT,
+            send_status TEXT,
+            last_sync_at TEXT,
+            last_sync_status TEXT,
+            last_sync_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (initiative_id) REFERENCES ws_initiatives(id)
+                ON DELETE CASCADE,
+            UNIQUE (initiative_id, advisor)
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO ws_initiative_campaign_files (
+            initiative_id, advisor, provider, item_id, filename, web_url,
+            etag, last_sync_at, last_sync_status, last_sync_message,
+            created_at, updated_at
+        )
+        SELECT initiative_id, advisor, provider, item_id, filename, web_url,
+               etag, last_sync_at, last_sync_status, last_sync_message,
+               created_at, updated_at
+        FROM ws_initiative_campaign_files_old
+        """
+    )
+    connection.execute("DROP TABLE ws_initiative_campaign_files_old")
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4655,6 +4698,10 @@ MIGRATION_MANIFEST = (
     Migration(
         91, "initiative_campaign_files",
         _migration_0091_initiative_campaign_files,
+    ),
+    Migration(
+        92, "campaign_files_per_advisor",
+        _migration_0092_campaign_files_per_advisor,
     ),
 )
 

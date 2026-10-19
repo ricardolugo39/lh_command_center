@@ -35,6 +35,10 @@ def test_campaign_summary_uses_percentages(monkeypatch):
         "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.get_file",
         lambda initiative_id: None,
     )
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.list_files",
+        lambda: [],
+    )
 
     campaign = InitiativeCampaignService.get_campaign(10)
 
@@ -91,11 +95,14 @@ def test_hourly_sync_continues_when_one_campaign_fails(monkeypatch):
     app = Flask(__name__)
     monkeypatch.setattr(
         "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.list_files",
-        lambda: [{"initiative_id": 10}, {"initiative_id": 11}],
+        lambda: [
+            {"initiative_id": 10, "advisor": "ANA"},
+            {"initiative_id": 11, "advisor": "BEA"},
+        ],
     )
     synced = []
 
-    def sync(initiative_id):
+    def sync(initiative_id, advisor=None):
         if initiative_id == 10:
             raise RuntimeError("Microsoft no disponible")
         synced.append(initiative_id)
@@ -117,6 +124,7 @@ def test_hourly_sync_continues_when_one_campaign_fails(monkeypatch):
     assert result == {"processed": 2, "succeeded": 1, "failed": 1}
     assert synced == [11]
     assert failures == [(10, {
+        "advisor": "ANA",
         "etag": None,
         "status": "error",
         "message": "Microsoft no disponible",

@@ -18,6 +18,7 @@ class MicrosoftGraphMailProvider:
     def upload_onedrive_file(
         self, *, filename: str, content: bytes,
         folder: str = "Campañas Comerciales",
+        recipient: str | None = None,
     ) -> dict:
         safe_folder = folder.replace("/", "-")
         self._request(
@@ -37,15 +38,29 @@ class MicrosoftGraphMailProvider:
             )},
             data=content,
         )
-        permission = self._request(
-            "POST", f"/me/drive/items/{item['id']}/createLink",
-            json={"type": "edit", "scope": "organization"},
-        )
+        if recipient:
+            self._request(
+                "POST", f"/me/drive/items/{item['id']}/invite",
+                json={
+                    "recipients": [{"email": recipient}],
+                    "message": "",
+                    "requireSignIn": True,
+                    "sendInvitation": False,
+                    "roles": ["write"],
+                },
+            )
+            web_url = item.get("webUrl")
+        else:
+            permission = self._request(
+                "POST", f"/me/drive/items/{item['id']}/createLink",
+                json={"type": "edit", "scope": "organization"},
+            )
+            web_url = (permission.get("link") or {}).get("webUrl")
+            web_url = web_url or item.get("webUrl")
         return {
             "item_id": item["id"],
             "filename": item.get("name") or filename,
-            "web_url": (permission.get("link") or {}).get("webUrl")
-            or item.get("webUrl"),
+            "web_url": web_url,
             "etag": item.get("eTag"),
         }
 

@@ -1274,6 +1274,26 @@ def initiative_campaign_launch(initiative_id: int):
     return redirect(url_for("workspace.initiative_detail", initiative_id=initiative_id))
 
 
+@workspace_bp.post("/workspace/initiatives/<int:initiative_id>/campaign/launch-advisor")
+@roles_required("administrator")
+def initiative_campaign_launch_advisor(initiative_id: int):
+    advisor = request.form.get("advisor", "").strip().upper()
+    recipient = request.form.get("recipient", "").strip()
+    if not advisor or not recipient:
+        return "Indique asesor y correo.", 400
+    try:
+        InitiativeCampaignService.launch_advisor_campaign(
+            initiative_id,
+            advisor=advisor,
+            recipient=recipient,
+            prepare_if_missing=request.form.get("prepare_if_missing") == "1",
+            reset_tracking=True,
+        )
+    except (RuntimeError, ValueError) as exc:
+        return str(exc), 400
+    return redirect(url_for("workspace.initiative_detail", initiative_id=initiative_id))
+
+
 @workspace_bp.post("/workspace/initiatives/<int:initiative_id>/campaign/sync-onedrive")
 @roles_required("administrator", "commercial_management")
 def initiative_campaign_sync_onedrive(initiative_id: int):

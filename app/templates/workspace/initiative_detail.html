@@ -115,6 +115,22 @@
             <div class="col-6 col-lg-3"><div class="text-secondary small">Oportunidad</div><div class="h2 mb-0">{{ campaign.summary.opportunities_pct }}%</div><div class="text-secondary small">{{ campaign.summary.opportunities }} clientes</div></div>
         </div>
     </div>
+    {% if current_user.role == 'administrator' %}
+    <div class="card-body border-bottom">
+        <h4 class="mb-2">Preparación de envíos</h4>
+        <form method="post" action="{{ url_for('workspace.initiative_campaign_launch_advisor', initiative_id=initiative.id) }}" class="row g-2 align-items-end">
+            <div class="col-md-4"><label class="form-label">Asesor ERP</label><input class="form-control" name="advisor" placeholder="NOMBRE DEL ASESOR" required></div>
+            <div class="col-md-4"><label class="form-label">Correo</label><input class="form-control" type="email" name="recipient" required></div>
+            <div class="col-md-2"><label class="form-check"><input class="form-check-input" type="checkbox" name="prepare_if_missing" value="1"><span class="form-check-label">Cargar clientes</span></label></div>
+            <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Crear y enviar</button></div>
+        </form>
+        {% if campaign.files %}
+        <div class="table-responsive mt-3"><table class="table table-sm table-vcenter mb-0"><thead><tr><th>Asesor</th><th>Correo</th><th>Enviado</th><th>Archivo</th><th>Sincronización</th></tr></thead><tbody>
+        {% for file in campaign.files %}<tr><td>{{ file.advisor|title }}</td><td>{{ file.recipient or 'Pendiente' }}</td><td>{{ file.sent_at or '—' }}</td><td><a href="{{ file.web_url }}" target="_blank" rel="noopener">Abrir Excel</a></td><td>{{ file.last_sync_status or 'Pendiente' }}{% if file.last_sync_at %} · {{ file.last_sync_at }}{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>
+        {% endif %}
+    </div>
+    {% endif %}
     <div class="table-responsive">
         <table class="table table-vcenter card-table">
             <thead><tr><th>Cliente</th><th>Asesor</th><th>Prioridad</th><th>Estado</th><th>Aplicación</th><th>Próxima acción</th><th>Fecha</th><th>Oportunidad</th></tr></thead>
