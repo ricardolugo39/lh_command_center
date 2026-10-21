@@ -4464,6 +4464,20 @@ def _migration_0093_campaign_followup_automation(connection: Connection) -> None
         _add_column(connection, "ws_initiative_campaign_files", name, definition)
 
 
+def _migration_0094_backfill_campaign_send_receipts(connection: Connection) -> None:
+    """Repair legacy campaign rows whose accepted send was not timestamped."""
+    connection.execute(
+        """
+        UPDATE ws_initiative_campaign_files
+        SET sent_at = COALESCE(sent_at, updated_at, created_at),
+            send_status = 'sent',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE recipient IS NOT NULL AND TRIM(recipient) <> ''
+          AND sent_at IS NULL
+        """
+    )
+
+
 MIGRATION_MANIFEST = (
     Migration(1, "core_workspace", _migration_0001_core_workspace),
     Migration(2, "opportunity_mvp", _migration_0002_opportunity_mvp),
@@ -4717,6 +4731,10 @@ MIGRATION_MANIFEST = (
     Migration(
         93, "campaign_followup_automation",
         _migration_0093_campaign_followup_automation,
+    ),
+    Migration(
+        94, "backfill_campaign_send_receipts",
+        _migration_0094_backfill_campaign_send_receipts,
     ),
 )
 
