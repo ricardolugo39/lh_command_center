@@ -344,10 +344,11 @@ class InitiativeCampaignService:
         <h3>Manejo del archivo</h3>
         <p>Trabaje directamente en Excel Online. Los cambios se guardan
         automáticamente. No es necesario descargar, copiar ni devolver el archivo.</p>
-        <p><strong>Fechas:</strong><br>
-        Primer contacto: 30 de octubre de 2026.<br>
-        Aplicación identificada: 13 de noviembre de 2026.<br>
-        Revisión inicial: 30 de noviembre de 2026.</p>
+        <p><strong>Fechas de seguimiento:</strong><br>
+        Primera actualización: 27 de octubre de 2026.<br>
+        Segundo y último plazo: 2 de noviembre de 2026.<br>
+        Los casos sin actualización se escalarán a Gerencia a partir del
+        4 de noviembre de 2026.</p>
         <p>Cordialmente,<br><strong>Lugo Hermanos</strong><br>
         Equipo comercial y técnico</p>
         """
@@ -441,9 +442,9 @@ class InitiativeCampaignService:
         guide = workbook.create_sheet("Instrucciones")
         guide.append(["Campaña THK para clientes de plásticos"])
         guide.append(["Objetivo", "Identificar aplicaciones de movimiento lineal y abrir oportunidades de homologación THK."])
-        guide.append(["Primer contacto", "30/10/2026"])
-        guide.append(["Aplicación identificada", "13/11/2026"])
-        guide.append(["Conclusión inicial", "30/11/2026"])
+        guide.append(["Primera actualización", "27/10/2026"])
+        guide.append(["Segundo y último plazo", "02/11/2026"])
+        guide.append(["Escalamiento a Gerencia", "A partir del 04/11/2026 si no se registra ninguna actualización."])
         guide.append(["Qué debe registrar", "Contacto, aplicación o máquina, referencia instalada, interés y próxima acción."])
         guide.append(["Qué ocurre después", "Los clientes marcados como oportunidad pasan al proceso comercial normal del Command Center."])
         guide["A1"].font = Font(size=18, bold=True, color="FFFFFF")
