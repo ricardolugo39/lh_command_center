@@ -30,6 +30,7 @@ INSIDE_SALES_REPS = (
     ("FERNEY RINCON", "ferney.rincon@lugohermanos.com"),
     ("DUBAN QUINTERO", "duban.quintero@lugohermanos.com"),
 )
+INSIDE_SALES_MANAGEMENT_CC = "rocio.rocha@lugohermanos.com"
 
 
 class InitiativeCampaignService:
@@ -264,6 +265,15 @@ class InitiativeCampaignService:
         }
 
     @staticmethod
+    def _campaign_cc(advisor: str) -> list[str]:
+        inside_sales_names = {name for name, _ in INSIDE_SALES_REPS}
+        return (
+            [INSIDE_SALES_MANAGEMENT_CC]
+            if advisor.strip().upper() in inside_sales_names
+            else []
+        )
+
+    @staticmethod
     @transactional
     def launch_microsoft_pilot(
         initiative_id: int,
@@ -316,7 +326,7 @@ class InitiativeCampaignService:
         provider.send(
             sender=current_app.config.get("MICROSOFT_MAILBOX_ADDRESS") or "",
             recipients=[recipient],
-            cc=[],
+            cc=InitiativeCampaignService._campaign_cc(advisor),
             subject="Iniciativa comercial THK – Clientes asignados del segmento de plásticos",
             body_text=(
                 f"Estimado(a) {advisor.title()}, consulte su archivo privado "

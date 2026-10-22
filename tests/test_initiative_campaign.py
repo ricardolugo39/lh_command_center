@@ -89,6 +89,13 @@ def test_warehouse_distribution_is_balanced_and_preserves_existing(monkeypatch):
     assert max(counts) - min(counts) <= 1
 
 
+def test_inside_sales_campaign_copies_management():
+    assert InitiativeCampaignService._campaign_cc("HAROL CAMARGO") == [
+        "rocio.rocha@lugohermanos.com"
+    ]
+    assert InitiativeCampaignService._campaign_cc("JOHN FREDY MORENO") == []
+
+
 def test_campaign_workbook_round_trip(monkeypatch):
     monkeypatch.setattr(
         "app.workspace.services.initiative_campaign_service.InitiativeRepository.get_initiative",
