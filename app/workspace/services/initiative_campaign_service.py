@@ -1,4 +1,5 @@
 from io import BytesIO
+import random
 from typing import Any
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -21,6 +22,14 @@ TRACKING_HEADERS = [
     "Contacto en cliente", "Aplicación o máquina", "Marca o referencia instalada",
     "Interés", "Próxima acción", "Fecha compromiso", "¿Oportunidad?",
 ]
+
+INSIDE_SALES_REPS = (
+    ("RICARDO CASTANEDA", "ricardo.castaneda@lugohermanos.com"),
+    ("HAROL CAMARGO", "harol.camargo@lugohermanos.com"),
+    ("TOMAS VARGAS", "asesor1@lugohermanos.com"),
+    ("FERNEY RINCON", "ferney.rincon@lugohermanos.com"),
+    ("DUBAN QUINTERO", "duban.quintero@lugohermanos.com"),
+)
 
 
 class InitiativeCampaignService:
@@ -157,6 +166,15 @@ class InitiativeCampaignService:
         contacted = sum(c["status"] not in {"Pendiente", "Contacto intentado"} for c in customers)
         applications = sum(bool(c.get("application")) for c in customers)
         opportunities = sum(c.get("opportunity_decision") == "Sí" for c in customers)
+        inside_sales = []
+        for advisor, email in INSIDE_SALES_REPS:
+            assigned = sum(c["advisor"] == advisor for c in customers)
+            if assigned:
+                inside_sales.append({
+                    "advisor": advisor,
+                    "email": email,
+                    "assigned": assigned,
+                })
         return {
             "customers": customers,
             "file": InitiativeCampaignRepository.get_file(initiative_id),
@@ -168,6 +186,7 @@ class InitiativeCampaignService:
                 item for item in InitiativeCampaignRepository.list_files()
                 if item["initiative_id"] == initiative_id and item.get("escalated_at")
             ],
+            "inside_sales": inside_sales,
             "summary": {
                 "assigned": total,
                 "contacted": contacted,
@@ -177,6 +196,71 @@ class InitiativeCampaignService:
                 "opportunities": opportunities,
                 "opportunities_pct": round(opportunities * 100 / total) if total else 0,
             },
+        }
+
+    @staticmethod
+    @transactional
+    def distribute_warehouse_customers(initiative_id: int) -> dict[str, Any]:
+        """Randomly balance ERP warehouse accounts across inside sales."""
+        opportunity = LinearMotionRepository.segment_opportunity("PLASTICOS", "THK")
+        warehouse_customers = [
+            item for item in opportunity.get("customers", [])
+            if str(item.get("advisor") or "").strip().casefold().startswith("almacen")
+        ]
+        if not warehouse_customers:
+            raise ValueError("No se encontraron clientes de Almacén para distribuir.")
+
+        existing = {
+            str(item["customer_erp_id"]): item
+            for item in InitiativeCampaignRepository.list_customers(initiative_id)
+        }
+        rep_names = [name for name, _ in INSIDE_SALES_REPS]
+        counts = {name: 0 for name in rep_names}
+        pending = []
+        for customer in warehouse_customers:
+            customer_id = str(customer.get("customer_id") or "").strip()
+            assigned = existing.get(customer_id, {}).get("advisor")
+            if assigned in counts:
+                counts[assigned] += 1
+            else:
+                pending.append(customer)
+
+        rng = random.SystemRandom()
+        rng.shuffle(pending)
+        for customer in pending:
+            minimum = min(counts.values())
+            eligible = [name for name, count in counts.items() if count == minimum]
+            advisor = rng.choice(eligible)
+            customer_id = str(customer.get("customer_id") or "").strip()
+            InitiativeCampaignRepository.upsert_customer(initiative_id, {
+                "customer_erp_id": customer_id,
+                "customer_name": customer.get("name") or customer_id,
+                "city": customer.get("city"),
+                "advisor": advisor,
+                "priority": "Alta" if counts[advisor] < 5 else "Media",
+                "brands": customer.get("brands"),
+                "competitor_linear_brands": customer.get("competitor_linear_brands"),
+                "last_purchase": customer.get("last_purchase"),
+                "other_sales": customer.get("other_sales"),
+                "status": "Pendiente",
+                "source_key": f"THK-PLASTICOS-{customer_id}",
+            })
+            counts[advisor] += 1
+
+        InitiativeRepository.create_event(
+            initiative_id=initiative_id,
+            event_type="campaign_assignment",
+            title="Clientes de Almacén distribuidos a Inside Sales",
+            details=(f"{len(warehouse_customers)} clientes distribuidos aleatoriamente "
+                     "y de forma equitativa entre cinco asesores."),
+            created_by="automation",
+        )
+        return {
+            "total": len(warehouse_customers),
+            "assignments": [
+                {"advisor": name, "email": email, "assigned": counts[name]}
+                for name, email in INSIDE_SALES_REPS
+            ],
         }
 
     @staticmethod

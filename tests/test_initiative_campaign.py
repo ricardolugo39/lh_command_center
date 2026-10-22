@@ -55,6 +55,40 @@ def test_campaign_summary_uses_percentages(monkeypatch):
     }
 
 
+def test_warehouse_distribution_is_balanced_and_preserves_existing(monkeypatch):
+    source = [
+        {
+            "customer_id": str(index), "name": f"Cliente {index}",
+            "city": "BOGOTA", "advisor": "ALMACEN", "other_sales": index,
+        }
+        for index in range(1, 13)
+    ]
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.LinearMotionRepository.segment_opportunity",
+        lambda segment, brand: {"customers": source},
+    )
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.list_customers",
+        lambda initiative_id: [{"customer_erp_id": "1", "advisor": "HAROL CAMARGO"}],
+    )
+    saved = []
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeCampaignRepository.upsert_customer",
+        lambda initiative_id, customer: saved.append(customer),
+    )
+    monkeypatch.setattr(
+        "app.workspace.services.initiative_campaign_service.InitiativeRepository.create_event",
+        lambda **values: 1,
+    )
+
+    result = InitiativeCampaignService.distribute_warehouse_customers.__wrapped__(10)
+
+    counts = [item["assigned"] for item in result["assignments"]]
+    assert result["total"] == 12
+    assert len(saved) == 11
+    assert max(counts) - min(counts) <= 1
+
+
 def test_campaign_workbook_round_trip(monkeypatch):
     monkeypatch.setattr(
         "app.workspace.services.initiative_campaign_service.InitiativeRepository.get_initiative",

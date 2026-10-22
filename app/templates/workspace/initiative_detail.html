@@ -129,6 +129,17 @@
     {% if current_user.role == 'administrator' %}
     <div class="card-body border-bottom">
         <h4 class="mb-2">Preparación de envíos</h4>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="text-secondary small">Los clientes ERP de Almacén pueden distribuirse aleatoriamente y con diferencia máxima de un cliente entre asesores de Inside Sales.</div>
+            <form method="post" action="{{ url_for('workspace.initiative_campaign_distribute_warehouse', initiative_id=initiative.id) }}" onsubmit="return confirm('Se asignarán equitativamente los clientes de Almacén. No se enviarán correos todavía. ¿Continuar?')">
+                <button class="btn btn-outline-primary" type="submit">Distribuir clientes de Almacén</button>
+            </form>
+        </div>
+        {% if campaign.inside_sales %}
+        <div class="table-responsive mb-3"><table class="table table-sm table-vcenter mb-0"><thead><tr><th>Inside Sales</th><th>Correo</th><th>Clientes asignados</th></tr></thead><tbody>
+        {% for item in campaign.inside_sales %}<tr><td>{{ item.advisor|title }}</td><td>{{ item.email }}</td><td>{{ item.assigned }}</td></tr>{% endfor %}
+        </tbody></table></div>
+        {% endif %}
         <form method="post" action="{{ url_for('workspace.initiative_campaign_launch_advisor', initiative_id=initiative.id) }}" class="row g-2 align-items-end">
             <div class="col-md-4"><label class="form-label">Asesor ERP</label><input class="form-control" name="advisor" placeholder="NOMBRE DEL ASESOR" required></div>
             <div class="col-md-4"><label class="form-label">Correo</label><input class="form-control" type="email" name="recipient" required></div>
