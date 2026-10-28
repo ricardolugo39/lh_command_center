@@ -81,6 +81,7 @@ from app.workspace.services.strategic_account_service import (
 )
 from app.workspace.services.company_sales_dashboard_service import CompanySalesDashboardService
 from app.workspace.services.linear_motion_service import LinearMotionService
+from app.workspace.services.thk_dashboard_service import ThkDashboardService
 from app.workspace.services.agreement_import_service import (
     AgreementImportError,
     AgreementImportService,
@@ -174,6 +175,12 @@ def company_sales_dashboard():
 
 @workspace_bp.get("/analytics/linear-motion")
 def linear_motion_dashboard():
+    if request.args.get("brand", "").strip() == "THK":
+        page = ThkDashboardService.get_page(request.args)
+        focus = request.args.get("focus", "")
+        if focus not in ("", "customers", "guides", "screws"):
+            focus = ""
+        return render_template("workspace/thk_dashboard.html", page=page, focus=focus)
     page = LinearMotionService.get_page(
         request.args.get("brand", "").strip(),
         request.args.get("focus", "").strip(),
