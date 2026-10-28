@@ -238,6 +238,30 @@ class ThkDashboardService:
                 if stop>end: continue
                 w=window(stop); count=sum(v[1]>0 and v[0]>0 for v in w.values()); base=sum(v[0]>0 for v in w.values())
                 snapshots.append({'label':f'Q{q} {y}','buyers':count,'active':base,'penetration':100*count/base if base else None})
+        monthly_ratio = defaultdict(lambda: [0.0, 0.0])
+        for r in current:
+            month = r['date'].strftime('%Y-%m')
+            if r['component'] == 'guide': monthly_ratio[month][0] += r['qty']
+            if r['component'] == 'rail' and r['length']: monthly_ratio[month][1] += r['qty'] * r['length'] / 1000
+        ratio_months = [{'month':month, 'guides':v[0], 'meters':v[1], 'ratio':v[0]/v[1] if v[1]>0 else None}
+                        for month,v in sorted(monthly_ratio.items())]
+        # Same-customer, same-code signals are leads, not confirmed lost sales.
+        account_products = defaultdict(lambda: [0.,0.,0.,0.])
+        for index, selection in enumerate((previous, current)):
+            for r in selection:
+                if r['component'] not in ('rail','guide') or r['family']=='Sin clasificar' or r['size']=='Sin clasificar':
+                    continue
+                key=(r['customer'],r['family'],r['size'])
+                pos = index*2 + (0 if r['component']=='rail' else 1)
+                account_products[key][pos] += r['qty']
+        names = {r['customer']:r['customer_name'] for r in rows if r['customer_name']}
+        paired_opportunities=[]
+        for (customer,family,size), v in account_products.items():
+            if v[0]>0 and v[2]<=0 and v[3]>0:
+                paired_opportunities.append({'customer':customer,'name':names.get(customer) or dimensions(customer,'name'),
+                    'advisor':dimensions(customer,'advisor'),'product':f'{family} {size}',
+                    'previous_rails':v[0],'current_guides':v[3]})
+        paired_opportunities.sort(key=lambda x:(-x['previous_rails'], x['name']))
         documents=[]
         for selection in (previous,current):
             docs=defaultdict(set)
@@ -284,7 +308,7 @@ class ThkDashboardService:
                 'rail_sales':_sum(rails),'rail_prev_sales':_sum(old_rails),'meters':meters,'previous_meters':old_meters,
                 'unparsed_rails':sum(r['qty'] for r in rails if not r['length']),
                 'ratio':guide_qty/meters if meters>0 else None,'previous_ratio':old_guide_qty/old_meters if old_meters>0 else None,
-                'guide_qty':guide_qty,'documents':documents,'rail_sizes':meter_rows(rail_sizes),'lengths':meter_rows(lengths),
+                'guide_qty':guide_qty,'ratio_months':ratio_months,'paired_opportunities':paired_opportunities,'documents':documents,'rail_sizes':meter_rows(rail_sizes),'lengths':meter_rows(lengths),
                 'rail_families':aggregate('rail',{'rail'},lambda r:r['family']),
                 'guide_families':aggregate('guide',{'guide'},lambda r:r['family']),
                 'guide_sizes':aggregate('guide',{'guide'},lambda r:f"{r['family']} {r['size']}"),

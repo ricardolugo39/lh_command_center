@@ -45,6 +45,19 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(p['meters'],1)
         self.assertEqual(p['screw_families'][0]['previous'],50)
 
+    def test_same_size_opportunity_and_monthly_ratio(self):
+        today=date(2026,10,24)
+        def row(d, component, qty, length):
+            return {'customer':'A','date':d,'sales':100,'group_id':1550,'component':component,'qty':qty,'length':length,'family':'HSR','size':'15','ref':'HSR 15','document':('A','FC',1),'customer_name':'Cliente A'}
+        rows=[row(date(2025,3,1),'rail',2,1000), row(date(2026,3,1),'guide',6,None), row(date(2026,4,1),'rail',1,3000)]
+        # No current HSR 15 rail in this test; a different-size rail must not suppress the lead.
+        rows[2]['size']='25'
+        p=module.ThkDashboardService._build(rows,[],lambda c,k:'ANA',{'segment':[],'city':[],'advisor':[]},{'segment':'','city':'','advisor':''},date(2026,1,1),today,date(2025,1,1),date(2025,10,24),today,2026,'YTD')
+        self.assertEqual(p['paired_opportunities'][0]['product'],'HSR 15')
+        self.assertEqual(p['paired_opportunities'][0]['current_guides'],6)
+        self.assertIsNone(p['ratio_months'][0]['ratio'])
+        self.assertEqual(p['ratio_months'][1]['meters'],3)
+
     def test_all_four_templates_render_with_empty_data(self):
         from jinja2 import Environment, DictLoader
         template = (Path(__file__).parents[1] / 'app/templates/workspace/thk_dashboard.html').read_text()
